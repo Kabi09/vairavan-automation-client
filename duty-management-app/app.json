@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Duty Management",
+    "slug": "duty-management-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0F172A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vairavan.dutymanagement",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Duty Management requires camera access to capture customer site proof photos.",
+        "NSPhotoLibraryUsageDescription": "Duty Management requires photo library access to upload site visit photos.",
+        "NSLocationWhenInUseUsageDescription": "Duty Management requires location access to record GPS coordinates at the customer service location."
+      }
+    },
+    "android": {
+      "package": "com.vairavan.dutymanagement",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      }
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Duty Management requires location access to record GPS coordinates at the customer service location."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Duty Management requires access to photos to upload site visit photos.",
+          "cameraPermission": "Duty Management requires camera access to capture site visit photos."
+        }
+      ],
+      "expo-font",
+      "expo-splash-screen"
+    ]
+  }
+}
