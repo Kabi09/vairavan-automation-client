@@ -1,0 +1,50 @@
+import { body, param } from 'express-validator';
+
+export const validateCreateLeave = [
+  body('reason')
+    .trim()
+    .notEmpty()
+    .withMessage('Reason for leave is required')
+    .isLength({ max: 1000 })
+    .withMessage('Reason cannot exceed 1000 characters'),
+  body('startDate')
+    .notEmpty()
+    .withMessage('Start date is required')
+    .isISO8601()
+    .withMessage('Start date must be a valid date'),
+  body('endDate')
+    .notEmpty()
+    .withMessage('End date is required')
+    .isISO8601()
+    .withMessage('End date must be a valid date')
+    .custom((endDate, { req }) => {
+      const start = new Date(req.body.startDate);
+      const end = new Date(endDate);
+      if (end < start) {
+        throw new Error('End date cannot be earlier than start date');
+      }
+      return true;
+    }),
+];
+
+export const validateReviewLeave = [
+  param('id')
+    .isMongoId()
+    .withMessage('Invalid leave request ID format'),
+  body('status')
+    .notEmpty()
+    .withMessage('Decision status is required')
+    .isIn(['approved', 'rejected'])
+    .withMessage('Status must be either approved or rejected'),
+  body('adminRemarks')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Admin remarks cannot exceed 500 characters'),
+];
+
+export const validateLeaveIdParam = [
+  param('id')
+    .isMongoId()
+    .withMessage('Invalid leave request ID format'),
+];

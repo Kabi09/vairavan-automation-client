@@ -1,0 +1,12 @@
+{
+  "name": "vairavan-automation-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npm --prefix backend start",
+    "dev": "npm --prefix backend run dev",
+    "test": "npm --prefix backend test",
+    "seed:admin": "npm --prefix backend run seed:admin"
+  }
+}

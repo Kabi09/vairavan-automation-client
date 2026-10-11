@@ -1,0 +1,849 @@
+{
+  "info": {
+    "_postman_id": "vairavan-duty-management-api-v1",
+    "name": "Vairavan Automation — Employee Duty Management API",
+    "description": "Production REST API collection for Employee Duty Management System covering Auth, Company, Employee, Duty, Uploads, Leave, Holiday, and Dashboard endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "employeeToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "companyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "employeeId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dutyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "leaveId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "holidayId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.token) {",
+                  "  pm.collectionVariables.set('adminToken', res.data.token);",
+                  "  pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@vairavan.com\",\n  \"password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Employee Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.token) {",
+                  "  pm.collectionVariables.set('employeeToken', res.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"employee@vairavan.com\",\n  \"password\": \"Employee123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get Profile (/auth/me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"Employee123!\",\n  \"newPassword\": \"NewEmployeePassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "change-password"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Companies",
+      "item": [
+        {
+          "name": "Create Company (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.company && res.data.company._id) {",
+                  "  pm.collectionVariables.set('companyId', res.data.company._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"Texmaco Textile Mills\",\n  \"location\": \"Coimbatore, Tamil Nadu\",\n  \"companyPhoneNumber\": \"+914222345678\",\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/companies",
+              "host": ["{{baseUrl}}"],
+              "path": ["companies"]
+            }
+          }
+        },
+        {
+          "name": "List Companies",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/companies?page=1&limit=10&status=active",
+              "host": ["{{baseUrl}}"],
+              "path": ["companies"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "active" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Company By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/companies/{{companyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["companies", "{{companyId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Company (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location\": \"Tirupur, Tamil Nadu\",\n  \"companyPhoneNumber\": \"+914219876543\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/companies/{{companyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["companies", "{{companyId}}"]
+            }
+          }
+        },
+        {
+          "name": "Deactivate Company (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/companies/{{companyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["companies", "{{companyId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Employees",
+      "item": [
+        {
+          "name": "Create Employee (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.employee && res.data.employee._id) {",
+                  "  pm.collectionVariables.set('employeeId', res.data.employee._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeName\": \"Ravi Kumar\",\n  \"employeeId\": \"EMP002\",\n  \"email\": \"ravi.kumar@vairavan.com\",\n  \"password\": \"Employee123!\",\n  \"phoneNumber\": \"+919876543211\",\n  \"address\": \"Peelamedu, Coimbatore\",\n  \"designation\": \"Senior Field Service Engineer\",\n  \"joiningDate\": \"2026-01-15\",\n  \"role\": \"employee\",\n  \"accountStatus\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/employees",
+              "host": ["{{baseUrl}}"],
+              "path": ["employees"]
+            }
+          }
+        },
+        {
+          "name": "List Employees (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/employees?page=1&limit=10&status=active",
+              "host": ["{{baseUrl}}"],
+              "path": ["employees"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "active" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Employee By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/employees/{{employeeId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["employees", "{{employeeId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Employee Details (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"designation\": \"Lead Automation Specialist\",\n  \"phoneNumber\": \"+919876543299\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/employees/{{employeeId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["employees", "{{employeeId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Employee Account Status (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountStatus\": \"inactive\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/employees/{{employeeId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["employees", "{{employeeId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "Reset Employee Password (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"ResetPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/employees/{{employeeId}}/password",
+              "host": ["{{baseUrl}}"],
+              "path": ["employees", "{{employeeId}}", "password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Duties",
+      "item": [
+        {
+          "name": "Submit Duty Report (Employee)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.duty && res.data.duty._id) {",
+                  "  pm.collectionVariables.set('dutyId', res.data.duty._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dutyDate\": \"2026-10-11\",\n  \"companyId\": \"{{companyId}}\",\n  \"customerName\": \"Senthil Nathan\",\n  \"customerPhoneNumber\": \"+919876500001\",\n  \"machineName\": \"Circular Knitting M4\",\n  \"workType\": \"Electrical\",\n  \"inTime\": \"09:00\",\n  \"outTime\": \"17:30\",\n  \"workDescription\": \"Replaced drive board and configured inverter parameters.\",\n  \"customerSignature\": {\n    \"url\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\",\n    \"publicId\": \"vairavan-automation/signatures/sig_001\"\n  },\n  \"customerProofPhotos\": [\n    {\n      \"url\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\",\n      \"publicId\": \"vairavan-automation/proofs/proof_001\"\n    }\n  ],\n  \"latitude\": 11.0168,\n  \"longitude\": 76.9558,\n  \"accuracy\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/duties",
+              "host": ["{{baseUrl}}"],
+              "path": ["duties"]
+            }
+          }
+        },
+        {
+          "name": "Get My Duties (Employee)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/duties/my?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["duties", "my"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Duty Report By ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/duties/{{dutyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["duties", "{{dutyId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Duty Report (Employee)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workDescription\": \"Replaced drive board, updated PLC firmware, and calibrated sensors.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/duties/{{dutyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["duties", "{{dutyId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get All Duties (Admin Filterable)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/duties?page=1&limit=10&status=submitted",
+              "host": ["{{baseUrl}}"],
+              "path": ["duties"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "submitted" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Review Duty Status (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"remarks\": \"Service completed satisfactorily. Approved by management.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/duties/{{dutyId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["duties", "{{dutyId}}", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Uploads",
+      "item": [
+        {
+          "name": "Upload Customer Signature",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "signature",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/uploads/signature",
+              "host": ["{{baseUrl}}"],
+              "path": ["uploads", "signature"]
+            }
+          }
+        },
+        {
+          "name": "Upload Customer Proof Photos",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photos",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/uploads/proof-photos",
+              "host": ["{{baseUrl}}"],
+              "path": ["uploads", "proof-photos"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Leave Management",
+      "item": [
+        {
+          "name": "Submit Leave Request (Employee)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.leave && res.data.leave._id) {",
+                  "  pm.collectionVariables.set('leaveId', res.data.leave._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Attending sibling wedding ceremony in native place.\",\n  \"startDate\": \"2026-11-10\",\n  \"endDate\": \"2026-11-12\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/leaves",
+              "host": ["{{baseUrl}}"],
+              "path": ["leaves"]
+            }
+          }
+        },
+        {
+          "name": "Get My Leave Requests (Employee)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/leaves/my?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["leaves", "my"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Leave Requests (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/leaves?page=1&limit=10&status=pending",
+              "host": ["{{baseUrl}}"],
+              "path": ["leaves"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "pending" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Review Leave (Admin Approve/Reject)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"adminRemarks\": \"Leave sanctioned. Please hand over pending service tickets.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/leaves/{{leaveId}}/review",
+              "host": ["{{baseUrl}}"],
+              "path": ["leaves", "{{leaveId}}", "review"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Leave Request (Employee)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/leaves/{{leaveId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["leaves", "{{leaveId}}", "cancel"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Holidays",
+      "item": [
+        {
+          "name": "Create Holiday (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.holiday && res.data.holiday._id) {",
+                  "  pm.collectionVariables.set('holidayId', res.data.holiday._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"holidayName\": \"Diwali Festival\",\n  \"startDate\": \"2026-11-08\",\n  \"endDate\": \"2026-11-09\",\n  \"description\": \"Annual Festival of Lights celebration.\",\n  \"notify\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/holidays",
+              "host": ["{{baseUrl}}"],
+              "path": ["holidays"]
+            }
+          }
+        },
+        {
+          "name": "List Holidays",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/holidays?year=2026",
+              "host": ["{{baseUrl}}"],
+              "path": ["holidays"],
+              "query": [{ "key": "year", "value": "2026" }]
+            }
+          }
+        },
+        {
+          "name": "Update Holiday (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Diwali Festival holiday announced for all employees.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/holidays/{{holidayId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["holidays", "{{holidayId}}"]
+            }
+          }
+        },
+        {
+          "name": "Deactivate Holiday (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/holidays/{{holidayId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["holidays", "{{holidayId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Dashboards",
+      "item": [
+        {
+          "name": "Admin Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "admin"]
+            }
+          }
+        },
+        {
+          "name": "Employee Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{employeeToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/employee",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard", "employee"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Push Notifications",
+      "item": [
+        {
+          "name": "Register FCM Device Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceToken\": \"fcm_sample_device_registration_token_xyz123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/notifications/register-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["notifications", "register-token"]
+            }
+          }
+        },
+        {
+          "name": "Remove FCM Device Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{employeeToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deviceToken\": \"fcm_sample_device_registration_token_xyz123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/notifications/remove-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["notifications", "remove-token"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

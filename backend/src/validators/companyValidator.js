@@ -1,0 +1,62 @@
+import { body, param } from 'express-validator';
+import mongoose from 'express-validator';
+
+export const validateCreateCompany = [
+  body('companyName')
+    .trim()
+    .notEmpty()
+    .withMessage('Company name is required')
+    .isLength({ max: 150 })
+    .withMessage('Company name cannot exceed 150 characters'),
+  body('location')
+    .trim()
+    .notEmpty()
+    .withMessage('Location is required')
+    .isLength({ max: 200 })
+    .withMessage('Location cannot exceed 200 characters'),
+  body('companyPhoneNumber')
+    .trim()
+    .notEmpty()
+    .withMessage('Company phone number is required')
+    .matches(/^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{6,15}$/)
+    .withMessage('Please provide a valid phone number'),
+  body('status')
+    .optional()
+    .isIn(['active', 'inactive'])
+    .withMessage('Status must be either active or inactive'),
+];
+
+export const validateUpdateCompany = [
+  param('id')
+    .isMongoId()
+    .withMessage('Invalid company ID format'),
+  body('companyName')
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage('Company name cannot be empty')
+    .isLength({ max: 150 })
+    .withMessage('Company name cannot exceed 150 characters'),
+  body('location')
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage('Location cannot be empty')
+    .isLength({ max: 200 })
+    .withMessage('Location cannot exceed 200 characters'),
+  body('companyPhoneNumber')
+    .optional()
+    .trim()
+    .matches(/^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{6,15}$/)
+    .withMessage('Please provide a valid phone number'),
+  body('status')
+    .optional()
+    .isIn(['active', 'inactive'])
+    .withMessage('Status must be either active or inactive'),
+];
+
+export const validateCompanyIdParam = [
+  param('id')
+    .isMongoId()
+    .withMessage('Invalid company ID format'),
+];
