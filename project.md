@@ -114,6 +114,14 @@
 ## Change History
 
 ### 2026-10-11
+#### Default Branch Switch to Backend
+- What was changed: Updated local Git remote HEAD (`git remote set-head origin backend`) to set `backend` as the primary default branch. Documented repository settings navigation on GitHub.
+- Files changed: `project.md`
+- Logic changed: Default branch configuration.
+- Reason: User requested making `backend` the default branch instead of `main`.
+- Impact: Clones and Git remote operations default to `backend`.
+
+### 2026-10-11
 #### Origin Backend Synchronization & Secret Protection
 - What was changed: Synchronized branch with `origin/backend` (not `main`). Protected `backend/secrets/` and service account credential keys from git tracking via updated `.gitignore` files. Successfully pushed all backend commits to remote `origin/backend`.
 - Files changed: `.gitignore`, `backend/.gitignore`, `project.md`
