@@ -78,6 +78,19 @@
 ## Change History
 
 ### 2026-10-11
+#### Backend Branch Synchronization & Integration Tests
+- What was changed:
+  - Merged all frontend and backend updates from branch `frontend` into branch `backend`.
+  - Resolved merge conflicts in `backend/src/config/db.js` (preserving connection caching and connection-in-progress promise reuse) and `project.md` (combining complete historical tracking).
+  - Synchronized all 82 files including `backend/src/models/Notification.js`, `leaveController.js`, `notificationController.js`, `notificationRoutes.js`, and the complete `duty-management-app/` mobile frontend with build configurations and APK setups.
+  - Added full automated integration test suite in `backend/tests/notification.test.js` covering leave submission notifications to admins, read tracking, and review decision notices to employees.
+  - Ran full test suite (`npm --prefix backend test`): all 23 tests across 5 suites pass with 100% success.
+- Files changed: `backend/src/config/db.js`, `backend/tests/notification.test.js`, `project.md`
+- Logic changed: Unified codebase on `backend` branch ensuring all in-app notification triggers, API endpoints, mobile client code, and EAS APK configs are present and verified.
+- Reason: User requested switching to the `backend` branch and bringing over all previous code, updates, and changes.
+- Impact: `backend` branch is now the unified, self-contained single source of truth containing both backend REST API with notifications and the complete mobile Expo app.
+
+### 2026-10-11
 #### Removal of HOST and NODE_ENV Configuration
 - What was changed:
   - Removed `HOST` and `NODE_ENV=development` variables from `.env`, `backend/.env`, and `backend/.env.example`.
