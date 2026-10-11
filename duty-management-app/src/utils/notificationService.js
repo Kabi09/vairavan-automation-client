@@ -1,16 +1,25 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import notificationApi from '../api/notificationApi';
 
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+  Constants.appOwnership === 'expo';
+
 // Configure foreground presentation behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+} catch (err) {
+  console.log('[NotificationService] Handler setup notice:', err.message);
+}
 
 let registeredToken = null;
 let notificationListener = null;
@@ -20,14 +29,18 @@ let responseListener = null;
  * Configure Android notification channels
  */
 export const setupNotificationChannels = async () => {
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'Default Alerts',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#0F52BA',
-      sound: 'default',
-    });
+  try {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Default Alerts',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#0F52BA',
+        sound: 'default',
+      });
+    }
+  } catch (err) {
+    console.log('[NotificationService] Channel setup notice:', err.message);
   }
 };
 
@@ -38,8 +51,17 @@ export const registerPushNotifications = async () => {
   try {
     await setupNotificationChannels();
 
+    // Expo Go (SDK 53+) removed remote push notifications; available in standalone APK builds
+    if (isExpoGo) {
+      console.log(
+        '[NotificationService] Running in Expo Go client. Remote device push tokens are skipped (active in standalone APK / development builds).'
+      );
+      return null;
+    }
+
     if (!Device.isDevice) {
       console.log('[NotificationService] Must use physical device for native Push Notifications');
+      return null;
     }
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -92,35 +114,41 @@ export const registerPushNotifications = async () => {
  * Listen for incoming notifications and user response clicks
  */
 export const initNotificationListeners = ({ onNotificationReceived, onNotificationTapped }) => {
-  // Listener for foreground notifications
-  if (!notificationListener) {
-    notificationListener = Notifications.addNotificationReceivedListener((notification) => {
-      console.log('[NotificationService] Foreground notification received:', notification.request.content.title);
-      if (typeof onNotificationReceived === 'function') {
-        onNotificationReceived(notification);
-      }
-    });
-  }
+  try {
+    // Listener for foreground notifications
+    if (!notificationListener) {
+      notificationListener = Notifications.addNotificationReceivedListener((notification) => {
+        console.log('[NotificationService] Foreground notification received:', notification?.request?.content?.title);
+        if (typeof onNotificationReceived === 'function') {
+          onNotificationReceived(notification);
+        }
+      });
+    }
 
-  // Listener for user tapping notification (background/closed app)
-  if (!responseListener) {
-    responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-      console.log('[NotificationService] Notification tapped by user:', response.notification.request.content.data);
-      if (typeof onNotificationTapped === 'function') {
-        onNotificationTapped(response);
-      }
-    });
+    // Listener for user tapping notification (background/closed app)
+    if (!responseListener) {
+      responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
+        console.log('[NotificationService] Notification tapped by user:', response?.notification?.request?.content?.data);
+        if (typeof onNotificationTapped === 'function') {
+          onNotificationTapped(response);
+        }
+      });
+    }
+  } catch (err) {
+    console.log('[NotificationService] Native listener notice:', err.message);
   }
 
   return () => {
-    if (notificationListener) {
-      notificationListener.remove();
-      notificationListener = null;
-    }
-    if (responseListener) {
-      responseListener.remove();
-      responseListener = null;
-    }
+    try {
+      if (notificationListener) {
+        notificationListener.remove();
+        notificationListener = null;
+      }
+      if (responseListener) {
+        responseListener.remove();
+        responseListener = null;
+      }
+    } catch {}
   };
 };
 
