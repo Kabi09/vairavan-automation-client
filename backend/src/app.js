@@ -2,15 +2,36 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
 import routes from './routes/index.js';
 import errorHandler from './middleware/errorHandler.js';
 import notFound from './middleware/notFound.js';
 import { generalLimiter } from './middleware/rateLimiter.js';
+import { connectDB } from './config/db.js';
 
-// Load environment variables
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables across potential run contexts
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
 dotenv.config();
 
 const app = express();
+
+// Ensure active database connection for incoming requests
+app.use(async (req, res, next) => {
+  if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+    try {
+      await connectDB();
+    } catch (err) {
+      console.error('[DB Middleware] Connection error:', err.message);
+    }
+  }
+  next();
+});
 
 // Security HTTP headers
 app.use(helmet());

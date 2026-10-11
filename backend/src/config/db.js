@@ -1,9 +1,21 @@
 import mongoose from 'mongoose';
 
+let isConnectingPromise = null;
+
 /**
- * Connect to MongoDB instance using Mongoose
+ * Connect to MongoDB instance using Mongoose with connection pooling and caching
  */
 export const connectDB = async (customUri = null) => {
+  // If already connected, reuse existing connection
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  // If connection is in progress, await the existing promise
+  if (isConnectingPromise) {
+    return isConnectingPromise;
+  }
+
   const uri = customUri || process.env.MONGODB_URI;
 
   if (!uri) {
@@ -11,19 +23,20 @@ export const connectDB = async (customUri = null) => {
   }
 
   try {
-    const conn = await mongoose.connect(uri, {
+    isConnectingPromise = mongoose.connect(uri, {
       autoIndex: true,
       serverSelectionTimeoutMS: 10000,
+      maxPoolSize: 10,
     });
 
+    const conn = await isConnectingPromise;
     console.log(`[MongoDB] Connected: ${conn.connection.host}/${conn.connection.name}`);
     return conn;
   } catch (error) {
     console.error(`[MongoDB] Connection error: ${error.message}`);
-    if (process.env.NODE_ENV !== 'test') {
-      process.exit(1);
-    }
     throw error;
+  } finally {
+    isConnectingPromise = null;
   }
 };
 
