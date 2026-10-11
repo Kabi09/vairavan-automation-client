@@ -10,11 +10,22 @@ import dashboardRoutes from './dashboardRoutes.js';
 import uploadRoutes from './uploadRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
 import ApiResponse from '../utils/ApiResponse.js';
+import { connectDB } from '../config/db.js';
 
 const router = Router();
 
-// Health check endpoint for Render / monitoring
-router.get('/health', (req, res) => {
+// Health check endpoint for Render / Vercel / monitoring
+router.get('/health', async (req, res) => {
+  let dbError = null;
+
+  if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+    try {
+      await connectDB();
+    } catch (err) {
+      dbError = err.message;
+    }
+  }
+
   const dbState = mongoose.connection.readyState;
   const dbStatusMap = {
     0: 'disconnected',
@@ -28,6 +39,8 @@ router.get('/health', (req, res) => {
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     database: dbStatusMap[dbState] || 'unknown',
+    hasMongoUri: !!process.env.MONGODB_URI,
+    dbError,
     environment: process.env.NODE_ENV || 'development',
   });
 });

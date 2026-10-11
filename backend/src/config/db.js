@@ -25,7 +25,7 @@ export const connectDB = async (customUri = null) => {
   try {
     isConnectingPromise = mongoose.connect(uri, {
       autoIndex: true,
-      serverSelectionTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 5000,
       maxPoolSize: 10,
     });
 

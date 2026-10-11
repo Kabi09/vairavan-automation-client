@@ -23,13 +23,32 @@ const app = express();
 
 // Ensure active database connection for incoming requests
 app.use(async (req, res, next) => {
-  if (mongoose.connection.readyState !== 1 && process.env.MONGODB_URI) {
+  // Allow root and health check without blocking
+  if (req.path === '/' || req.path === '/api/health') {
+    return next();
+  }
+
+  if (mongoose.connection.readyState !== 1) {
+    if (!process.env.MONGODB_URI) {
+      return res.status(500).json({
+        success: false,
+        message:
+          'Database configuration missing: MONGODB_URI is not set in environment variables. Please add MONGODB_URI in Vercel Project Settings > Environment Variables.',
+        code: 'MONGODB_URI_MISSING',
+      });
+    }
+
     try {
       await connectDB();
     } catch (err) {
-      console.error('[DB Middleware] Connection error:', err.message);
+      return res.status(500).json({
+        success: false,
+        message: `Database connection failed: ${err.message}. If using MongoDB Atlas, ensure '0.0.0.0/0' (Allow access from anywhere) is configured under Network Access.`,
+        code: 'MONGODB_CONNECTION_ERROR',
+      });
     }
   }
+
   next();
 });
 
