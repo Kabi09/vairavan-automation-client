@@ -114,6 +114,19 @@
 ## Change History
 
 ### 2026-10-11
+#### MongoDB Atlas Integration & Admin Credential Synchronization
+- What was changed:
+  - Updated MongoDB connection logic in `backend/src/config/db.js` with connection pooling (`maxPoolSize: 10`), idempotency, and caching across serverless/web requests.
+  - Added auto-connection middleware in `backend/src/app.js` to ensure active database connection before routing API requests.
+  - Updated `createAdmin.js` to automatically synchronize existing administrator credentials with `ADMIN_PASSWORD` in `.env` instead of skipping on existing admin.
+  - Synchronized `MONGODB_URI` pointing to MongoDB Atlas (`vairavan_auto`) and bootstrapped the administrator account (`admin@vairavan.com` / `AdminPassword123!`).
+  - Verified live authentication on `http://localhost:5000/api/auth/login` returning 200 OK and valid JWT token.
+- Files changed: `backend/src/config/db.js`, `backend/src/app.js`, `backend/src/server.js`, `backend/src/scripts/createAdmin.js`, `.env`, `project.md`
+- Logic changed: Idempotent connection pooling and automatic administrator credential synchronization.
+- Reason: User requested fixing database connection and credentials synchronization for MongoDB Atlas.
+- Impact: Backend seamlessly connects to MongoDB Atlas cluster and admin can log in with configured password.
+
+### 2026-10-11
 #### Default Branch Switch to Backend
 - What was changed: Updated local Git remote HEAD (`git remote set-head origin backend`) to set `backend` as the primary default branch. Documented repository settings navigation on GitHub.
 - Files changed: `project.md`
