@@ -1,4 +1,5 @@
 import Leave from '../models/Leave.js';
+import Notification from '../models/Notification.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -46,7 +47,29 @@ export const createLeave = asyncHandler(async (req, res) => {
     'employeeName employeeId email'
   );
 
-  // Notify Admins about the new leave request
+  // Create in-app notification for Admins
+  try {
+    await Notification.create({
+      recipientRole: 'admin',
+      sender: req.user._id,
+      type: 'leave_request',
+      title: 'New Leave Request Submitted',
+      message: `${req.user.employeeName} (${req.user.employeeId}) requested leave: ${reason.trim()}`,
+      data: {
+        leaveId: leave._id,
+        employeeId: req.user.employeeId,
+        employeeName: req.user.employeeName,
+        reason: reason.trim(),
+        startDate: start,
+        endDate: end,
+        status: 'pending',
+      },
+    });
+  } catch (notifErr) {
+    console.error('[Notification] Failed to create in-app notification:', notifErr.message);
+  }
+
+  // Notify Admins about the new leave request via FCM
   const notificationPayload = {
     title: 'New Leave Request Submitted',
     body: `${req.user.employeeName} (${req.user.employeeId}) requested leave from ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`,
@@ -207,6 +230,43 @@ export const reviewLeave = asyncHandler(async (req, res) => {
   leave.reviewedAt = new Date();
 
   await leave.save();
+
+  // Update existing admin in-app notification state
+  try {
+    await Notification.updateMany(
+      { 'data.leaveId': leave._id },
+      {
+        $set: {
+          'data.status': status,
+          'data.adminRemarks': adminRemarks || '',
+          isRead: true,
+        },
+      }
+    );
+
+    // Create in-app notification for the employee
+    if (leave.employee) {
+      await Notification.create({
+        recipient: leave.employee._id,
+        sender: req.user._id,
+        type: 'leave_reviewed',
+        title: `Leave Request ${status === 'approved' ? 'Approved' : 'Rejected'}`,
+        message: `Your leave request from ${leave.startDate.toISOString().split('T')[0]} to ${leave.endDate.toISOString().split('T')[0]} has been ${status}.${adminRemarks ? ` Remarks: ${adminRemarks}` : ''}`,
+        data: {
+          leaveId: leave._id,
+          employeeId: leave.employee.employeeId,
+          employeeName: leave.employee.employeeName,
+          reason: leave.reason,
+          startDate: leave.startDate,
+          endDate: leave.endDate,
+          status,
+          adminRemarks: adminRemarks || '',
+        },
+      });
+    }
+  } catch (notifErr) {
+    console.error('[Notification] Error updating in-app notifications on leave review:', notifErr.message);
+  }
 
   // Send push notification to the employee
   if (leave.employee) {

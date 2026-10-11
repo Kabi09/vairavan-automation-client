@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import dashboardApi from '../../api/dashboardApi';
+import notificationApi from '../../api/notificationApi';
 import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
 import LoadingIndicator from '../../components/LoadingIndicator';
@@ -22,6 +23,7 @@ import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 export const AdminDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [data, setData] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -29,9 +31,15 @@ export const AdminDashboardScreen = ({ navigation }) => {
   const fetchDashboard = useCallback(async () => {
     try {
       setError('');
-      const res = await dashboardApi.getAdminDashboard();
-      if (res.data) {
-        setData(res.data);
+      const [dashRes, notifRes] = await Promise.all([
+        dashboardApi.getAdminDashboard(),
+        notificationApi.getNotifications({ limit: 1 }).catch(() => ({ data: { unreadCount: 0 } })),
+      ]);
+      if (dashRes.data) {
+        setData(dashRes.data);
+      }
+      if (notifRes?.data) {
+        setUnreadCount(notifRes.data.unreadCount || 0);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load admin dashboard'));
@@ -68,16 +76,34 @@ export const AdminDashboardScreen = ({ navigation }) => {
       >
         {/* Header Greeting */}
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerTitleWrap}>
             <Text style={styles.greeting}>Administrator Portal</Text>
             <Text style={styles.userName}>{user?.employeeName || 'Admin'}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.profileBadge}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Ionicons name="person-circle-outline" size={36} color={COLORS.primary} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.notificationBadgeBtn}
+              onPress={() => navigation.navigate('Notifications')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
+              {unreadCount > 0 && (
+                <View style={styles.unreadDotBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.profileBadge}
+              onPress={() => navigation.navigate('Profile')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="person-circle-outline" size={36} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ErrorMessage message={error} onRetry={fetchDashboard} />
@@ -256,6 +282,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SPACING.lg,
+  },
+  headerTitleWrap: {
+    flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  notificationBadgeBtn: {
+    position: 'relative',
+    padding: SPACING.xs,
+    marginRight: 4,
+  },
+  unreadDotBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: COLORS.danger,
+    borderRadius: RADIUS.full,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: COLORS.background,
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
   },
   greeting: {
     fontSize: 13,

@@ -11,6 +11,7 @@ import EmployeeFormScreen from '../screens/admin/EmployeeFormScreen';
 import LeaveRequestsScreen from '../screens/admin/LeaveRequestsScreen';
 import HolidayManagementScreen from '../screens/admin/HolidayManagementScreen';
 import DutyDetailsScreen from '../screens/employee/DutyDetailsScreen';
+import NotificationsScreen from '../screens/admin/NotificationsScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 import ChangePasswordScreen from '../screens/common/ChangePasswordScreen';
 import { COLORS } from '../constants/theme';
@@ -90,6 +91,7 @@ export const AdminNavigator = () => {
       <Stack.Screen name="EmployeeForm" component={EmployeeFormScreen} />
       <Stack.Screen name="HolidayManagement" component={HolidayManagementScreen} />
       <Stack.Screen name="DutyDetails" component={DutyDetailsScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     </Stack.Navigator>

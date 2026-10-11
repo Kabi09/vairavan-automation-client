@@ -9,6 +9,7 @@ import DutyDetailsScreen from '../screens/employee/DutyDetailsScreen';
 import MyLeavesScreen from '../screens/employee/MyLeavesScreen';
 import LeaveRequestScreen from '../screens/employee/LeaveRequestScreen';
 import HolidayListScreen from '../screens/employee/HolidayListScreen';
+import NotificationsScreen from '../screens/admin/NotificationsScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 import ChangePasswordScreen from '../screens/common/ChangePasswordScreen';
 import { COLORS } from '../constants/theme';
@@ -92,6 +93,7 @@ export const EmployeeNavigator = () => {
       <Stack.Screen name="LeaveRequest" component={LeaveRequestScreen} />
       <Stack.Screen name="MyLeaves" component={MyLeavesScreen} />
       <Stack.Screen name="HolidayList" component={HolidayListScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     </Stack.Navigator>

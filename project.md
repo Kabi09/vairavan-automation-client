@@ -73,8 +73,35 @@
 - `ScreenHeader`: Uniform navigation header with back button, title, and action slot.
 - `ConfirmationDialog`: Accessible modal confirmation dialog for destructive actions (deactivation, deletion).
 - `SignaturePadModal`: Touch SVG drawing canvas modal with Clear and Done actions.
+- `NotificationsScreen`: Real-time notification feed displaying staff details, leave reason, date range, status badge, and direct inline Approve and Reject actions with admin remarks.
 
 ## Change History
+
+### 2026-10-11
+#### Leave Request In-App Notifications & Direct Review Actions
+- What was changed:
+  - Created `backend/src/models/Notification.js` to persist in-app notifications with rich payload (staff member, employee ID, leave ID, reason, date range, decision status, admin remarks).
+  - Updated `backend/src/controllers/leaveController.js` to automatically generate admin notifications upon leave submission and employee notifications upon leave approval/rejection.
+  - Updated `backend/src/controllers/notificationController.js` and `backend/src/routes/notificationRoutes.js` with `GET /api/notifications` (with unread count), `PATCH /:id/read`, `PATCH /mark-all-read`, and `DELETE /:id`.
+  - Updated `duty-management-app/src/api/notificationApi.js` with in-app notification queries and read status handlers.
+  - Created `duty-management-app/src/screens/admin/NotificationsScreen.jsx` rendering detailed leave notifications with staff name, dates, reason, status badge, and direct inline **Approve** and **Reject** action buttons with remarks modal.
+  - Added Notification Bell with unread counter badge to `AdminDashboardScreen` and `EmployeeDashboardScreen` headers.
+  - Integrated `NotificationsScreen` into both `AdminNavigator` and `EmployeeNavigator`.
+- Files changed:
+  - `backend/src/models/Notification.js`
+  - `backend/src/controllers/leaveController.js`
+  - `backend/src/controllers/notificationController.js`
+  - `backend/src/routes/notificationRoutes.js`
+  - `duty-management-app/src/api/notificationApi.js`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/navigation/EmployeeNavigator.jsx`
+  - `project.md`
+- Logic changed: Automated in-app notification dispatch on leave requests and direct one-tap leave reviews from notifications.
+- Reason: User requested sending notifications to admin when employee submits leave, displaying staff name, reason, dates, and direct approve/reject capabilities.
+- Impact: Admins can instantly view leave requests with full context and approve or reject them directly from their notification feed.
 
 ### 2026-10-11
 #### Android APK Build Configuration (EAS Build)
