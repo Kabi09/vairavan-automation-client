@@ -78,6 +78,19 @@
 ## Change History
 
 ### 2026-10-11
+#### Firebase Push Notifications Service Account & Vercel Endpoints Fix
+- What was changed:
+  - Fixed Firebase Admin SDK credentials discovery in `backend/src/config/firebase.js` to automatically detect and load `firebase-service-account.json` across standard relative and absolute paths (`backend/secrets/firebase-service-account.json`).
+  - Added safe JSON check for `FIREBASE_SERVICE_ACCOUNT_JSON` to prevent syntax parse exceptions on invalid string fallbacks.
+  - Pushed synchronized `backend` commits to `origin/main` to update the deployed Vercel instance, resolving `404 Resource not found: GET /api/notifications`.
+  - Verified live leave request creation (`POST /api/leaves`) by employee and verified in-app notification dispatch + unread counter retrieval (`GET /api/notifications`) on the deployed Vercel backend with HTTP 200 OK.
+  - Untracked temporary Metro bundler `.expo/` build log artifacts.
+- Files changed: `backend/src/config/firebase.js`, `.env`, `backend/.env`, `project.md`
+- Logic changed: Automatic filesystem resolution of Firebase service account credentials and production deployment synchronization.
+- Reason: User reported push notification not received, missing credentials error, and 404 resource not found on tapping notification button.
+- Impact: In-app notifications feed and Firebase Cloud Messaging now fully functional across local and Vercel production environments.
+
+### 2026-10-11
 #### Backend Branch Synchronization & Integration Tests
 - What was changed:
   - Merged all frontend and backend updates from branch `frontend` into branch `backend`.
