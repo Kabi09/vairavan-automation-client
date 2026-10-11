@@ -88,7 +88,7 @@
   - Implemented `addNotificationResponseReceivedListener` routing users directly to the Notifications screen when tapping alerts in the Android notification tray.
   - Attached `useFocusEffect` across `AdminDashboardScreen`, `EmployeeDashboardScreen`, and `NotificationsScreen` ensuring instantaneous badge and list refresh when switching or returning to screens.
   - Configured `expo-notifications` plugin in `duty-management-app/app.json`.
-  - Added `isExpoGo` execution environment guard in `notificationService.js` to prevent SDK 53+ Expo Go runtime exceptions while preserving native token registration in standalone APK builds.
+  - Converted `expo-notifications` to dynamic `require` guarded by `!isExpoGo` in `notificationService.js`, eliminating module-level top-level evaluation of `DevicePushTokenAutoRegistration.fx` which threw an uncatchable exception in Expo Go SDK 53+.
 - Files changed:
   - `duty-management-app/package.json`
   - `duty-management-app/app.json`

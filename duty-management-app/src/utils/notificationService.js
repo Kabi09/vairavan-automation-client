@@ -1,24 +1,31 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import notificationApi from '../api/notificationApi';
 
+// Determine if running inside Expo Go client sandbox
 const isExpoGo =
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
   Constants.appOwnership === 'expo';
 
-// Configure foreground presentation behavior
-try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-    }),
-  });
-} catch (err) {
-  console.log('[NotificationService] Handler setup notice:', err.message);
+// Only load native expo-notifications module when NOT running in Expo Go client.
+// Expo SDK 53+ throws an uncatchable runtime error in Expo Go upon evaluating expo-notifications TokenEmitter.
+let Notifications = null;
+if (!isExpoGo) {
+  try {
+    Notifications = require('expo-notifications');
+    if (Notifications?.setNotificationHandler) {
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: true,
+        }),
+      });
+    }
+  } catch (err) {
+    console.log('[NotificationService] Native push module notice:', err.message);
+  }
 }
 
 let registeredToken = null;
@@ -26,9 +33,10 @@ let notificationListener = null;
 let responseListener = null;
 
 /**
- * Configure Android notification channels
+ * Configure Android notification channels (for standalone APK / Development builds)
  */
 export const setupNotificationChannels = async () => {
+  if (isExpoGo || !Notifications?.setNotificationChannelAsync) return;
   try {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
@@ -48,16 +56,15 @@ export const setupNotificationChannels = async () => {
  * Request permission, obtain push token and register with backend
  */
 export const registerPushNotifications = async () => {
+  // Remote device push tokens are disabled by Expo in Expo Go SDK 53+;
+  // fully enabled in standalone APK builds
+  if (isExpoGo || !Notifications) {
+    console.log('[NotificationService] Running in Expo Go client: in-app real-time synchronization active.');
+    return null;
+  }
+
   try {
     await setupNotificationChannels();
-
-    // Expo Go (SDK 53+) removed remote push notifications; available in standalone APK builds
-    if (isExpoGo) {
-      console.log(
-        '[NotificationService] Running in Expo Go client. Remote device push tokens are skipped (active in standalone APK / development builds).'
-      );
-      return null;
-    }
 
     if (!Device.isDevice) {
       console.log('[NotificationService] Must use physical device for native Push Notifications');
@@ -77,19 +84,12 @@ export const registerPushNotifications = async () => {
       return null;
     }
 
-    // Try fetching device token (FCM for Android)
     let token = null;
     try {
       const tokenData = await Notifications.getDevicePushTokenAsync();
       token = tokenData?.data;
-    } catch {
-      // In Expo Go client, fallback to Expo Push Token if device token unavailable
-      try {
-        const expoTokenData = await Notifications.getExpoPushTokenAsync();
-        token = expoTokenData?.data;
-      } catch (expoErr) {
-        console.log('[NotificationService] Token fetch info:', expoErr.message);
-      }
+    } catch (e) {
+      console.log('[NotificationService] Device push token query notice:', e.message);
     }
 
     if (token) {
@@ -111,11 +111,14 @@ export const registerPushNotifications = async () => {
 };
 
 /**
- * Listen for incoming notifications and user response clicks
+ * Listen for incoming notifications and user response clicks (Standalone APK builds)
  */
 export const initNotificationListeners = ({ onNotificationReceived, onNotificationTapped }) => {
+  if (isExpoGo || !Notifications?.addNotificationReceivedListener) {
+    return () => {};
+  }
+
   try {
-    // Listener for foreground notifications
     if (!notificationListener) {
       notificationListener = Notifications.addNotificationReceivedListener((notification) => {
         console.log('[NotificationService] Foreground notification received:', notification?.request?.content?.title);
@@ -125,7 +128,6 @@ export const initNotificationListeners = ({ onNotificationReceived, onNotificati
       });
     }
 
-    // Listener for user tapping notification (background/closed app)
     if (!responseListener) {
       responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
         console.log('[NotificationService] Notification tapped by user:', response?.notification?.request?.content?.data);
