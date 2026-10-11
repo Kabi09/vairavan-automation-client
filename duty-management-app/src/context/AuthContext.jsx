@@ -4,6 +4,7 @@ import authApi from '../api/authApi';
 import { setUnauthorizedHandler } from '../api/apiClient';
 import { APP_CONFIG } from '../constants/config';
 import { extractErrorMessage } from '../utils/errorUtils';
+import notificationService from '../utils/notificationService';
 
 const AuthContext = createContext(null);
 
@@ -25,6 +26,9 @@ export const AuthProvider = ({ children }) => {
           setToken(storedToken);
           setRefreshToken(storedRefresh);
           setUser(JSON.parse(storedUser));
+
+          // Refresh device token with backend on app launch
+          notificationService.registerPushNotifications().catch(() => {});
 
           // Verify token validity in background
           try {
@@ -77,6 +81,9 @@ export const AuthProvider = ({ children }) => {
       setRefreshToken(newRefreshToken);
       setUser(userData);
 
+      // Register device token on backend immediately upon login
+      notificationService.registerPushNotifications().catch(() => {});
+
       return { success: true, user: userData };
     } catch (error) {
       const message = extractErrorMessage(error, 'Login failed');
@@ -86,6 +93,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      await notificationService.unregisterPushNotifications().catch(() => {});
       if (refreshToken) {
         await authApi.logout(refreshToken).catch(() => {});
       }

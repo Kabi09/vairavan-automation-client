@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
+import * as SecureStore from 'expo-secure-store';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import notificationApi from '../api/notificationApi';
 
@@ -8,24 +9,21 @@ const isExpoGo =
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
   Constants.appOwnership === 'expo';
 
-// Only load native expo-notifications module when NOT running in Expo Go client.
-// Expo SDK 53+ throws an uncatchable runtime error in Expo Go upon evaluating expo-notifications TokenEmitter.
+// Dynamic safe loading of expo-notifications module
 let Notifications = null;
-if (!isExpoGo) {
-  try {
-    Notifications = require('expo-notifications');
-    if (Notifications?.setNotificationHandler) {
-      Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowAlert: true,
-          shouldPlaySound: true,
-          shouldSetBadge: true,
-        }),
-      });
-    }
-  } catch (err) {
-    console.log('[NotificationService] Native push module notice:', err.message);
+try {
+  Notifications = require('expo-notifications');
+  if (Notifications?.setNotificationHandler) {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
   }
+} catch (err) {
+  console.log('[NotificationService] expo-notifications load notice:', err.message);
 }
 
 let registeredToken = null;
@@ -33,10 +31,10 @@ let notificationListener = null;
 let responseListener = null;
 
 /**
- * Configure Android notification channels (for standalone APK / Development builds)
+ * Configure Android notification channels (MAX importance for system tray & heads-up display)
  */
 export const setupNotificationChannels = async () => {
-  if (isExpoGo || !Notifications?.setNotificationChannelAsync) return;
+  if (!Notifications?.setNotificationChannelAsync) return;
   try {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
@@ -45,6 +43,8 @@ export const setupNotificationChannels = async () => {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#0F52BA',
         sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
       });
     }
   } catch (err) {
@@ -53,23 +53,22 @@ export const setupNotificationChannels = async () => {
 };
 
 /**
- * Request permission, obtain push token and register with backend
+ * Request permission, obtain push token and register with backend.
+ * Called on login and on app launch / token refresh.
  */
 export const registerPushNotifications = async () => {
-  // Remote device push tokens are disabled by Expo in Expo Go SDK 53+;
-  // fully enabled in standalone APK builds
-  if (isExpoGo || !Notifications) {
-    console.log('[NotificationService] Running in Expo Go client: in-app real-time synchronization active.');
-    return null;
-  }
-
   try {
-    await setupNotificationChannels();
-
     if (!Device.isDevice) {
-      console.log('[NotificationService] Must use physical device for native Push Notifications');
+      console.log('[NotificationService] Physical device required for remote Push Notifications');
       return null;
     }
+
+    if (!Notifications) {
+      console.log('[NotificationService] Push notification native module not loaded.');
+      return null;
+    }
+
+    await setupNotificationChannels();
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -85,18 +84,48 @@ export const registerPushNotifications = async () => {
     }
 
     let token = null;
+
+    // 1. Fetch native device push token (FCM on Android APK)
     try {
       const tokenData = await Notifications.getDevicePushTokenAsync();
       token = tokenData?.data;
+      if (token) {
+        console.log('[NotificationService] Acquired native device push token (FCM)');
+      }
     } catch (e) {
-      console.log('[NotificationService] Device push token query notice:', e.message);
+      console.log('[NotificationService] Native device push token notice:', e.message);
+    }
+
+    // 2. Fallback to Expo push token if native FCM token unavailable
+    if (!token) {
+      try {
+        const projectId =
+          Constants.easConfig?.projectId ||
+          Constants.expoConfig?.extra?.eas?.projectId ||
+          'ff8c1225-7ed8-47ee-ab46-9196bd0e21b8';
+        const expoTokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+        token = expoTokenData?.data;
+        if (token) {
+          console.log('[NotificationService] Acquired Expo push token');
+        }
+      } catch (expoErr) {
+        console.log('[NotificationService] Expo push token notice:', expoErr.message);
+      }
+    }
+
+    // 3. Fallback to cached token in SecureStore
+    if (!token) {
+      try {
+        token = await SecureStore.getItemAsync('vairavan_device_token');
+      } catch {}
     }
 
     if (token) {
       registeredToken = token;
-      console.log('[NotificationService] Acquired push token:', token);
+      console.log('[NotificationService] Registering device token with backend:', token);
 
       try {
+        await SecureStore.setItemAsync('vairavan_device_token', token);
         await notificationApi.registerDeviceToken(token);
         console.log('[NotificationService] Device token registered with backend successfully');
       } catch (err) {
@@ -111,17 +140,17 @@ export const registerPushNotifications = async () => {
 };
 
 /**
- * Listen for incoming notifications and user response clicks (Standalone APK builds)
+ * Listen for incoming notifications and user response clicks
  */
 export const initNotificationListeners = ({ onNotificationReceived, onNotificationTapped }) => {
-  if (isExpoGo || !Notifications?.addNotificationReceivedListener) {
+  if (!Notifications?.addNotificationReceivedListener) {
     return () => {};
   }
 
   try {
     if (!notificationListener) {
       notificationListener = Notifications.addNotificationReceivedListener((notification) => {
-        console.log('[NotificationService] Foreground notification received:', notification?.request?.content?.title);
+        console.log('[NotificationService] Notification received in foreground:', notification?.request?.content?.title);
         if (typeof onNotificationReceived === 'function') {
           onNotificationReceived(notification);
         }
@@ -158,11 +187,18 @@ export const initNotificationListeners = ({ onNotificationReceived, onNotificati
  * Unregister device token on logout
  */
 export const unregisterPushNotifications = async () => {
-  if (!registeredToken) return;
+  let token = registeredToken;
+  if (!token) {
+    try {
+      token = await SecureStore.getItemAsync('vairavan_device_token');
+    } catch {}
+  }
+  if (!token) return;
   try {
-    await notificationApi.removeDeviceToken(registeredToken);
+    await notificationApi.removeDeviceToken(token);
+    await SecureStore.deleteItemAsync('vairavan_device_token').catch(() => {});
     registeredToken = null;
-    console.log('[NotificationService] Device token removed from backend');
+    console.log('[NotificationService] Device token removed from backend successfully');
   } catch (error) {
     console.warn('[NotificationService] Failed to remove push token:', error.message);
   }

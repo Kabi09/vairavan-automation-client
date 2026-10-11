@@ -11,67 +11,116 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
     return { success: true, deliveredCount: 0, failedCount: 0 };
   }
 
-  const messaging = getMessaging();
-  if (!messaging) {
-    console.log(`[FCM Mock] Push notification simulated to ${tokens.length} tokens: "${notificationPayload.title}"`);
-    return { success: true, deliveredCount: tokens.length, failedCount: 0, mock: true };
+  const stringifiedData = {};
+  for (const [key, value] of Object.entries(dataPayload)) {
+    stringifiedData[key] = typeof value === 'string' ? value : JSON.stringify(value);
   }
 
-  try {
-    const stringifiedData = {};
-    for (const [key, value] of Object.entries(dataPayload)) {
-      stringifiedData[key] = typeof value === 'string' ? value : JSON.stringify(value);
-    }
+  // Separate tokens into Expo Push tokens and Firebase FCM tokens
+  const expoTokens = tokens.filter(
+    (t) => typeof t === 'string' && (t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken'))
+  );
+  const fcmTokens = tokens.filter(
+    (t) => typeof t === 'string' && !t.startsWith('ExponentPushToken') && !t.startsWith('ExpoPushToken')
+  );
 
-    const message = {
-      tokens,
-      notification: {
+  let totalDelivered = 0;
+  let totalFailed = 0;
+
+  // 1. Deliver native FCM tokens via Firebase Admin SDK
+  if (fcmTokens.length > 0) {
+    const messaging = getMessaging();
+    if (messaging) {
+      try {
+        const message = {
+          tokens: fcmTokens,
+          notification: {
+            title: notificationPayload.title,
+            body: notificationPayload.body,
+          },
+          data: stringifiedData,
+          android: {
+            priority: 'high',
+            notification: {
+              sound: 'default',
+              channelId: 'default',
+              priority: 'max',
+              defaultSound: true,
+              defaultVibrateTimings: true,
+            },
+          },
+        };
+
+        const response = await messaging.sendEachForMulticast(message);
+        totalDelivered += response.successCount;
+        totalFailed += response.failureCount;
+
+        const tokensToRemove = [];
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            const error = resp.error;
+            if (
+              error &&
+              (error.code === 'messaging/invalid-registration-token' ||
+                error.code === 'messaging/registration-token-not-registered')
+            ) {
+              tokensToRemove.push(fcmTokens[idx]);
+            }
+          }
+        });
+
+        if (tokensToRemove.length > 0) {
+          User.updateMany(
+            { deviceTokens: { $in: tokensToRemove } },
+            { $pull: { deviceTokens: { $in: tokensToRemove } } }
+          ).catch((err) => console.error('[FCM] Error pruning invalid tokens:', err.message));
+        }
+      } catch (error) {
+        console.error(`[FCM] Notification delivery failed: ${error.message}`);
+        totalFailed += fcmTokens.length;
+      }
+    } else {
+      console.log(`[FCM Mock] Push notification simulated to ${fcmTokens.length} tokens: "${notificationPayload.title}"`);
+      totalDelivered += fcmTokens.length;
+    }
+  }
+
+  // 2. Deliver Expo Push tokens via Expo Push Service API
+  if (expoTokens.length > 0) {
+    try {
+      const expoMessages = expoTokens.map((to) => ({
+        to,
+        sound: 'default',
         title: notificationPayload.title,
         body: notificationPayload.body,
-      },
-      data: stringifiedData,
-      android: {
+        data: stringifiedData,
         priority: 'high',
-        notification: {
-          sound: 'default',
-          channelId: 'default',
+        channelId: 'default',
+      }));
+
+      const res = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
         },
-      },
-    };
+        body: JSON.stringify(expoMessages),
+      });
 
-    const response = await messaging.sendEachForMulticast(message);
-    const tokensToRemove = [];
-
-    response.responses.forEach((resp, idx) => {
-      if (!resp.success) {
-        const error = resp.error;
-        if (
-          error &&
-          (error.code === 'messaging/invalid-registration-token' ||
-            error.code === 'messaging/registration-token-not-registered')
-        ) {
-          tokensToRemove.push(tokens[idx]);
-        }
-      }
-    });
-
-    if (tokensToRemove.length > 0) {
-      // Clean up stale tokens asynchronously
-      User.updateMany(
-        { deviceTokens: { $in: tokensToRemove } },
-        { $pull: { deviceTokens: { $in: tokensToRemove } } }
-      ).catch((err) => console.error('[FCM] Error pruning invalid tokens:', err.message));
+      const json = await res.json();
+      console.log(`[Expo Push Service] Dispatched push to ${expoTokens.length} devices:`, json);
+      totalDelivered += expoTokens.length;
+    } catch (expoErr) {
+      console.error(`[Expo Push Service] Push delivery failed: ${expoErr.message}`);
+      totalFailed += expoTokens.length;
     }
-
-    return {
-      success: true,
-      deliveredCount: response.successCount,
-      failedCount: response.failureCount,
-    };
-  } catch (error) {
-    console.error(`[FCM] Notification delivery failed: ${error.message}`);
-    return { success: false, deliveredCount: 0, failedCount: tokens.length, error: error.message };
   }
+
+  return {
+    success: true,
+    deliveredCount: totalDelivered,
+    failedCount: totalFailed,
+  };
 };
 
 /**

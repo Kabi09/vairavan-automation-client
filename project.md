@@ -77,6 +77,28 @@
 
 ## Change History
 
+### 2026-10-12
+#### Complete Native Device Push Notification Workflow & Pruning of Old Alert Hack
+- What was changed:
+  - Removed old polling `Alert.alert` popup workaround from `duty-management-app/src/context/NotificationContext.jsx`.
+  - Implemented end-to-end device token registration and refresh lifecycle in `duty-management-app/src/utils/notificationService.js`:
+    - On login & session restore (`initializeAuth`): requests permissions, acquires native FCM/Expo push token, caches to `SecureStore`, and registers with backend `POST /api/notifications/register-token`.
+    - On logout: unregisters device token via `POST /api/notifications/remove-token` and purges local storage.
+  - Enhanced backend `registerDeviceToken` controller (`backend/src/controllers/notificationController.js`) to automatically prune the device token from any prior accounts on that device before associating with the logged-in user.
+  - Enhanced `backend/src/services/notificationService.js` dual-dispatch engine delivering high-priority native alerts via Firebase Admin SDK (FCM) and Expo Push API with default sound, MAX Android importance, and vibration timings.
+  - Added `android.permission.POST_NOTIFICATIONS` and `android.permission.VIBRATE` to `duty-management-app/app.json` for Android 13+ support.
+- Files changed:
+  - `duty-management-app/src/utils/notificationService.js`
+  - `duty-management-app/src/context/NotificationContext.jsx`
+  - `duty-management-app/src/context/AuthContext.jsx`
+  - `duty-management-app/app.json`
+  - `backend/src/controllers/notificationController.js`
+  - `backend/src/services/notificationService.js`
+  - `project.md`
+- Logic changed: Transitioned completely from in-app popup dialogs to real system-level mobile push notifications (active across screen-off, background, and foreground app states).
+- Reason: User requested mobile notifications for screen-off and background states with explicit workflow: login -> get device token -> refresh/store token -> action events dispatch to device token -> remove old workflow.
+- Impact: Device notifications arrive natively at the Android notification tray with heads-up alerts and sound regardless of whether the screen is off or the app is running in the background.
+
 ### 2026-10-11
 #### Real-Time Notification System (Foreground, Background & Closed States)
 - What was changed:
