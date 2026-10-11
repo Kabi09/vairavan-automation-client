@@ -114,6 +114,14 @@
 ## Change History
 
 ### 2026-10-11
+#### Local Environment Setup (.env)
+- What was changed: Created `.env` files in both `backend/.env` and root `.env` configured for local MongoDB server (`mongodb://127.0.0.1:27017/vairavan_duty_management`) with secure JWT keys. Enhanced `server.js` and `createAdmin.js` to resolve `.env` across local and parent directories. Bootstrapped initial admin and verified live server startup and login endpoints.
+- Files changed: `backend/.env`, `.env`, `backend/src/server.js`, `backend/src/scripts/createAdmin.js`, `project.md`
+- Logic changed: Multi-path fallback resolution for dotenv configuration.
+- Reason: Resolve missing environment variables on local `npm start`.
+- Impact: Server boots seamlessly both from workspace root and inside `backend/` directory.
+
+### 2026-10-11
 #### Complete Backend Development — Employee Duty Management System
 - What was changed: Built complete, production-ready REST API backend in `backend/` on branch `backend`.
 - Files changed:

@@ -6,3 +6,7 @@ uploads/
 coverage/
 .DS_Store
 serviceAccountKey.json
+secrets/
+backend/secrets/
+*service-account*.json
+firebase-service-account.json

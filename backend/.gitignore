@@ -10,3 +10,6 @@ coverage/
 .DS_Store
 *.pem
 serviceAccountKey.json
+secrets/
+*service-account*.json
+firebase-service-account.json
