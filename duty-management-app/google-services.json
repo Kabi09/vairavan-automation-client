@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "170235924054",
+    "project_id": "fir-25fea",
+    "storage_bucket": "fir-25fea.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:170235924054:android:5505f5932dcf31b664f5f7",
+        "android_client_info": {
+          "package_name": "com.vairavan.dutymanagement"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUJePHEQ1OfaWZLzB9fls5I1tkW4KilFY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

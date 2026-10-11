@@ -87,11 +87,13 @@
   - Enhanced backend `registerDeviceToken` controller (`backend/src/controllers/notificationController.js`) to automatically prune the device token from any prior accounts on that device before associating with the logged-in user.
   - Enhanced `backend/src/services/notificationService.js` dual-dispatch engine delivering high-priority native alerts via Firebase Admin SDK (FCM) and Expo Push API with default sound, MAX Android importance, and vibration timings.
   - Added `android.permission.POST_NOTIFICATIONS` and `android.permission.VIBRATE` to `duty-management-app/app.json` for Android 13+ support.
+  - Linked `google-services.json` (Firebase Project `fir-25fea`, Package `com.vairavan.dutymanagement`) into `duty-management-app/` and configured `"googleServicesFile": "./google-services.json"` in `duty-management-app/app.json` for Expo Android EAS builds.
 - Files changed:
+  - `duty-management-app/google-services.json`
+  - `duty-management-app/app.json`
   - `duty-management-app/src/utils/notificationService.js`
   - `duty-management-app/src/context/NotificationContext.jsx`
   - `duty-management-app/src/context/AuthContext.jsx`
-  - `duty-management-app/app.json`
   - `backend/src/controllers/notificationController.js`
   - `backend/src/services/notificationService.js`
   - `project.md`
