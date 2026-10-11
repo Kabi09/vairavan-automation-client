@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import dashboardApi from '../../api/dashboardApi';
 import notificationApi from '../../api/notificationApi';
 import Card from '../../components/Card';
@@ -22,8 +24,8 @@ import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
 export const EmployeeDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
+  const { unreadCount, refreshNotifications } = useNotifications();
   const [data, setData] = useState(null);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -31,15 +33,9 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const fetchDashboard = useCallback(async () => {
     try {
       setError('');
-      const [dashRes, notifRes] = await Promise.all([
-        dashboardApi.getEmployeeDashboard(),
-        notificationApi.getNotifications({ limit: 1 }).catch(() => ({ data: { unreadCount: 0 } })),
-      ]);
+      const dashRes = await dashboardApi.getEmployeeDashboard();
       if (dashRes.data) {
         setData(dashRes.data);
-      }
-      if (notifRes?.data) {
-        setUnreadCount(notifRes.data.unreadCount || 0);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load dashboard'));
@@ -49,9 +45,12 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboard();
+      refreshNotifications();
+    }, [fetchDashboard, refreshNotifications])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

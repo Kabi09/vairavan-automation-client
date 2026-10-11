@@ -11,9 +11,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import notificationApi from '../../api/notificationApi';
 import leaveApi from '../../api/leaveApi';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
@@ -29,6 +31,7 @@ import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const NotificationsScreen = ({ navigation }) => {
   const { user, isAdmin } = useAuth();
+  const { refreshNotifications: refreshGlobalNotifications } = useNotifications();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -57,13 +60,17 @@ export const NotificationsScreen = ({ navigation }) => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+      refreshGlobalNotifications();
+    }, [fetchNotifications, refreshGlobalNotifications])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchNotifications();
+    refreshGlobalNotifications();
   };
 
   const handleMarkAllRead = async () => {
@@ -71,6 +78,7 @@ export const NotificationsScreen = ({ navigation }) => {
       await notificationApi.markAllAsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       setUnreadCount(0);
+      refreshGlobalNotifications();
     } catch (err) {
       Alert.alert('Error', extractErrorMessage(err, 'Could not mark all as read'));
     }
@@ -125,6 +133,7 @@ export const NotificationsScreen = ({ navigation }) => {
       );
       setSelectedNotif(null);
       fetchNotifications();
+      refreshGlobalNotifications();
     } catch (err) {
       Alert.alert('Decision Failed', extractErrorMessage(err, 'Could not process leave review'));
     } finally {

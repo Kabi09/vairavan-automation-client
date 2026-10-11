@@ -30,6 +30,13 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
         body: notificationPayload.body,
       },
       data: stringifiedData,
+      android: {
+        priority: 'high',
+        notification: {
+          sound: 'default',
+          channelId: 'default',
+        },
+      },
     };
 
     const response = await messaging.sendEachForMulticast(message);

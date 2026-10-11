@@ -78,6 +78,32 @@
 ## Change History
 
 ### 2026-10-11
+#### Real-Time Notification System (Foreground, Background & Closed States)
+- What was changed:
+  - Installed native modules `expo-notifications` and `expo-device` in `duty-management-app`.
+  - Configured high-importance Android notification channels (`setNotificationChannelAsync`) with sound and vibration patterns in `notificationService.js`.
+  - Enhanced backend FCM message structure in `backend/src/services/notificationService.js` with Android high-priority delivery flags (`priority: 'high'`) ensuring heads-up display when the app is backgrounded or closed.
+  - Created global `NotificationContext.jsx` with automatic 15-second background polling for seamless real-time synchronization in serverless/production environments.
+  - Configured foreground notification presentation handlers (`shouldShowAlert: true`, `shouldPlaySound: true`) and foreground arrival alert dialogs with one-tap "View" navigation.
+  - Implemented `addNotificationResponseReceivedListener` routing users directly to the Notifications screen when tapping alerts in the Android notification tray.
+  - Attached `useFocusEffect` across `AdminDashboardScreen`, `EmployeeDashboardScreen`, and `NotificationsScreen` ensuring instantaneous badge and list refresh when switching or returning to screens.
+  - Configured `expo-notifications` plugin in `duty-management-app/app.json`.
+- Files changed:
+  - `duty-management-app/package.json`
+  - `duty-management-app/app.json`
+  - `duty-management-app/App.js`
+  - `duty-management-app/src/utils/notificationService.js`
+  - `duty-management-app/src/context/NotificationContext.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `backend/src/services/notificationService.js`
+  - `project.md`
+- Logic changed: Unified push delivery across all 3 app states (foreground in-app dialogs + focus sync, background tray delivery, closed app wake & tap routing).
+- Reason: User requested real-time notification handling across all states (closed, background, and in-app open).
+- Impact: Users receive real-time alerts regardless of app lifecycle state, eliminating stale unread counts and manual pull-to-refresh friction.
+
+### 2026-10-11
 #### Firebase Push Notifications Service Account & Vercel Endpoints Fix
 - What was changed:
   - Fixed Firebase Admin SDK credentials discovery in `backend/src/config/firebase.js` to automatically detect and load `firebase-service-account.json` across standard relative and absolute paths (`backend/secrets/firebase-service-account.json`).
