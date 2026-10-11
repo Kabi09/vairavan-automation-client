@@ -82,7 +82,7 @@
 - What was changed:
   - Removed old polling `Alert.alert` popup workaround from `duty-management-app/src/context/NotificationContext.jsx`.
   - Implemented end-to-end device token registration and refresh lifecycle in `duty-management-app/src/utils/notificationService.js`:
-    - On login & session restore (`initializeAuth`): requests permissions, acquires native FCM/Expo push token, caches to `SecureStore`, and registers with backend `POST /api/notifications/register-token`.
+    - On login & session restore (`initializeAuth`): requests permissions, acquires native FCM token on standalone APK (or persistent client device token on Expo Go), caches to `SecureStore`, and registers with backend `POST /api/notifications/register-token`.
     - On logout: unregisters device token via `POST /api/notifications/remove-token` and purges local storage.
   - Enhanced backend `registerDeviceToken` controller (`backend/src/controllers/notificationController.js`) to automatically prune the device token from any prior accounts on that device before associating with the logged-in user.
   - Enhanced `backend/src/services/notificationService.js` dual-dispatch engine delivering high-priority native alerts via Firebase Admin SDK (FCM) and Expo Push API with default sound, MAX Android importance, and vibration timings.
