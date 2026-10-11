@@ -114,6 +114,14 @@
 ## Change History
 
 ### 2026-10-11
+#### Origin Backend Synchronization & Secret Protection
+- What was changed: Synchronized branch with `origin/backend` (not `main`). Protected `backend/secrets/` and service account credential keys from git tracking via updated `.gitignore` files. Successfully pushed all backend commits to remote `origin/backend`.
+- Files changed: `.gitignore`, `backend/.gitignore`, `project.md`
+- Logic changed: Secret scanning compliance and upstream branch verification.
+- Reason: User requested targeting `origin - backend` (not `main`) and prevented credential exposure.
+- Impact: Remote `origin/backend` is up to date and clean; local credentials remain preserved on disk.
+
+### 2026-10-11
 #### Local Environment Setup (.env)
 - What was changed: Created `.env` files in both `backend/.env` and root `.env` configured for local MongoDB server (`mongodb://127.0.0.1:27017/vairavan_duty_management`) with secure JWT keys. Enhanced `server.js` and `createAdmin.js` to resolve `.env` across local and parent directories. Bootstrapped initial admin and verified live server startup and login endpoints.
 - Files changed: `backend/.env`, `.env`, `backend/src/server.js`, `backend/src/scripts/createAdmin.js`, `project.md`
