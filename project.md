@@ -114,6 +114,18 @@
 ## Change History
 
 ### 2026-10-11
+#### Removal of HOST and NODE_ENV Configuration
+- What was changed:
+  - Removed `HOST` and `NODE_ENV=development` variables from `.env`, `backend/.env`, and `backend/.env.example`.
+  - Updated `backend/src/server.js` to bind directly to `PORT` using standard defaults (`app.listen(PORT)`), eliminating redundant `HOST` and `NODE_ENV` references.
+  - Updated `backend/src/routes/index.js` health check to remove the `environment` response field.
+  - Updated `backend/src/middleware/errorHandler.js` to remove `NODE_ENV` checks, preventing stack trace leaks in API responses.
+- Files changed: `backend/.env`, `.env`, `backend/.env.example`, `backend/src/server.js`, `backend/src/routes/index.js`, `backend/src/middleware/errorHandler.js`, `project.md`
+- Logic changed: Simplified server binding and removed environment-dependent branching.
+- Reason: User requested removing `HOST` and `NODE_ENV=development` from `.env` and related code.
+- Impact: Cleaner environment setup, standard port binding across local and cloud environments, and secure error responses.
+
+### 2026-10-11
 #### MongoDB Atlas Integration & Admin Credential Synchronization
 - What was changed:
   - Updated MongoDB connection logic in `backend/src/config/db.js` with connection pooling (`maxPoolSize: 10`), idempotency, and caching across serverless/web requests.

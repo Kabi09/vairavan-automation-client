@@ -58,10 +58,6 @@ export const errorHandler = (err, req, res, next) => {
     response.errors = error.errors;
   }
 
-  // Include stack trace only in development
-  if (process.env.NODE_ENV === 'development' && statusCode === 500) {
-    response.stack = err.stack;
-  }
 
   if (statusCode === 500) {
     console.error(`[Unhandled Error] ${req.method} ${req.originalUrl}:`, err);

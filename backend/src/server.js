@@ -15,7 +15,6 @@ import { initializeFirebase } from './config/firebase.js';
 import { configureCloudinary } from './config/cloudinary.js';
 
 const PORT = parseInt(process.env.PORT || '5000', 10);
-const HOST = process.env.HOST || '0.0.0.0';
 
 let server;
 
@@ -28,13 +27,12 @@ const startServer = async () => {
     configureCloudinary();
     initializeFirebase();
 
-    // 3. Start listening on configured host and port
-    server = app.listen(PORT, HOST, () => {
+    // 3. Start listening on configured port
+    server = app.listen(PORT, () => {
       console.log(`=======================================================`);
       console.log(`  Vairavan Automation Backend API Server Started`);
-      console.log(`  Mode: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`  Listening on http://${HOST}:${PORT}`);
-      console.log(`  Health Check: http://${HOST}:${PORT}/api/health`);
+      console.log(`  Listening on port ${PORT}`);
+      console.log(`  Health Check: http://localhost:${PORT}/api/health`);
       console.log(`=======================================================`);
     });
   } catch (error) {

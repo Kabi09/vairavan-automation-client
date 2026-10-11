@@ -41,7 +41,6 @@ router.get('/health', async (req, res) => {
     database: dbStatusMap[dbState] || 'unknown',
     hasMongoUri: !!process.env.MONGODB_URI,
     dbError,
-    environment: process.env.NODE_ENV || 'development',
   });
 });
 
