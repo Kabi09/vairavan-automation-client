@@ -15,7 +15,6 @@ export const connectDB = async (customUri = null) => {
   if (isConnectingPromise) {
     return isConnectingPromise;
   }
-
   const uri = customUri || process.env.MONGODB_URI;
 
   if (!uri) {
