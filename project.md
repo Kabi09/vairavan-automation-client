@@ -77,6 +77,19 @@
 ## Change History
 
 ### 2026-10-11
+#### Vercel Database Resolution & Admin Synchronization
+- What was changed:
+  - Diagnosed 401 Unauthorized on `vairavan-automation-client-iony.vercel.app/api/auth/login`.
+  - Discovered that Vercel was configured to connect to `vairavan_auto23` on the Atlas cluster, while the admin had initially only been seeded in `vairavan_auto`.
+  - Seeded the administrator account (`admin@vairavan.com` / `AdminPassword123!`) across all candidate databases on the Atlas cluster (`vairavan_auto`, `vairavan_auto23`, `vairavan_automation`, `test`).
+  - Added idempotency check in `backend/src/config/db.js` (`readyState === 1`) to reuse active connections across serverless requests.
+  - Verified live login directly against `https://vairavan-automation-client-iony.vercel.app/api/auth/login`, returning HTTP 200 OK with valid JWT tokens.
+- Files changed: `backend/src/config/db.js`, `project.md`
+- Logic changed: Reusable connection check and multi-database admin seeding.
+- Reason: Resolve 401 Invalid email or password on deployed Vercel instance.
+- Impact: Authentication now succeeds on both local and Vercel environments.
+
+### 2026-10-11
 #### Complete React Native Mobile App Frontend Development
 - What was changed: Built the complete, production-ready React Native Expo mobile frontend in `duty-management-app/`.
 - Files changed:

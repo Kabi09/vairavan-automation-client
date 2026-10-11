@@ -4,6 +4,10 @@ import mongoose from 'mongoose';
  * Connect to MongoDB instance using Mongoose
  */
 export const connectDB = async (customUri = null) => {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
   const uri = customUri || process.env.MONGODB_URI;
 
   if (!uri) {
