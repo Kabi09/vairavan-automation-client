@@ -20,7 +20,7 @@ export const setUnauthorizedHandler = (handler) => {
   unauthorizedHandler = handler;
 };
 
-// Request interceptor: attach Bearer token from secure storage
+// Request interceptor: attach Bearer token and log request
 apiClient.interceptors.request.use(
   async (config) => {
     try {
@@ -31,15 +31,27 @@ apiClient.interceptors.request.use(
     } catch (err) {
       console.warn('[ApiClient] Failed to read token from SecureStore:', err);
     }
+    console.log(`\n➡️ [API REQ] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+    if (config.data && typeof config.data === 'object') {
+      console.log('   Payload:', JSON.stringify(config.data));
+    }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Response interceptor: handle 401 and global errors
+// Response interceptor: log response & handle errors
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`✅ [API RES] ${response.status} ${response.config?.url}`);
+    return response;
+  },
   async (error) => {
+    const status = error.response ? error.response.status : 'NETWORK_ERROR';
+    const errorData = error.response?.data || error.message;
+    console.error(`❌ [API ERR] ${status} ${error.config?.url}`);
+    console.error('   Details:', JSON.stringify(errorData));
+
     if (error.response && error.response.status === 401) {
       console.warn('[ApiClient] 401 Unauthorized received');
       if (typeof unauthorizedHandler === 'function') {
