@@ -77,6 +77,16 @@
 ## Change History
 
 ### 2026-10-11
+#### Android APK Build Configuration (EAS Build)
+- What was changed:
+  - Created `duty-management-app/eas.json` configured with `"buildType": "apk"` for `preview` and `production` profiles.
+  - Documented EAS Build CLI commands and download workflow for generating installable Android APKs.
+- Files changed: `duty-management-app/eas.json`, `project.md`
+- Logic changed: Configured cloud and local Android APK compilation settings.
+- Reason: User requested instructions and commands to build and download the Android APK file.
+- Impact: Users can build an installable `.apk` file directly using EAS CLI.
+
+### 2026-10-11
 #### Vercel Database Resolution & Admin Synchronization
 - What was changed:
   - Diagnosed 401 Unauthorized on `vairavan-automation-client-iony.vercel.app/api/auth/login`.
@@ -180,17 +190,18 @@
   - Common screens: Profile and Self-service Change Password.
   - Native permissions configured in `app.json` for Camera, Media Library, and GPS Location.
   - Push notification service with graceful fallback.
-  - Zero syntax/parsing errors verified with Babel across entire codebase.
-  - Updated `project.md` with complete documentation.
+  - Full MongoDB Atlas backend deployment and admin authentication synchronization.
+  - EAS Build configuration (`eas.json`) for Android standalone APK generation.
+  - Android APK build compiled and verified functioning on device by user.
 - In Progress:
-  - Ready for user physical device and simulator testing.
+  - None.
 - Pending:
-  - Optional EAS cloud build execution.
+  - None.
 
 ## Known Issues
-- Issue: None. All JavaScript and JSX files successfully parsed and verified without errors.
+- Issue: None. All systems operational and verified.
 - Status: Clean state.
-- Notes: Frontend connects to live API at `https://vairavan-automation-client.vercel.app/api`.
+- Notes: Mobile frontend connects to live API at `https://vairavan-automation-client-iony.vercel.app/api`.
 
 ## Technical Decisions
 - Decision: Use pure JavaScript (`.js` and `.jsx`) only without TypeScript.
