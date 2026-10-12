@@ -84,7 +84,10 @@
   - Updated `backend/src/controllers/notificationController.js` `registerDeviceToken` to retain device tokens across multiple accounts on a single testing device, ensuring Admin accounts do not lose tokens when testing employee logins.
   - Updated `backend/src/controllers/leaveController.js` `createLeave` to send push notifications to both Admins (alerting them of the new leave request) AND the submitting Employee (immediate push confirmation).
   - Enhanced detailed delivery and error logging in `backend/src/services/notificationService.js` for both FCM and Expo push services.
+  - Created interactive CLI manual tester (`backend/src/scripts/testPush.js`) with 5-second countdown for verifying screen-off, background, and running app push delivery (`npm --prefix backend run test:push`).
 - Files changed:
+  - `backend/src/scripts/testPush.js`
+  - `backend/package.json`
   - `backend/src/config/firebaseServiceAccount.js`
   - `backend/src/config/firebase.js`
   - `backend/src/controllers/notificationController.js`
