@@ -78,6 +78,39 @@
 ## Change History
 
 ### 2026-10-12
+#### Brand App Icon & Push Notification Rich Image Integration
+- What was changed:
+  - Processed user-uploaded official "V@IRAVAN AUTOMATION" logo image into all required cross-platform mobile assets:
+    - `duty-management-app/assets/icon.png` (1024x1024 standard app icon)
+    - `duty-management-app/assets/logo.png` (1024x1024 high-res in-app branding)
+    - `duty-management-app/assets/android-icon-foreground.png` (512x512 adaptive foreground with safe-zone margin)
+    - `duty-management-app/assets/android-icon-background.png` (512x512 matching metallic background `#cbe6f3`)
+    - `duty-management-app/assets/notification-icon.png` (96x96 status bar icon)
+    - `duty-management-app/assets/splash-icon.png` (1024x1024 splash icon)
+    - `duty-management-app/assets/favicon.png` (48x48 web favicon)
+  - Updated `duty-management-app/app.json`:
+    - Configured `android.adaptiveIcon` with matching `#cbe6f3` background and foreground assets.
+    - Updated `expo-notifications` plugin config to use `notification-icon.png`.
+  - Hosted high-resolution logo on Cloudinary CDN (`https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png`).
+  - Updated `backend/src/services/notificationService.js`:
+    - Attached `imageUrl` to FCM `notification.imageUrl`, `android.notification.imageUrl`, and `data.imageUrl` so push notifications display rich logo imagery in Android system notification trays.
+    - Attached rich image payload to Expo push service messages.
+  - Updated `duty-management-app/src/screens/admin/NotificationsScreen.jsx`:
+    - Replaced placeholder Ionicons icon badge with official logo thumbnail with status dot overlay.
+  - Updated `duty-management-app/src/screens/auth/LoginScreen.jsx`:
+    - Replaced generic Ionicons construct icon with brand logo image.
+- Files changed:
+  - `duty-management-app/assets/*`
+  - `duty-management-app/app.json`
+  - `backend/src/services/notificationService.js`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+  - `duty-management-app/src/screens/auth/LoginScreen.jsx`
+  - `project.md`
+- Logic changed: Attached rich logo image to FCM notification payloads and integrated brand logo across mobile app icon, splash, notifications, and login UI.
+- Reason: User requested updating the app icon to the uploaded V@IRAVAN AUTOMATION emblem and displaying the image icon in push notifications.
+- Impact: App displays the official emblem as launcher icon, splash icon, in-app branding, and delivers rich notification alerts with brand image in the notification shade.
+
+### 2026-10-12
 #### Production Cleanup & Removal of Test-Only Artifacts
 - What was changed:
   - Removed temporary manual push tester script `backend/src/scripts/testPush.js` and removed `"test:push"` script from `backend/package.json`.

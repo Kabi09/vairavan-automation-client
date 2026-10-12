@@ -35,6 +35,10 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
   let totalDelivered = 0;
   let totalFailed = 0;
 
+  const logoImageUrl =
+    notificationPayload.imageUrl ||
+    'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
+
   // 1. Deliver native FCM tokens via Firebase Admin SDK
   if (fcmTokens.length > 0) {
     const messaging = getMessaging();
@@ -45,8 +49,12 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
           notification: {
             title: notificationPayload.title,
             body: notificationPayload.body,
+            imageUrl: logoImageUrl,
           },
-          data: stringifiedData,
+          data: {
+            ...stringifiedData,
+            imageUrl: logoImageUrl,
+          },
           android: {
             priority: 'high',
             notification: {
@@ -55,6 +63,7 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
               priority: 'max',
               defaultSound: true,
               defaultVibrateTimings: true,
+              imageUrl: logoImageUrl,
             },
           },
         };
@@ -104,9 +113,15 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
         sound: 'default',
         title: notificationPayload.title,
         body: notificationPayload.body,
-        data: stringifiedData,
+        data: {
+          ...stringifiedData,
+          imageUrl: logoImageUrl,
+        },
         priority: 'high',
         channelId: 'default',
+        richContent: {
+          image: logoImageUrl,
+        },
       }));
 
       const res = await fetch('https://exp.host/--/api/v2/push/send', {

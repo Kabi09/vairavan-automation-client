@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -152,30 +153,21 @@ export const NotificationsScreen = ({ navigation }) => {
         {/* Top Header */}
         <View style={styles.cardHeader}>
           <View style={styles.headerLeft}>
-            <View
-              style={[
-                styles.iconBadge,
-                item.type === 'leave_request'
-                  ? styles.iconLeave
-                  : styles.iconDecision,
-              ]}
-            >
-              <Ionicons
-                name={
+            <View style={styles.logoBadgeContainer}>
+              <Image
+                source={require('../../../assets/logo.png')}
+                style={styles.notifLogoImage}
+                resizeMode="cover"
+              />
+              <View
+                style={[
+                  styles.statusDot,
                   item.type === 'leave_request'
-                    ? 'calendar'
+                    ? styles.dotWarning
                     : leaveStatus === 'approved'
-                    ? 'checkmark-circle'
-                    : 'close-circle'
-                }
-                size={20}
-                color={
-                  item.type === 'leave_request'
-                    ? COLORS.warning
-                    : leaveStatus === 'approved'
-                    ? COLORS.success
-                    : COLORS.danger
-                }
+                    ? styles.dotSuccess
+                    : styles.dotDanger,
+                ]}
               />
             </View>
             <View style={styles.titleBlock}>
@@ -388,19 +380,37 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: SPACING.sm,
   },
-  iconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: RADIUS.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoBadgeContainer: {
+    position: 'relative',
+    width: 42,
+    height: 42,
     marginRight: SPACING.sm,
   },
-  iconLeave: {
-    backgroundColor: '#FEF3C7',
+  notifLogoImage: {
+    width: 42,
+    height: 42,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  iconDecision: {
-    backgroundColor: '#EFF6FF',
+  statusDot: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  dotWarning: {
+    backgroundColor: COLORS.warning,
+  },
+  dotSuccess: {
+    backgroundColor: COLORS.success,
+  },
+  dotDanger: {
+    backgroundColor: COLORS.danger,
   },
   titleBlock: {
     flex: 1,

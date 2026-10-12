@@ -7,6 +7,7 @@ import {
   Platform,
   StyleSheet,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -81,7 +82,11 @@ export const LoginScreen = () => {
           {/* Header Branding */}
           <View style={styles.brandContainer}>
             <View style={styles.logoCircle}>
-              <Ionicons name="construct" size={38} color={COLORS.primary} />
+              <Image
+                source={require('../../../assets/logo.png')}
+                style={styles.logoImage}
+                resizeMode="cover"
+              />
             </View>
             <Text style={styles.appName}>{APP_CONFIG.COMPANY_NAME}</Text>
             <Text style={styles.appSubtitle}>Field Service & Duty Management</Text>
@@ -161,15 +166,23 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xxl,
   },
   logoCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: COLORS.primarySubtle,
+    width: 80,
+    height: 80,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  logoImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
   },
   appName: {
     fontSize: 24,
