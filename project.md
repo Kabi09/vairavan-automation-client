@@ -81,6 +81,40 @@
 ## Change History
 
 ### 2026-10-12
+#### Fix Task Employee Assignment, Add Company Picker to Task Assign, Default Duty List Filter, and Resolve Dropdown Filters
+- What was changed:
+  - **Employee Assignment Fix in TaskAssignScreen**:
+    - Fixed `DropdownPickerModal.jsx` value extraction to support `value`, `id`, and `_id`, and updated `onSelect` callback to pass both `(val, fullItem)`.
+    - Updated `TaskAssignScreen.jsx` to correctly capture and assign the selected employee object and ID (`selectedEmployee.value || selectedEmployee.id || selectedEmployee._id`).
+  - **Company Selection in TaskAssignScreen**:
+    - Added company directory loading via `companyApi.getCompanies({ status: 'active', limit: 100 })`.
+    - Added a searchable Company Selection button opening `DropdownPickerModal`, auto-populating company name and phone number while allowing custom edits.
+    - Added a quick "New Company" shortcut link navigating to `CompanyFormScreen`.
+  - **Duty List Predefined Filter Fix**:
+    - In `AllDutiesScreen.jsx`, changed `startDate` and `endDate` to default to empty strings `''` (no filter applied), so opening the Duty list displays ALL records by default.
+    - Added route parameter detection `route?.params?.filterToday`. When clicking "Today's Duties" metric card on `AdminDashboardScreen`, it passes `{ filterToday: true }` to filter only today's duties.
+    - In `backend/src/controllers/dutyController.js`, ensured full day UTC bounds (`00:00:00.000` to `23:59:59.999`) for accurate single-day date queries.
+  - **Filter Employee & Company Visibility Fix**:
+    - Replaced the modal-in-modal `<Modal visible={filterModalVisible}>` in `AllDutiesScreen.jsx` with a collapsible inline Filter Card toggled by the "Filter" button.
+    - Fixed Android modal nesting issues so tapping "Filter By Employee" or "Filter By Company" opens `DropdownPickerModal` directly and cleanly.
+    - Updated `DropdownPickerModal` to accept both `items` and `options` props and handle search filtering and checkmark selection reliably.
+    - Updated `LeaveRequestsScreen.jsx` to pass `items` prop to `DropdownPickerModal`.
+- Files changed:
+  - `duty-management-app/src/components/DropdownPickerModal.jsx`
+  - `duty-management-app/src/screens/admin/TaskAssignScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `backend/src/controllers/dutyController.js`
+  - `project.md`
+- Logic changed:
+  - Duty list defaults to unrestricted view; filtered by today only when initiated from Dashboard.
+  - Staff and company dropdown options are properly resolved and displayed without modal conflicts.
+  - Task assignment allows selecting companies from database and reliably assigns staff.
+- Reason: User reported that selecting employee in add-task didn't assign, company list was missing in add-task, duty list was incorrectly filtered to today by default, and filter employee/company lists were not showing.
+- Impact: Seamless task assignment with employee & company pickers; comprehensive, unrestricted duty reports by default with on-demand today filters.
+
+### 2026-10-12
 #### Fix Leave Application in Mobile App & Admin Recent Duty Click Navigation
 - What was changed:
   - Added and exported `isDateRangeValid(startDate, endDate)` in `duty-management-app/src/utils/dateUtils.js` to resolve an unhandled `TypeError: (0, _dateUtils.isDateRangeValid) is not a function` when submitting leave requests in the mobile app.

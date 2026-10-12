@@ -30,8 +30,9 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
-export const AllDutiesScreen = () => {
+export const AllDutiesScreen = ({ route }) => {
   const today = formatISODateOnly();
+  const initialFilterToday = Boolean(route?.params?.filterToday);
   const [duties, setDuties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,11 +44,13 @@ export const AllDutiesScreen = () => {
   const [companies, setCompanies] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  
+  // Default to empty strings (NO date filter) unless navigated with filterToday
+  const [startDate, setStartDate] = useState(initialFilterToday ? today : '');
+  const [endDate, setEndDate] = useState(initialFilterToday ? today : '');
 
-  // Filter selection modal
-  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  // Filter toggle state for inline collapsible filter panel
+  const [isFilterExpanded, setIsFilterExpanded] = useState(initialFilterToday);
 
   // Pickers visibility
   const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
@@ -102,6 +105,14 @@ export const AllDutiesScreen = () => {
   useEffect(() => {
     fetchDuties();
   }, [fetchDuties]);
+
+  useEffect(() => {
+    if (route?.params?.filterToday) {
+      setStartDate(today);
+      setEndDate(today);
+      setIsFilterExpanded(true);
+    }
+  }, [route?.params?.filterToday, today]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -197,22 +208,25 @@ export const AllDutiesScreen = () => {
         subtitle="View field visit logs & service records"
         rightAction={
           <TouchableOpacity
-            style={[styles.filterToggleBtn, hasActiveFilters && styles.filterToggleBtnActive]}
-            onPress={() => setFilterModalVisible(true)}
+            style={[
+              styles.filterToggleBtn,
+              (hasActiveFilters || isFilterExpanded) && styles.filterToggleBtnActive,
+            ]}
+            onPress={() => setIsFilterExpanded(!isFilterExpanded)}
             activeOpacity={0.8}
           >
             <Ionicons
               name={hasActiveFilters ? 'funnel' : 'funnel-outline'}
               size={18}
-              color={hasActiveFilters ? COLORS.textLight : COLORS.primary}
+              color={(hasActiveFilters || isFilterExpanded) ? COLORS.textLight : COLORS.primary}
             />
             <Text
               style={[
                 styles.filterToggleText,
-                hasActiveFilters && styles.filterToggleTextActive,
+                (hasActiveFilters || isFilterExpanded) && styles.filterToggleTextActive,
               ]}
             >
-              Filter
+              {isFilterExpanded ? 'Hide Filter' : 'Filter'}
             </Text>
           </TouchableOpacity>
         }
@@ -261,6 +275,121 @@ export const AllDutiesScreen = () => {
           </View>
         </View>
 
+        {/* Inline Expandable Filter Card */}
+        {isFilterExpanded && (
+          <Card style={styles.inlineFilterCard}>
+            <View style={styles.inlineFilterHeader}>
+              <View style={styles.filterTitleRow}>
+                <Ionicons name="funnel" size={16} color={COLORS.primary} />
+                <Text style={styles.inlineFilterTitle}>Filter Duty Records</Text>
+              </View>
+              <View style={styles.inlineFilterActions}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setStartDate(today);
+                    setEndDate(today);
+                  }}
+                  style={[
+                    styles.quickFilterChip,
+                    startDate === today && endDate === today && styles.quickFilterChipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.quickFilterChipText,
+                      startDate === today && endDate === today && styles.quickFilterChipTextActive,
+                    ]}
+                  >
+                    Today
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setStartDate('');
+                    setEndDate('');
+                  }}
+                  style={[
+                    styles.quickFilterChip,
+                    !startDate && !endDate && styles.quickFilterChipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.quickFilterChipText,
+                      !startDate && !endDate && styles.quickFilterChipTextActive,
+                    ]}
+                  >
+                    All
+                  </Text>
+                </TouchableOpacity>
+                {hasActiveFilters && (
+                  <TouchableOpacity onPress={clearFilters} style={styles.inlineResetBtn}>
+                    <Text style={styles.inlineResetText}>Clear</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Date Range Pickers */}
+            <View style={styles.dateInputsRow}>
+              <View style={{ flex: 1, marginRight: SPACING.xs }}>
+                <Text style={styles.fieldLabelSmall}>From Date</Text>
+                <TouchableOpacity
+                  style={styles.pickerTriggerBtn}
+                  onPress={() => setStartDatePickerVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+                  <Text style={styles.pickerTriggerText}>{startDate || 'Start Date (All)'}</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ flex: 1, marginLeft: SPACING.xs }}>
+                <Text style={styles.fieldLabelSmall}>To Date</Text>
+                <TouchableOpacity
+                  style={styles.pickerTriggerBtn}
+                  onPress={() => setEndDatePickerVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+                  <Text style={styles.pickerTriggerText}>{endDate || 'To Date (All)'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Employee Filter */}
+            <Text style={styles.filterSectionLabel}>Filter By Employee</Text>
+            <TouchableOpacity
+              style={styles.dropdownTriggerBtn}
+              onPress={() => setEmployeeDropdownVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="person-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.dropdownTriggerText}>
+                {selectedEmployeeId
+                  ? employees.find((e) => e._id === selectedEmployeeId)?.employeeName || 'Staff Selected'
+                  : 'All Staff (Default)'}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+            </TouchableOpacity>
+
+            {/* Company Filter */}
+            <Text style={styles.filterSectionLabel}>Filter By Company</Text>
+            <TouchableOpacity
+              style={styles.dropdownTriggerBtn}
+              onPress={() => setCompanyDropdownVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="business-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.dropdownTriggerText}>
+                {selectedCompanyId
+                  ? companies.find((c) => c._id === selectedCompanyId)?.companyName || 'Company Selected'
+                  : 'All Companies (Default)'}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+            </TouchableOpacity>
+          </Card>
+        )}
+
         <ErrorMessage message={error} onRetry={fetchDuties} />
 
         {loading && !refreshing ? (
@@ -294,105 +423,6 @@ export const AllDutiesScreen = () => {
           />
         )}
       </View>
-
-      {/* Filter Modal (Date, Employee, Company) */}
-      <Modal
-        visible={filterModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setFilterModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.filterSheet}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Filter Duty Records</Text>
-              <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
-                <Ionicons name="close-circle" size={26} color={COLORS.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.sheetBody} showsVerticalScrollIndicator={false}>
-              {/* Date Filters with Calendar Pickers */}
-              <Text style={styles.filterSectionLabel}>Date Range (Default: Today)</Text>
-              <View style={styles.dateInputsRow}>
-                <View style={{ flex: 1, marginRight: SPACING.xs }}>
-                  <Text style={styles.fieldLabelSmall}>From Date</Text>
-                  <TouchableOpacity
-                    style={styles.pickerTriggerBtn}
-                    onPress={() => setStartDatePickerVisible(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
-                    <Text style={styles.pickerTriggerText}>{startDate || 'Start Date'}</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={{ flex: 1, marginLeft: SPACING.xs }}>
-                  <Text style={styles.fieldLabelSmall}>To Date</Text>
-                  <TouchableOpacity
-                    style={styles.pickerTriggerBtn}
-                    onPress={() => setEndDatePickerVisible(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
-                    <Text style={styles.pickerTriggerText}>{endDate || 'To Date'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Employee Filter with Reusable Dropdown Picker */}
-              <Text style={styles.filterSectionLabel}>Filter By Employee</Text>
-              <TouchableOpacity
-                style={styles.dropdownTriggerBtn}
-                onPress={() => setEmployeeDropdownVisible(true)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="person-outline" size={18} color={COLORS.primary} />
-                <Text style={styles.dropdownTriggerText}>
-                  {selectedEmployeeId
-                    ? employees.find((e) => e._id === selectedEmployeeId)?.employeeName || 'Staff Selected'
-                    : 'All Staff (Default)'}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
-              </TouchableOpacity>
-
-              {/* Company Filter with Reusable Dropdown Picker */}
-              <Text style={styles.filterSectionLabel}>Filter By Company</Text>
-              <TouchableOpacity
-                style={styles.dropdownTriggerBtn}
-                onPress={() => setCompanyDropdownVisible(true)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="business-outline" size={18} color={COLORS.primary} />
-                <Text style={styles.dropdownTriggerText}>
-                  {selectedCompanyId
-                    ? companies.find((c) => c._id === selectedCompanyId)?.companyName || 'Company Selected'
-                    : 'All Companies (Default)'}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
-              </TouchableOpacity>
-
-              <View style={styles.filterActions}>
-                <TouchableOpacity
-                  style={styles.resetFilterBtn}
-                  onPress={() => {
-                    clearFilters();
-                    setFilterModalVisible(false);
-                  }}
-                >
-                  <Text style={styles.resetFilterBtnText}>Reset All</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.applyFilterBtn}
-                  onPress={() => setFilterModalVisible(false)}
-                >
-                  <Text style={styles.applyFilterBtnText}>Apply Filters</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       {/* Read-Only Duty Detail Modal (Pure Viewing, NO Approve/Reject buttons) */}
       <Modal
@@ -562,13 +592,15 @@ export const AllDutiesScreen = () => {
       <DropdownPickerModal
         visible={employeeDropdownVisible}
         onClose={() => setEmployeeDropdownVisible(false)}
-        title="Filter by Employee"
+        title="Filter by Staff Member"
         selectedValue={selectedEmployeeId}
         onSelect={(val) => setSelectedEmployeeId(val)}
         allOptionLabel="All Staff"
-        options={employees.map((e) => ({
+        items={employees.map((e) => ({
           label: `${e.employeeName} (${e.employeeId || 'Staff'})`,
           value: e._id,
+          id: e._id,
+          subtitle: `${e.designation || 'Staff'} • ${e.phoneNumber || 'No phone'}`,
         }))}
       />
 
@@ -579,9 +611,11 @@ export const AllDutiesScreen = () => {
         selectedValue={selectedCompanyId}
         onSelect={(val) => setSelectedCompanyId(val)}
         allOptionLabel="All Companies"
-        options={companies.map((c) => ({
+        items={companies.map((c) => ({
           label: `${c.companyName} (${c.location || 'Site'})`,
           value: c._id,
+          id: c._id,
+          subtitle: c.companyPhoneNumber || '',
         }))}
       />
     </SafeAreaView>
@@ -631,6 +665,64 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     marginBottom: SPACING.sm,
+  },
+  inlineFilterCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginBottom: SPACING.sm,
+  },
+  inlineFilterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    marginBottom: SPACING.xs,
+  },
+  filterTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  inlineFilterTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  inlineFilterActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  quickFilterChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.xs,
+    backgroundColor: '#E2E8F0',
+  },
+  quickFilterChipActive: {
+    backgroundColor: COLORS.primary,
+  },
+  quickFilterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  quickFilterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  inlineResetBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  inlineResetText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.danger,
   },
   countWrap: {
     flexDirection: 'row',

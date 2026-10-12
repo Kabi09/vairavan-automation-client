@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import employeeApi from '../../api/employeeApi';
+import companyApi from '../../api/companyApi';
 import taskApi from '../../api/taskApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
@@ -29,6 +30,10 @@ export const TaskAssignScreen = ({ navigation }) => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employeeDropdownVisible, setEmployeeDropdownVisible] = useState(false);
 
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [companyDropdownVisible, setCompanyDropdownVisible] = useState(false);
+
   const [taskName, setTaskName] = useState('');
   const [date, setDate] = useState(formatISODateOnly());
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -39,33 +44,58 @@ export const TaskAssignScreen = ({ navigation }) => {
   const [description, setDescription] = useState('');
 
   const [loading, setLoading] = useState(false);
-  const [fetchingEmployees, setFetchingEmployees] = useState(true);
+  const [fetchingData, setFetchingData] = useState(true);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
-    const fetchActiveStaff = async () => {
+    const fetchDirectory = async () => {
       try {
-        const res = await employeeApi.getEmployees({ status: 'active', limit: 100 });
-        if (res.data?.employees) {
-          const formatted = res.data.employees
+        const [empRes, compRes] = await Promise.all([
+          employeeApi.getEmployees({ status: 'active', limit: 100 }).catch(() => ({ data: { employees: [] } })),
+          companyApi.getCompanies({ status: 'active', limit: 100 }).catch(() => ({ data: { companies: [] } })),
+        ]);
+
+        if (empRes.data?.employees) {
+          const formattedEmp = empRes.data.employees
             .filter((e) => e.accountStatus === 'active')
             .map((e) => ({
+              value: e._id,
               id: e._id,
-              label: `${e.employeeName} (${e.employeeId})`,
+              _id: e._id,
+              label: `${e.employeeName} (${e.employeeId || 'Staff'})`,
               subtitle: `${e.designation || 'Staff'} • ${e.phoneNumber || 'No phone'}`,
+              employeeName: e.employeeName,
+              employeeId: e.employeeId,
+              phoneNumber: e.phoneNumber,
               raw: e,
             }));
-          setEmployees(formatted);
+          setEmployees(formattedEmp);
+        }
+
+        if (compRes.data?.companies) {
+          const formattedComp = compRes.data.companies
+            .filter((c) => c.status === 'active')
+            .map((c) => ({
+              value: c._id,
+              id: c._id,
+              _id: c._id,
+              label: c.companyName,
+              subtitle: `${c.location || 'Site'}${c.companyPhoneNumber ? ` • ${c.companyPhoneNumber}` : ''}`,
+              companyName: c.companyName,
+              contactNumber: c.companyPhoneNumber || '',
+              raw: c,
+            }));
+          setCompanies(formattedComp);
         }
       } catch (err) {
-        setError(extractErrorMessage(err, 'Failed to load active employee list'));
+        setError(extractErrorMessage(err, 'Failed to load staff or company directory'));
       } finally {
-        setFetchingEmployees(false);
+        setFetchingData(false);
       }
     };
 
-    fetchActiveStaff();
+    fetchDirectory();
   }, []);
 
   const validate = () => {
@@ -95,7 +125,7 @@ export const TaskAssignScreen = ({ navigation }) => {
     setError('');
 
     const payload = {
-      employee: selectedEmployee.id,
+      employee: selectedEmployee.value || selectedEmployee.id || selectedEmployee._id,
       taskName: taskName.trim(),
       date,
       companyName: companyName.trim(),
@@ -202,8 +232,39 @@ export const TaskAssignScreen = ({ navigation }) => {
               required
             />
 
+            {/* Company Selection */}
+            <View style={styles.fieldContainer}>
+              <View style={styles.fieldLabelRow}>
+                <Text style={styles.fieldLabel}>Client Company *</Text>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('CompanyForm')}
+                  style={styles.addCompanyLink}
+                >
+                  <Ionicons name="add-circle-outline" size={14} color={COLORS.primary} />
+                  <Text style={styles.addCompanyLinkText}>New Company</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.pickerBtn,
+                  fieldErrors.companyName && styles.pickerBtnError,
+                ]}
+                onPress={() => setCompanyDropdownVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="business-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.pickerBtnText}>
+                  {companyName ? companyName : 'Choose from company list'}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+              {fieldErrors.companyName ? (
+                <Text style={styles.errorText}>{fieldErrors.companyName}</Text>
+              ) : null}
+            </View>
+
             <TextInputField
-              label="Company Name"
+              label="Company Name (Custom or Selected)"
               placeholder="e.g. Apex Engineering Ltd"
               value={companyName}
               onChangeText={(t) => {
@@ -255,7 +316,7 @@ export const TaskAssignScreen = ({ navigation }) => {
             title="Assign Task to Employee"
             onPress={handleAssignTask}
             loading={loading}
-            disabled={fetchingEmployees}
+            disabled={fetchingData}
             style={styles.submitBtn}
           />
         </ScrollView>
@@ -273,17 +334,43 @@ export const TaskAssignScreen = ({ navigation }) => {
         title="Select Task Scheduled Date"
       />
 
+      {/* Company Dropdown Modal */}
+      <DropdownPickerModal
+        visible={companyDropdownVisible}
+        onClose={() => setCompanyDropdownVisible(false)}
+        title="Select Client Company"
+        items={companies}
+        selectedValue={selectedCompany?.value || selectedCompany?.id}
+        showAllOption={false}
+        searchPlaceholder="Search company by name or site..."
+        onSelect={(val, item) => {
+          const chosen = item || companies.find((c) => (c.value || c.id || c._id) === val);
+          if (chosen) {
+            setSelectedCompany(chosen);
+            setCompanyName(chosen.companyName || chosen.label);
+            if (chosen.contactNumber && !phoneNumber) {
+              const cleanPhone = chosen.contactNumber.replace(/[^0-9]/g, '').slice(-10);
+              if (cleanPhone) setPhoneNumber(cleanPhone);
+            }
+          }
+          if (fieldErrors.companyName) setFieldErrors((p) => ({ ...p, companyName: null }));
+        }}
+      />
+
       {/* Employee Dropdown Modal */}
       <DropdownPickerModal
         visible={employeeDropdownVisible}
         onClose={() => setEmployeeDropdownVisible(false)}
         title="Select Assigned Staff"
         items={employees}
-        selectedValue={selectedEmployee?.id}
+        selectedValue={selectedEmployee?.value || selectedEmployee?.id}
         showAllOption={false}
         searchPlaceholder="Search staff by name or ID..."
-        onSelect={(item) => {
-          setSelectedEmployee(item);
+        onSelect={(val, item) => {
+          const chosen = item || employees.find((e) => (e.value || e.id || e._id) === val);
+          if (chosen) {
+            setSelectedEmployee(chosen);
+          }
           if (fieldErrors.employee) setFieldErrors((p) => ({ ...p, employee: null }));
         }}
       />
@@ -317,6 +404,22 @@ const styles = StyleSheet.create({
   },
   fieldContainer: {
     marginBottom: SPACING.md,
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  addCompanyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addCompanyLinkText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   fieldLabel: {
     fontSize: 13,

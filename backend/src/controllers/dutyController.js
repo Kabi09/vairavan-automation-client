@@ -129,8 +129,16 @@ export const getMyDuties = asyncHandler(async (req, res) => {
 
   if (startDate || endDate) {
     filter.dutyDate = {};
-    if (startDate) filter.dutyDate.$gte = new Date(startDate);
-    if (endDate) filter.dutyDate.$lte = new Date(endDate);
+    if (startDate) {
+      const s = new Date(startDate);
+      s.setUTCHours(0, 0, 0, 0);
+      filter.dutyDate.$gte = s;
+    }
+    if (endDate) {
+      const e = new Date(endDate);
+      e.setUTCHours(23, 59, 59, 999);
+      filter.dutyDate.$lte = e;
+    }
   }
 
   const [duties, total] = await Promise.all([
@@ -300,8 +308,16 @@ export const getAllDuties = asyncHandler(async (req, res) => {
 
   if (startDate || endDate) {
     filter.dutyDate = {};
-    if (startDate) filter.dutyDate.$gte = new Date(startDate);
-    if (endDate) filter.dutyDate.$lte = new Date(endDate);
+    if (startDate) {
+      const s = new Date(startDate);
+      s.setUTCHours(0, 0, 0, 0);
+      filter.dutyDate.$gte = s;
+    }
+    if (endDate) {
+      const e = new Date(endDate);
+      e.setUTCHours(23, 59, 59, 999);
+      filter.dutyDate.$lte = e;
+    }
   }
 
   if (search) {

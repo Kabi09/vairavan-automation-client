@@ -14,7 +14,8 @@ import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 export const DropdownPickerModal = ({
   visible,
   title = 'Select Option',
-  items = [],
+  items,
+  options,
   selectedValue,
   onSelect,
   onClose,
@@ -24,20 +25,28 @@ export const DropdownPickerModal = ({
 }) => {
   const [search, setSearch] = useState('');
 
+  const dataList = useMemo(() => {
+    if (Array.isArray(items) && items.length > 0) return items;
+    if (Array.isArray(options) && options.length > 0) return options;
+    return items || options || [];
+  }, [items, options]);
+
   const filteredItems = useMemo(() => {
-    if (!search.trim()) return items;
+    if (!search.trim()) return dataList;
     const q = search.toLowerCase();
-    return items.filter((item) => {
-      const label = (item.label || item.name || '').toLowerCase();
-      const sub = (item.subtitle || item.description || '').toLowerCase();
+    return dataList.filter((item) => {
+      const label = (item.label || item.companyName || item.employeeName || item.name || '').toLowerCase();
+      const sub = (item.subtitle || item.location || item.designation || (item.employeeId ? `ID: ${item.employeeId}` : '') || '').toLowerCase();
       return label.includes(q) || sub.includes(q);
     });
-  }, [items, search]);
+  }, [dataList, search]);
 
-  const handleSelect = (val) => {
-    onSelect(val);
+  const handleSelect = (val, itemObj) => {
+    if (onSelect) {
+      onSelect(val, itemObj);
+    }
     setSearch('');
-    onClose();
+    if (onClose) onClose();
   };
 
   return (
@@ -68,7 +77,9 @@ export const DropdownPickerModal = ({
           {/* Options List */}
           <FlatList
             data={filteredItems}
-            keyExtractor={(item) => String(item.value || item._id || item.id || item.label)}
+            keyExtractor={(item, index) =>
+              String(item.value || item._id || item.id || item.label || index)
+            }
             showsVerticalScrollIndicator={false}
             style={styles.list}
             ListHeaderComponent={
@@ -78,7 +89,7 @@ export const DropdownPickerModal = ({
                     styles.itemRow,
                     !selectedValue && styles.itemRowSelected,
                   ]}
-                  onPress={() => handleSelect('')}
+                  onPress={() => handleSelect('', null)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.itemTextWrap}>
@@ -99,15 +110,32 @@ export const DropdownPickerModal = ({
               ) : null
             }
             renderItem={({ item }) => {
-              const val = item.value !== undefined ? item.value : item._id;
-              const isSelected = selectedValue === val;
-              const label = item.label || item.companyName || item.employeeName || item.name || '';
-              const sub = item.subtitle || item.location || item.designation || item.employeeId || '';
+              const val =
+                item.value !== undefined
+                  ? item.value
+                  : item._id !== undefined
+                  ? item._id
+                  : item.id !== undefined
+                  ? item.id
+                  : item;
+              const isSelected =
+                selectedValue !== undefined &&
+                selectedValue !== null &&
+                selectedValue !== '' &&
+                (selectedValue === val || selectedValue === item._id || selectedValue === item.id || selectedValue?.id === val);
+              const label =
+                item.label || item.companyName || item.employeeName || item.name || '';
+              const sub =
+                item.subtitle ||
+                item.location ||
+                item.designation ||
+                (item.employeeId ? `ID: ${item.employeeId}` : '') ||
+                '';
 
               return (
                 <TouchableOpacity
                   style={[styles.itemRow, isSelected && styles.itemRowSelected]}
-                  onPress={() => handleSelect(val)}
+                  onPress={() => handleSelect(val, item)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.itemTextWrap}>

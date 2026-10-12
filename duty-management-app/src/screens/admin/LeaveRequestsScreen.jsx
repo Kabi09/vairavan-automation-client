@@ -428,9 +428,11 @@ export const LeaveRequestsScreen = () => {
         selectedValue={selectedEmployeeId}
         onSelect={(val) => setSelectedEmployeeId(val)}
         allOptionLabel="All Staff"
-        options={employees.map((e) => ({
+        items={employees.map((e) => ({
           label: `${e.employeeName} (${e.employeeId || 'Staff'})`,
           value: e._id,
+          id: e._id,
+          subtitle: `${e.designation || 'Staff'} • ${e.phoneNumber || 'No phone'}`,
         }))}
       />
     </SafeAreaView>

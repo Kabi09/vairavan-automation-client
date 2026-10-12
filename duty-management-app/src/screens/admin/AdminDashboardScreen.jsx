@@ -142,7 +142,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
 
               <Card
                 style={styles.metricCard}
-                onPress={() => navigation.navigate('DutiesTab')}
+                onPress={() => navigation.navigate('DutiesTab', { filterToday: true })}
               >
                 <View style={[styles.metricIcon, { backgroundColor: '#FFFBEB' }]}>
                   <Ionicons name="clipboard" size={22} color={COLORS.warning} />
