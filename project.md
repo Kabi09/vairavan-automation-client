@@ -81,6 +81,22 @@
 ## Change History
 
 ### 2026-10-12
+#### Fix Vercel Production Build: Explicit @vercel/node Builder & Root Dependencies
+- What was changed:
+  - Added explicit `@vercel/node` builder definitions to root `vercel.json` and `backend/vercel.json`.
+  - Added backend production dependencies (`express`, `mongoose`, `helmet`, `cors`, etc.) directly into root `package.json` and generated root `package-lock.json`.
+  - Removed erroneous `"build"` script from root `package.json` which caused Vercel to look for non-existent frontend static output directories.
+- Files changed:
+  - `package.json`
+  - `package-lock.json`
+  - `vercel.json`
+  - `backend/vercel.json`
+  - `project.md`
+- Logic changed: Converted Vercel project configuration to explicit serverless Node runtime builder without requiring static build artifacts.
+- Reason: User's Vercel production deployment on `backend` branch failed with a build error due to missing root dependencies and invalid build script expectations.
+- Impact: Vercel production deployments build and deploy serverless endpoints successfully.
+
+### 2026-10-12
 #### Fix Holiday Modal Android Conflicts, DatePicker Safe Dispatch, and Backend Vercel Serverless Deployment
 - What was changed:
   1. **Date Picker Component & Selection Error Fix (`DatePickerModal.jsx`)**:

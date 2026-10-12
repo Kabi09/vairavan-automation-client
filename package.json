@@ -7,7 +7,20 @@
     "start": "npm --prefix backend start",
     "dev": "npm --prefix backend run dev",
     "test": "npm --prefix backend test",
-    "seed:admin": "npm --prefix backend run seed:admin",
-    "build": "npm --prefix backend install"
+    "seed:admin": "npm --prefix backend run seed:admin"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.5.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "express-validator": "^7.2.1",
+    "firebase-admin": "^13.1.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.10.1",
+    "multer": "^1.4.5-lts.1"
   }
 }
