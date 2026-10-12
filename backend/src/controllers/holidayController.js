@@ -23,8 +23,9 @@ export const createHoliday = asyncHandler(async (req, res) => {
   const startOfYear = new Date(start.getFullYear(), 0, 1);
   const endOfYear = new Date(start.getFullYear(), 11, 31, 23, 59, 59);
 
+  const escapedName = holidayName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const duplicate = await Holiday.findOne({
-    holidayName: new RegExp(`^${holidayName.trim()}$`, 'i'),
+    holidayName: new RegExp(`^${escapedName}$`, 'i'),
     startDate: { $gte: startOfYear, $lte: endOfYear },
     isDeleted: false,
   });
@@ -46,29 +47,33 @@ export const createHoliday = asyncHandler(async (req, res) => {
 
   // Optionally send push notification to all employees
   if (notify) {
-    const payload = {
-      title: `Upcoming Holiday: ${holiday.holidayName}`,
-      body: `Company holiday scheduled from ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`,
-    };
-    notificationService.notifyAllEmployees(payload, {
-      holidayId: holiday._id.toString(),
-    }).catch((err) => console.error('[FCM] Error notifying employees of new holiday:', err.message));
+    try {
+      const payload = {
+        title: `Upcoming Holiday: ${holiday.holidayName}`,
+        body: `Company holiday scheduled from ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`,
+      };
+      await notificationService.notifyAllEmployees(payload, {
+        holidayId: holiday._id.toString(),
+      });
+    } catch (err) {
+      console.error('[FCM] Error notifying employees of new holiday:', err.message);
+    }
   }
 
   return ApiResponse.created(res, 'Holiday created successfully', { holiday });
 });
 
 /**
- * @desc    Get holidays (Admin sees all; Employees see active holidays)
+ * @desc    Get holidays (Admin sees all; Employees/Staff see active holidays)
  * @route   GET /api/holidays
- * @access  Private (Admin / Employee)
+ * @access  Private (Admin / Employee / Staff)
  */
 export const getHolidays = asyncHandler(async (req, res) => {
   const { year, status, startDate, endDate } = req.query;
 
   const filter = { isDeleted: false };
 
-  if (req.user.role === 'employee') {
+  if (req.user.role !== 'admin') {
     filter.status = 'active';
   } else if (status) {
     filter.status = status;

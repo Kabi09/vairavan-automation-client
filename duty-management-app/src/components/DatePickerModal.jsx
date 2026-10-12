@@ -5,11 +5,10 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
-import { getTodayDateString, formatISODateOnly } from '../utils/dateUtils';
+import { getTodayDateString } from '../utils/dateUtils';
 
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS = [
@@ -18,32 +17,40 @@ const MONTHS = [
 ];
 
 export const DatePickerModal = ({
-  visible,
+  visible = true,
+  inline = false,
   value,
+  selectedDate,
   onSelect,
+  onSelectDate,
   onClose,
   title = 'Select Date',
   minDate,
   maxDate,
 }) => {
-  const initialDate = value ? new Date(value) : new Date();
-  const validInitialDate = isNaN(initialDate.getTime()) ? new Date() : initialDate;
+  const activeDateValue = value || selectedDate || '';
+  const parseValidDate = (val) => {
+    if (!val) return new Date();
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? new Date() : d;
+  };
 
-  const [currentYear, setCurrentYear] = useState(validInitialDate.getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(validInitialDate.getMonth());
+  const initial = parseValidDate(activeDateValue);
+  const [currentYear, setCurrentYear] = useState(initial.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(initial.getMonth());
   const [selectedDateStr, setSelectedDateStr] = useState(
-    value || getTodayDateString()
+    activeDateValue || getTodayDateString()
   );
 
   useEffect(() => {
-    if (visible) {
-      const d = value ? new Date(value) : new Date();
-      const validD = isNaN(d.getTime()) ? new Date() : d;
-      setCurrentYear(validD.getFullYear());
-      setCurrentMonth(validD.getMonth());
-      setSelectedDateStr(value || getTodayDateString());
+    const active = value || selectedDate || '';
+    if (visible || inline) {
+      const d = parseValidDate(active);
+      setCurrentYear(d.getFullYear());
+      setCurrentMonth(d.getMonth());
+      setSelectedDateStr(active || getTodayDateString());
     }
-  }, [visible, value]);
+  }, [visible, inline, value, selectedDate]);
 
   const handlePrevMonth = () => {
     if (currentMonth === 0) {
@@ -74,20 +81,29 @@ export const DatePickerModal = ({
   const daysInMonth = getDaysInMonth(currentYear, currentMonth);
   const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
 
+  const dispatchSelection = (dateStr) => {
+    setSelectedDateStr(dateStr);
+    if (typeof onSelect === 'function') {
+      onSelect(dateStr);
+    }
+    if (typeof onSelectDate === 'function') {
+      onSelectDate(dateStr);
+    }
+    if (typeof onClose === 'function') {
+      onClose();
+    }
+  };
+
   const handleDayPress = (day) => {
     const m = String(currentMonth + 1).padStart(2, '0');
     const d = String(day).padStart(2, '0');
     const dateStr = `${currentYear}-${m}-${d}`;
-    setSelectedDateStr(dateStr);
-    onSelect(dateStr);
-    onClose();
+    dispatchSelection(dateStr);
   };
 
   const handleSelectToday = () => {
     const today = getTodayDateString();
-    setSelectedDateStr(today);
-    onSelect(today);
-    onClose();
+    dispatchSelection(today);
   };
 
   // Build calendar matrix
@@ -112,110 +128,122 @@ export const DatePickerModal = ({
 
   const todayStr = getTodayDateString();
 
+  const renderContent = () => (
+    <View style={[styles.container, inline && styles.inlineContainer]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>{title}</Text>
+        {onClose && (
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Month / Year Navigator */}
+      <View style={styles.navRow}>
+        <TouchableOpacity onPress={handlePrevMonth} style={styles.navBtn}>
+          <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
+
+        <Text style={styles.monthYearText}>
+          {MONTHS[currentMonth]} {currentYear}
+        </Text>
+
+        <TouchableOpacity onPress={handleNextMonth} style={styles.navBtn}>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Days of Week Row */}
+      <View style={styles.weekRow}>
+        {DAYS.map((day, idx) => (
+          <Text key={idx} style={styles.weekDayText}>
+            {day}
+          </Text>
+        ))}
+      </View>
+
+      {/* Days Grid */}
+      <View style={styles.daysGrid}>
+        {matrix.map((week, wIdx) => (
+          <View key={wIdx} style={styles.weekLine}>
+            {week.map((day, dIdx) => {
+              if (day === null) {
+                return <View key={dIdx} style={styles.daySlot} />;
+              }
+
+              const m = String(currentMonth + 1).padStart(2, '0');
+              const d = String(day).padStart(2, '0');
+              const thisDateStr = `${currentYear}-${m}-${d}`;
+
+              const isSelected = selectedDateStr === thisDateStr;
+              const isToday = todayStr === thisDateStr;
+
+              return (
+                <TouchableOpacity
+                  key={dIdx}
+                  style={[
+                    styles.daySlot,
+                    isToday && styles.todaySlot,
+                    isSelected && styles.selectedSlot,
+                  ]}
+                  onPress={() => handleDayPress(day)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.dayText,
+                      isToday && styles.todayText,
+                      isSelected && styles.selectedText,
+                    ]}
+                  >
+                    {day}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+
+      {/* Footer Actions */}
+      <View style={styles.footerRow}>
+        <TouchableOpacity
+          style={styles.todayButton}
+          onPress={handleSelectToday}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="today-outline" size={16} color={COLORS.primary} />
+          <Text style={styles.todayButtonText}>Today</Text>
+        </TouchableOpacity>
+
+        {onClose && (
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={onClose}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.closeBtnText}>Done</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  if (inline) {
+    return renderContent();
+  }
+
   return (
     <Modal
-      visible={visible}
+      visible={Boolean(visible)}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={onClose || (() => {})}
     >
       <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Month / Year Navigator */}
-          <View style={styles.navRow}>
-            <TouchableOpacity onPress={handlePrevMonth} style={styles.navBtn}>
-              <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
-            </TouchableOpacity>
-
-            <Text style={styles.monthYearText}>
-              {MONTHS[currentMonth]} {currentYear}
-            </Text>
-
-            <TouchableOpacity onPress={handleNextMonth} style={styles.navBtn}>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Days of Week Row */}
-          <View style={styles.weekRow}>
-            {DAYS.map((day, idx) => (
-              <Text key={idx} style={styles.weekDayText}>
-                {day}
-              </Text>
-            ))}
-          </View>
-
-          {/* Days Grid */}
-          <View style={styles.daysGrid}>
-            {matrix.map((week, wIdx) => (
-              <View key={wIdx} style={styles.weekLine}>
-                {week.map((day, dIdx) => {
-                  if (day === null) {
-                    return <View key={dIdx} style={styles.daySlot} />;
-                  }
-
-                  const m = String(currentMonth + 1).padStart(2, '0');
-                  const d = String(day).padStart(2, '0');
-                  const thisDateStr = `${currentYear}-${m}-${d}`;
-
-                  const isSelected = selectedDateStr === thisDateStr;
-                  const isToday = todayStr === thisDateStr;
-
-                  return (
-                    <TouchableOpacity
-                      key={dIdx}
-                      style={[
-                        styles.daySlot,
-                        isToday && styles.todaySlot,
-                        isSelected && styles.selectedSlot,
-                      ]}
-                      onPress={() => handleDayPress(day)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.dayText,
-                          isToday && styles.todayText,
-                          isSelected && styles.selectedText,
-                        ]}
-                      >
-                        {day}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ))}
-          </View>
-
-          {/* Footer Actions */}
-          <View style={styles.footerRow}>
-            <TouchableOpacity
-              style={styles.todayButton}
-              onPress={handleSelectToday}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="today-outline" size={16} color={COLORS.primary} />
-              <Text style={styles.todayButtonText}>Today</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.closeBtn}
-              onPress={onClose}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.closeBtnText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        {renderContent()}
       </View>
     </Modal>
   );
@@ -236,6 +264,15 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.xl,
     padding: SPACING.lg,
     ...SHADOWS.lg,
+  },
+  inlineContainer: {
+    maxWidth: '100%',
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.primarySubtle,
+    backgroundColor: '#FAFCFF',
+    ...SHADOWS.sm,
   },
   header: {
     flexDirection: 'row',

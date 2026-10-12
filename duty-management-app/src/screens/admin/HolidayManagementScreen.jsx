@@ -270,13 +270,34 @@ export const HolidayManagementScreen = () => {
                 <Text style={styles.fieldLabel}>Start Date *</Text>
                 <TouchableOpacity
                   style={styles.datePickerBtn}
-                  onPress={() => setStartDatePickerVisible(true)}
+                  onPress={() => {
+                    setStartDatePickerVisible((v) => !v);
+                    setEndDatePickerVisible(false);
+                  }}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
                   <Text style={styles.pickerBtnText}>{startDate || 'Select Start Date'}</Text>
-                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+                  <Ionicons
+                    name={startDatePickerVisible ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={COLORS.textSecondary}
+                    style={{ marginLeft: 'auto' }}
+                  />
                 </TouchableOpacity>
+
+                {startDatePickerVisible && (
+                  <DatePickerModal
+                    inline
+                    selectedDate={startDate}
+                    onSelectDate={(date) => {
+                      setStartDate(date);
+                      setStartDatePickerVisible(false);
+                    }}
+                    onClose={() => setStartDatePickerVisible(false)}
+                    title="Select Holiday Start Date"
+                  />
+                )}
               </View>
 
               {/* End Date Picker */}
@@ -284,13 +305,34 @@ export const HolidayManagementScreen = () => {
                 <Text style={styles.fieldLabel}>End Date *</Text>
                 <TouchableOpacity
                   style={styles.datePickerBtn}
-                  onPress={() => setEndDatePickerVisible(true)}
+                  onPress={() => {
+                    setEndDatePickerVisible((v) => !v);
+                    setStartDatePickerVisible(false);
+                  }}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
                   <Text style={styles.pickerBtnText}>{endDate || 'Select End Date'}</Text>
-                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+                  <Ionicons
+                    name={endDatePickerVisible ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={COLORS.textSecondary}
+                    style={{ marginLeft: 'auto' }}
+                  />
                 </TouchableOpacity>
+
+                {endDatePickerVisible && (
+                  <DatePickerModal
+                    inline
+                    selectedDate={endDate}
+                    onSelectDate={(date) => {
+                      setEndDate(date);
+                      setEndDatePickerVisible(false);
+                    }}
+                    onClose={() => setEndDatePickerVisible(false)}
+                    title="Select Holiday End Date"
+                  />
+                )}
               </View>
 
               <TextInputField
@@ -335,23 +377,6 @@ export const HolidayManagementScreen = () => {
           </View>
         </View>
       </Modal>
-
-      {/* Date Pickers */}
-      <DatePickerModal
-        visible={startDatePickerVisible}
-        onClose={() => setStartDatePickerVisible(false)}
-        selectedDate={startDate}
-        onSelectDate={(date) => setStartDate(date)}
-        title="Select Holiday Start Date"
-      />
-
-      <DatePickerModal
-        visible={endDatePickerVisible}
-        onClose={() => setEndDatePickerVisible(false)}
-        selectedDate={endDate}
-        onSelectDate={(date) => setEndDate(date)}
-        title="Select Holiday End Date"
-      />
 
       {/* Delete Confirmation */}
       <ConfirmationDialog

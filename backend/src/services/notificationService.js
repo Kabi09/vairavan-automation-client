@@ -192,7 +192,10 @@ export const notifyAdmins = async (notificationPayload, dataPayload = {}) => {
  */
 export const notifyAllEmployees = async (notificationPayload, dataPayload = {}) => {
   try {
-    const employees = await User.find({ role: 'employee', accountStatus: 'active' }).select('deviceTokens');
+    const employees = await User.find({
+      role: { $in: ['employee', 'staff'] },
+      accountStatus: 'active',
+    }).select('deviceTokens');
     const allEmployeeTokens = employees.flatMap((emp) => emp.deviceTokens || []);
     const uniqueTokens = [...new Set(allEmployeeTokens)];
     return await sendMulticastNotification(uniqueTokens, notificationPayload, dataPayload);

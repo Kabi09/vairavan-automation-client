@@ -81,6 +81,41 @@
 ## Change History
 
 ### 2026-10-12
+#### Fix Holiday Modal Android Conflicts, DatePicker Safe Dispatch, and Backend Vercel Serverless Deployment
+- What was changed:
+  1. **Date Picker Component & Selection Error Fix (`DatePickerModal.jsx`)**:
+     - Fixed date selection runtime errors where screens calling `onSelectDate` or `selectedDate` threw `TypeError: onSelect is not a function`.
+     - Standardized dual-prop compatibility (`value` or `selectedDate`, `onSelect` or `onSelectDate`).
+     - Added safe function type checks before invoking selection callbacks and close handlers.
+     - Implemented `inline={true}` mode to allow calendars to render seamlessly inside existing modals/views without creating nested native dialogs.
+  2. **Holiday Creation & Management Fix (`HolidayManagementScreen.jsx` & `holidayController.js`)**:
+     - Resolved Android nested `<Modal>` conflict where opening DatePicker inside the Create/Edit Holiday modal failed to show or froze touches. Start Date and End Date now toggle inline calendar pickers directly within the form.
+     - Backend: Sanitized holiday name regular expression search in duplicate detection (`escapeRegExp`), preventing crashes when holiday names contain special characters (e.g., parentheses or dashes).
+     - Backend: Awaited `notificationService.notifyAllEmployees` in `createHoliday` so serverless function execution on Vercel is not terminated prematurely before push notifications dispatch.
+     - Backend: Extended `getHolidays` and employee push notification targeting to include users with role `'staff'`.
+  3. **Backend Vercel Deployment Configuration**:
+     - Created root `api/index.js` and `backend/api/index.js` serverless function entrypoints.
+     - Created root `vercel.json` and `backend/vercel.json` with URL rewrites mapping to serverless handlers.
+     - Added `"build": "npm --prefix backend install"` to root `package.json` to ensure clean automated builds across all Vercel root directory settings.
+- Files changed:
+  - `duty-management-app/src/components/DatePickerModal.jsx`
+  - `duty-management-app/src/screens/admin/HolidayManagementScreen.jsx`
+  - `backend/src/controllers/holidayController.js`
+  - `backend/src/services/notificationService.js`
+  - `api/index.js`
+  - `backend/api/index.js`
+  - `vercel.json`
+  - `backend/vercel.json`
+  - `package.json`
+  - `project.md`
+- Logic changed:
+  - Switched date picker inside Holiday modal to inline expansion.
+  - Added dual prop support in DatePickerModal.
+  - Added serverless entrypoints and rewrites for Vercel deployment.
+- Reason: User reported "holdiday error", "backend deployee error", and "date selecterror".
+- Impact: Vercel builds and runs serverless backend reliably; date selection works without errors on all screens; holiday creation works smoothly on mobile without modal stacking issues.
+
+### 2026-10-12
 #### Fix EAS Build JS Bundling SyntaxError in EmployeeListScreen & eas.json Config
 - What was changed:
   - Resolved `SyntaxError: 'import' and 'export' may only appear at the top level. (500:0)` in `EmployeeListScreen.jsx`.
