@@ -105,6 +105,8 @@ export const EmployeeListScreen = ({ navigation }) => {
     } finally {
       setResetLoading(false);
     }
+  };
+
   const handleExportPDF = () => {
     exportEmployeesToPDF({
       title: 'Staff Directory',

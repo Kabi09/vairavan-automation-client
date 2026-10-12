@@ -81,6 +81,21 @@
 ## Change History
 
 ### 2026-10-12
+#### Fix EAS Build JS Bundling SyntaxError in EmployeeListScreen & eas.json Config
+- What was changed:
+  - Resolved `SyntaxError: 'import' and 'export' may only appear at the top level. (500:0)` in `EmployeeListScreen.jsx`.
+  - Added missing closing `};` to `handleResetPassword` which previously left the function scope unclosed and nested the export declaration inside the component scope.
+  - Added `"appVersionSource": "local"` to `eas.json` under `cli` to address future versioning requirements.
+  - Verified with Babel parser that all 50+ JavaScript and JSX files across `duty-management-app/src` parse with zero syntax errors.
+- Files changed:
+  - `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`
+  - `duty-management-app/eas.json`
+  - `project.md`
+- Logic changed: Closed `handleResetPassword` function properly, restoring valid ES module structure.
+- Reason: EAS Android build failed during `Bundle JavaScript` phase due to an unclosed function brace.
+- Impact: JavaScript bundle compiles cleanly for both Expo Go and EAS Android APK preview builds.
+
+### 2026-10-12
 #### Full Improvements & Bug Fixes: Export Engine, Reusable Calendar & Time Pickers, 10-Digit Validation, Dropdowns & Signature Persistence
 - What was changed:
   1. **Export Engine & File System Fix**:
