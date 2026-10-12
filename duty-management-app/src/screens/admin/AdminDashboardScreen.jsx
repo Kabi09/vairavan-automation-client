@@ -235,7 +235,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
             {/* Upcoming Holidays */}
             <View style={[styles.sectionHeaderRow, { marginTop: SPACING.md }]}>
               <Text style={styles.sectionTitle}>Upcoming Holidays</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('HolidaysTab')}>
+              <TouchableOpacity onPress={() => navigation.navigate('HolidayManagement')}>
                 <Text style={styles.viewAllText}>Manage</Text>
               </TouchableOpacity>
             </View>
