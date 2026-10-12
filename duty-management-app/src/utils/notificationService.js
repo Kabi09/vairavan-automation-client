@@ -1,13 +1,8 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as SecureStore from 'expo-secure-store';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
+import Constants from 'expo-constants';
 import notificationApi from '../api/notificationApi';
-
-// Determine if running inside Expo Go client sandbox
-const isExpoGo =
-  Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
-  Constants.appOwnership === 'expo';
 
 // Dynamic safe loading of expo-notifications module
 let Notifications = null;

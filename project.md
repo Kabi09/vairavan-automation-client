@@ -78,6 +78,22 @@
 ## Change History
 
 ### 2026-10-12
+#### Production Cleanup & Removal of Test-Only Artifacts
+- What was changed:
+  - Removed temporary manual push tester script `backend/src/scripts/testPush.js` and removed `"test:push"` script from `backend/package.json`.
+  - Cleaned up unused imports (`ExecutionEnvironment`) and unused variables (`isExpoGo`) in `duty-management-app/src/utils/notificationService.js`.
+  - Retained all production push notification code: Firebase Admin SDK initialization, high-importance Android notification channels, device token registration/refresh, backend multicast delivery, and native OS notification listeners.
+  - Verified that all 23 backend unit tests continue to pass and leave application push notifications remain fully operational.
+- Files changed:
+  - `backend/package.json`
+  - `backend/src/scripts/testPush.js` (deleted)
+  - `duty-management-app/src/utils/notificationService.js`
+  - `project.md`
+- Logic changed: Removed non-production test-only CLI scripts while preserving all production runtime business logic, API endpoints, and push notification handlers.
+- Reason: User requested code cleanup to retain only production-ready files, dependencies, and business workflows.
+- Impact: Codebase is clean, maintainable, and free of extraneous testing scripts while maintaining complete push notification and leave management workflows.
+
+### 2026-10-12
 #### Leave Application Push Notification Await & FCM Token Sanitization
 - What was changed:
   - In `backend/src/controllers/leaveController.js`:
