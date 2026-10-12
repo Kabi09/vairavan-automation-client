@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import authApi from '../api/authApi';
 import { setUnauthorizedHandler } from '../api/apiClient';
@@ -13,6 +13,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [refreshToken, setRefreshToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isLoggingOutRef = useRef(false);
 
   // Initialize and check stored session
   useEffect(() => {
@@ -57,9 +58,11 @@ export const AuthProvider = ({ children }) => {
   // Handle automatic logout on 401
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      logout();
+      if ((token || refreshToken) && !isLoggingOutRef.current) {
+        logout();
+      }
     });
-  }, [refreshToken]);
+  }, [token, refreshToken]);
 
   const login = async (email, password) => {
     try {
@@ -92,8 +95,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
     try {
-      await notificationService.unregisterPushNotifications().catch(() => {});
+      if (token) {
+        await notificationService.unregisterPushNotifications().catch(() => {});
+      }
       if (refreshToken) {
         await authApi.logout(refreshToken).catch(() => {});
       }
@@ -106,6 +113,7 @@ export const AuthProvider = ({ children }) => {
       setToken(null);
       setRefreshToken(null);
       setUser(null);
+      isLoggingOutRef.current = false;
     }
   };
 

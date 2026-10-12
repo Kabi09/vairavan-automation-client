@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import notificationApi from '../api/notificationApi';
+import { APP_CONFIG } from '../constants/config';
 
 // Dynamic safe loading of expo-notifications module
 let Notifications = null;
@@ -124,8 +125,13 @@ export const registerPushNotifications = async () => {
 
       try {
         await SecureStore.setItemAsync('vairavan_device_token', token);
-        await notificationApi.registerDeviceToken(token);
-        console.log('[NotificationService] Device token registered with backend successfully');
+        const authToken = await SecureStore.getItemAsync(APP_CONFIG.STORAGE_KEYS.ACCESS_TOKEN);
+        if (authToken) {
+          await notificationApi.registerDeviceToken(token);
+          console.log('[NotificationService] Device token registered with backend successfully');
+        } else {
+          console.log('[NotificationService] Device token cached locally; will register after login');
+        }
       } catch (err) {
         console.warn('[NotificationService] Failed to register token with backend:', err.message);
       }
@@ -192,6 +198,19 @@ export const unregisterPushNotifications = async () => {
     } catch {}
   }
   if (!token) return;
+
+  // Verify access token exists before calling authenticated endpoint
+  let authToken = null;
+  try {
+    authToken = await SecureStore.getItemAsync(APP_CONFIG.STORAGE_KEYS.ACCESS_TOKEN);
+  } catch {}
+
+  // If no auth token is present, server unregistration would fail with 401
+  if (!authToken) {
+    registeredToken = null;
+    return;
+  }
+
   try {
     await notificationApi.removeDeviceToken(token);
     // Keep device token in SecureStore so subsequent logins on this physical device can re-register immediately

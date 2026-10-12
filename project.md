@@ -598,6 +598,22 @@
 - Impact: Users can build an installable `.apk` file directly using EAS CLI.
 
 ### 2026-10-12
+#### Fix Recursive 401 Request Loop on Invalid Login Credentials
+- What was changed:
+  - Fixed an infinite request loop that triggered continuous 401 calls to `/notifications/remove-token` when a user entered invalid credentials on `LoginScreen`.
+  - In `apiClient.js`: Guarded the 401 response interceptor so endpoints like `/auth/login`, `/auth/register`, `/notifications/remove-token`, and `/notifications/register-token` do NOT invoke `unauthorizedHandler`. Added `isHandlingUnauthorized` flag to debounce/prevent re-entrance.
+  - In `AuthContext.jsx`: Guarded `setUnauthorizedHandler` to only trigger `logout()` if `token` or `refreshToken` exists, and added `isLoggingOutRef` to prevent concurrent logout cascades.
+  - In `notificationService.js`: Added an authentication check prior to calling `removeDeviceToken` and `registerDeviceToken`. If no active `ACCESS_TOKEN` is found in `SecureStore`, remote backend calls are skipped, avoiding unauthorized requests.
+- Files changed:
+  - `duty-management-app/src/api/apiClient.js`
+  - `duty-management-app/src/context/AuthContext.jsx`
+  - `duty-management-app/src/utils/notificationService.js`
+  - `project.md`
+- Logic changed: Segregated auth failure from session expiration; prevented unauthenticated notification token removal calls.
+- Reason: User encountered flood of 401 Unauthorized API calls on `/notifications/remove-token` when entering invalid login credentials.
+- Impact: Clean single error display on `LoginScreen` with zero recursive network requests.
+
+### 2026-10-12
 #### Assigned Task Dropdown and Auto-fill in Duty Submission
 - What was changed:
   - Added assigned task dropdown picker to `DutyFormScreen.jsx` with default `"Not Mentioned"`.

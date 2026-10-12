@@ -40,6 +40,8 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+let isHandlingUnauthorized = false;
+
 // Response interceptor: log response & handle errors
 apiClient.interceptors.response.use(
   (response) => {
@@ -53,9 +55,29 @@ apiClient.interceptors.response.use(
     console.error('   Details:', JSON.stringify(errorData));
 
     if (error.response && error.response.status === 401) {
-      console.warn('[ApiClient] 401 Unauthorized received');
-      if (typeof unauthorizedHandler === 'function') {
-        unauthorizedHandler();
+      const url = error.config?.url || '';
+      // Do NOT trigger global logout on auth routes or token unregistration routes
+      const isExempt =
+        url.includes('/auth/login') ||
+        url.includes('/auth/register') ||
+        url.includes('/auth/forgot-password') ||
+        url.includes('/auth/refresh-token') ||
+        url.includes('/notifications/remove-token') ||
+        url.includes('/notifications/register-token');
+
+      if (!isExempt && !isHandlingUnauthorized) {
+        isHandlingUnauthorized = true;
+        console.warn('[ApiClient] 401 Unauthorized received for protected endpoint');
+        if (typeof unauthorizedHandler === 'function') {
+          try {
+            unauthorizedHandler();
+          } catch (handlerErr) {
+            console.warn('[ApiClient] Error in unauthorizedHandler:', handlerErr);
+          }
+        }
+        setTimeout(() => {
+          isHandlingUnauthorized = false;
+        }, 3000);
       }
     }
     return Promise.reject(error);
