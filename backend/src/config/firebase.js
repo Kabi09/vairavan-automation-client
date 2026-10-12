@@ -2,6 +2,7 @@ import admin from 'firebase-admin';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import defaultServiceAccount from './firebaseServiceAccount.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -57,6 +58,16 @@ export const initializeFirebase = () => {
             console.warn(`[Firebase] Could not load candidate ${candidate}: ${err.message}`);
           }
         }
+      }
+    }
+
+    // 3. Bundled configuration fallback (guarantees operation in Vercel serverless environment)
+    if (!credential && defaultServiceAccount?.project_id && defaultServiceAccount?.private_key) {
+      try {
+        credential = admin.credential.cert(defaultServiceAccount);
+        console.log('[Firebase] Loaded service account credentials from bundled configuration');
+      } catch (err) {
+        console.warn(`[Firebase] Failed to load bundled configuration: ${err.message}`);
       }
     }
 

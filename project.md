@@ -78,6 +78,24 @@
 ## Change History
 
 ### 2026-10-12
+#### Firebase Vercel Credentials Bundling, Leave Push Confirmation & Testing Token Retention
+- What was changed:
+  - Created bundled service account credentials fallback (`backend/src/config/firebaseServiceAccount.js`) and imported it into `backend/src/config/firebase.js` to ensure Firebase Admin SDK initializes successfully on Vercel without relying on uncommitted `.gitignore` secret paths.
+  - Updated `backend/src/controllers/notificationController.js` `registerDeviceToken` to retain device tokens across multiple accounts on a single testing device, ensuring Admin accounts do not lose tokens when testing employee logins.
+  - Updated `backend/src/controllers/leaveController.js` `createLeave` to send push notifications to both Admins (alerting them of the new leave request) AND the submitting Employee (immediate push confirmation).
+  - Enhanced detailed delivery and error logging in `backend/src/services/notificationService.js` for both FCM and Expo push services.
+- Files changed:
+  - `backend/src/config/firebaseServiceAccount.js`
+  - `backend/src/config/firebase.js`
+  - `backend/src/controllers/notificationController.js`
+  - `backend/src/controllers/leaveController.js`
+  - `backend/src/services/notificationService.js`
+  - `project.md`
+- Logic changed: Guaranteed Firebase Admin initialization on Vercel and added dual-recipient push dispatch on leave application.
+- Reason: User reported that manual FCM test notifications succeeded across all three states, but leave application did not send push alerts because Vercel was missing service account credentials and no Admin device was registered in the database.
+- Impact: Leave applications trigger instant push notifications from Vercel to both admin and employee mobile devices across screen-off, background, and foreground states.
+
+### 2026-10-12
 #### Complete Native Device Push Notification Workflow & Pruning of Old Alert Hack
 - What was changed:
   - Removed old polling `Alert.alert` popup workaround from `duty-management-app/src/context/NotificationContext.jsx`.

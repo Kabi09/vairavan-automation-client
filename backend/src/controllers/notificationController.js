@@ -174,12 +174,6 @@ export const registerDeviceToken = asyncHandler(async (req, res) => {
 
   const trimmed = deviceToken.trim();
 
-  // Prune token from other users if device was previously used by someone else
-  await User.updateMany(
-    { _id: { $ne: req.user._id }, deviceTokens: trimmed },
-    { $pull: { deviceTokens: trimmed } }
-  );
-
   await User.findByIdAndUpdate(req.user._id, {
     $addToSet: { deviceTokens: trimmed },
   });

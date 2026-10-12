@@ -52,6 +52,7 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
         };
 
         const response = await messaging.sendEachForMulticast(message);
+        console.log(`[FCM] Sent to ${fcmTokens.length} devices: ${response.successCount} succeeded, ${response.failureCount} failed`);
         totalDelivered += response.successCount;
         totalFailed += response.failureCount;
 
@@ -59,6 +60,7 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
         response.responses.forEach((resp, idx) => {
           if (!resp.success) {
             const error = resp.error;
+            console.warn(`[FCM] Delivery failed for token: ${error?.message || 'Unknown error'}`);
             if (
               error &&
               (error.code === 'messaging/invalid-registration-token' ||
@@ -130,8 +132,10 @@ export const sendNotificationToUser = async (userId, notificationPayload, dataPa
   try {
     const user = await User.findById(userId).select('deviceTokens');
     if (!user || !user.deviceTokens || user.deviceTokens.length === 0) {
+      console.log(`[FCM] No registered device tokens found for user ${userId}`);
       return { success: true, message: 'No registered devices found for user' };
     }
+    console.log(`[FCM] Sending push notification to user ${userId} (${user.deviceTokens.length} device tokens)`);
     return await sendMulticastNotification(user.deviceTokens, notificationPayload, dataPayload);
   } catch (error) {
     console.error(`[FCM] Failed to send notification to user ${userId}:`, error.message);
@@ -147,6 +151,11 @@ export const notifyAdmins = async (notificationPayload, dataPayload = {}) => {
     const admins = await User.find({ role: 'admin', accountStatus: 'active' }).select('deviceTokens');
     const allAdminTokens = admins.flatMap((admin) => admin.deviceTokens || []);
     const uniqueTokens = [...new Set(allAdminTokens)];
+    console.log(`[FCM] Found ${admins.length} active admins with ${uniqueTokens.length} unique device tokens`);
+    if (uniqueTokens.length === 0) {
+      console.log('[FCM] No admin devices registered yet. Skipping push.');
+      return { success: true, deliveredCount: 0, message: 'No registered admin device tokens' };
+    }
     return await sendMulticastNotification(uniqueTokens, notificationPayload, dataPayload);
   } catch (error) {
     console.error('[FCM] Failed to notify admins:', error.message);

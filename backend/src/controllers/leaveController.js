@@ -79,6 +79,15 @@ export const createLeave = asyncHandler(async (req, res) => {
     employeeId: req.user._id.toString(),
   }).catch((err) => console.error('[FCM] Error notifying admins on leave submission:', err.message));
 
+  // Also send push confirmation to the submitting employee
+  notificationService.sendNotificationToUser(req.user._id, {
+    title: 'Leave Request Submitted',
+    body: `Your leave request from ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]} was submitted successfully.`,
+  }, {
+    leaveId: leave._id.toString(),
+    status: 'pending',
+  }).catch((err) => console.error('[FCM] Error notifying submitting employee:', err.message));
+
   return ApiResponse.created(res, 'Leave request submitted successfully', {
     leave: populatedLeave,
   });
