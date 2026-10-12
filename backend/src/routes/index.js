@@ -9,6 +9,7 @@ import holidayRoutes from './holidayRoutes.js';
 import dashboardRoutes from './dashboardRoutes.js';
 import uploadRoutes from './uploadRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
+import taskRoutes from './taskRoutes.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import { connectDB } from '../config/db.js';
 
@@ -54,5 +55,6 @@ router.use('/holidays', holidayRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/uploads', uploadRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/tasks', taskRoutes);
 
 export default router;

@@ -81,6 +81,71 @@
 ## Change History
 
 ### 2026-10-12
+#### Fix Leave Application in Mobile App & Admin Recent Duty Click Navigation
+- What was changed:
+  - Added and exported `isDateRangeValid(startDate, endDate)` in `duty-management-app/src/utils/dateUtils.js` to resolve an unhandled `TypeError: (0, _dateUtils.isDateRangeValid) is not a function` when submitting leave requests in the mobile app.
+  - Updated `duty-management-app/src/screens/employee/LeaveRequestScreen.jsx` to safely check `navigation.canGoBack()` before falling back to `MyLeaves`.
+  - Updated `backend/src/routes/leaveRoutes.js` to allow `admin`, `staff`, and `employee` roles on `POST /api/leaves` and `GET /api/leaves/my` so test admin accounts can submit and test leaves.
+  - Updated `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx` so that tapping on any item in "Recent Duty Activity" navigates directly to `DutyDetailsScreen` with `{ dutyId: duty._id }`, displaying complete duty information (customer details, machine info, time, GPS location, interactive map, customer/technician digital signatures, and proof photos).
+- Files changed:
+  - `duty-management-app/src/utils/dateUtils.js`
+  - `duty-management-app/src/screens/employee/LeaveRequestScreen.jsx`
+  - `backend/src/routes/leaveRoutes.js`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+- Logic changed:
+  - Leave date validation is now safely resolved without throwing runtime exceptions.
+  - Recent duties on the Admin Dashboard are now fully interactive and clickable.
+- Reason: User reported that leave application worked in manual API testing (Postman) but failed in the mobile app, and requested that clicking any recent duty on the admin dashboard display full duty details.
+- Impact: Flawless leave requests in mobile app; immediate visibility of full duty reports from the admin dashboard.
+
+### 2026-10-12
+#### Feature: Admin Task Assignment to Employees
+- What was changed:
+  - **Backend Model & Schema (`backend/src/models/Task.js`)**:
+    - Created Mongoose schema with `taskName`, `employee` (ref to User), `date`, `companyName`, `phoneNumber` (validated 10-digit mobile number), `work`, `description`, `status` (`assigned`, `in_progress`, `completed`, `cancelled`), `assignedBy` (ref to User), `isDeleted`, and timestamps.
+  - **Backend Validators (`backend/src/validators/taskValidator.js`)**:
+    - Input validation for `taskName`, valid MongoDB ObjectId for `employee`, valid ISO date for `date`, `companyName`, 10-digit mobile regex (`phoneNumber`), `work`, and status transitions.
+  - **Backend Controllers & Routes (`backend/src/controllers/taskController.js`, `backend/src/routes/taskRoutes.js`)**:
+    - `POST /api/tasks`: Admin assigns a new task; triggers push notification and in-app notification to the assigned employee.
+    - `GET /api/tasks`: List all tasks with status and date filters (restricted to Admin).
+    - `GET /api/tasks/my`: Retrieves tasks assigned specifically to the authenticated employee.
+    - `GET /api/tasks/:id`: Retrieves full details of a specific task.
+    - `PATCH /api/tasks/:id/status`: Updates task status (allowed for assigned employee or Admin).
+    - `DELETE /api/tasks/:id`: Soft-deletes a task (Admin only).
+    - Mounted under `/api/tasks` in `backend/src/routes/index.js`.
+  - **Frontend Client (`duty-management-app/src/api/taskApi.js`)**:
+    - Centralized API endpoints for creating, fetching, filtering, updating status, and deleting tasks.
+  - **Admin Task Screens**:
+    - `TaskAssignScreen.jsx`: Form with employee selector (`DropdownPickerModal`), scheduled date picker (`DatePickerModal`), task name, company name, 10-digit phone, work, and description.
+    - `AdminTaskListScreen.jsx`: Full task management screen with status tabs, search, one-tap phone call button (`Linking.openURL`), and task cancellation.
+  - **Employee Task Screens & Dashboard**:
+    - `EmployeeTaskListScreen.jsx`: View list of tasks assigned to the employee with one-tap phone call button and status update buttons ("Start Task", "Mark Done").
+    - `EmployeeDashboardScreen.jsx`: Added "Assigned Tasks" section with direct task overview cards and quick phone dial button, plus a "My Tasks" quick action button.
+    - `AdminDashboardScreen.jsx`: Added "Assign Task" and "All Tasks" quick action buttons.
+  - **Navigation**:
+    - Registered `TaskAssign` and `AdminTaskList` in `AdminNavigator.jsx`.
+    - Registered `EmployeeTaskList` in `EmployeeNavigator.jsx`.
+- Files changed:
+  - `backend/src/models/Task.js`
+  - `backend/src/validators/taskValidator.js`
+  - `backend/src/controllers/taskController.js`
+  - `backend/src/routes/taskRoutes.js`
+  - `backend/src/routes/index.js`
+  - `duty-management-app/src/api/taskApi.js`
+  - `duty-management-app/src/screens/admin/TaskAssignScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminTaskListScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeTaskListScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/navigation/EmployeeNavigator.jsx`
+- Logic changed:
+  - Admin can now assign ad-hoc field tasks with company, date, work, phone number, and instructions.
+  - Employees immediately receive and view their assigned tasks with status tracking and direct calling.
+- Reason: User requested admin task assignment (employee, taskname, date, company name, number, work, description) and employee task visibility.
+- Impact: Full end-to-end task workflow for field technicians and admin dispatchers.
+
+### 2026-10-12
 #### Fix Vercel Production Build: Explicit @vercel/node Builder & Root Dependencies
 - What was changed:
   - Added explicit `@vercel/node` builder definitions to root `vercel.json` and `backend/vercel.json`.
@@ -615,6 +680,10 @@
   - Full MongoDB Atlas backend deployment and admin authentication synchronization.
   - EAS Build configuration (`eas.json`) for Android standalone APK generation.
   - 23/23 backend test suites passing.
+  - Leave Request Mobile App Fix: Exported `isDateRangeValid` in `dateUtils.js`, safe fallback navigation, and authorized all roles for leave submission.
+  - Interactive Admin Recent Duties: Tapping any item in Recent Duty Activity on Admin Dashboard opens full `DutyDetailsScreen` with customer info, machine details, GPS location, interactive map, signatures, and photos.
+  - Admin Task Assignment: Full backend model, validators, controller, FCM push/in-app notification, frontend admin assign form with employee picker, scheduled date picker, task name, company name, 10-digit phone, work, and description.
+  - Employee Task Visibility & Status Workflow: Dedicated employee task list screen, phone dialing shortcut, status update transitions ("Start Task", "Mark Done"), and dashboard overview card with quick links.
 - In Progress:
   - None.
 - Pending:

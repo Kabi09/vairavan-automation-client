@@ -20,11 +20,11 @@ const router = Router();
 
 router.use(authenticate);
 
-// Employee submits leave request
-router.post('/', authorize('employee', 'staff'), validateCreateLeave, validate, createLeave);
+// Submit leave request (Employee, Staff, Admin)
+router.post('/', authorize('employee', 'staff', 'admin'), validateCreateLeave, validate, createLeave);
 
-// Employee views own leaves
-router.get('/my', authorize('employee', 'staff'), getMyLeaves);
+// View own leaves (Employee, Staff, Admin)
+router.get('/my', authorize('employee', 'staff', 'admin'), getMyLeaves);
 
 // Admin views all employee leave requests
 router.get('/', authorize('admin'), getAllLeaves);

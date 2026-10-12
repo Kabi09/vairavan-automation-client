@@ -47,10 +47,19 @@ export const getGreeting = () => {
   return 'Good Evening';
 };
 
+export const isDateRangeValid = (startDate, endDate) => {
+  if (!startDate || !endDate) return false;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
+  return end >= start;
+};
+
 export default {
   formatDate,
   formatISODateOnly,
   formatTime,
   getTodayDateString,
   getGreeting,
+  isDateRangeValid,
 };

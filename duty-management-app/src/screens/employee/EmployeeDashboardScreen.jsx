@@ -6,6 +6,7 @@ import {
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import dashboardApi from '../../api/dashboardApi';
+import taskApi from '../../api/taskApi';
 import notificationApi from '../../api/notificationApi';
 import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
@@ -26,6 +28,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { unreadCount, refreshNotifications } = useNotifications();
   const [data, setData] = useState(null);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -33,9 +36,17 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const fetchDashboard = useCallback(async () => {
     try {
       setError('');
-      const dashRes = await dashboardApi.getEmployeeDashboard();
-      if (dashRes.data) {
-        setData(dashRes.data);
+      const [dashRes, taskRes] = await Promise.allSettled([
+        dashboardApi.getEmployeeDashboard(),
+        taskApi.getMyTasks({ limit: 5 }),
+      ]);
+      if (dashRes.status === 'fulfilled' && dashRes.value?.data) {
+        setData(dashRes.value.data);
+      } else if (dashRes.status === 'rejected') {
+        setError(extractErrorMessage(dashRes.reason, 'Failed to load dashboard'));
+      }
+      if (taskRes.status === 'fulfilled' && taskRes.value?.data) {
+        setTasks(taskRes.value.data.tasks || []);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load dashboard'));
@@ -123,10 +134,24 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                 activeOpacity={0.8}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: '#DBEAFE' }]}>
-                  <Ionicons name="add-circle" size={26} color={COLORS.primary} />
+                  <Ionicons name="add-circle" size={24} color={COLORS.primary} />
                 </View>
                 <Text style={styles.quickActionTitle}>Submit Duty</Text>
-                <Text style={styles.quickActionSub}>Log service visit</Text>
+                <Text style={styles.quickActionSub}>Log visit</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickActionBtn, styles.taskQuickAction]}
+                onPress={() => navigation.navigate('EmployeeTaskList')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: '#EEF2FF' }]}>
+                  <Ionicons name="clipboard" size={24} color="#4F46E5" />
+                </View>
+                <Text style={styles.quickActionTitle}>My Tasks</Text>
+                <Text style={styles.quickActionSub}>
+                  {tasks.length > 0 ? `${tasks.length} active` : 'Assigned jobs'}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -135,12 +160,66 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                 activeOpacity={0.8}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: '#FEF3C7' }]}>
-                  <Ionicons name="calendar" size={26} color={COLORS.warning} />
+                  <Ionicons name="calendar" size={24} color={COLORS.warning} />
                 </View>
-                <Text style={styles.quickActionTitle}>Request Leave</Text>
-                <Text style={styles.quickActionSub}>Apply time off</Text>
+                <Text style={styles.quickActionTitle}>Leave</Text>
+                <Text style={styles.quickActionSub}>Apply off</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Assigned Tasks Section */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeaderTitle}>Assigned Tasks</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('EmployeeTaskList')}>
+                <Text style={styles.linkText}>View All ({tasks.length})</Text>
+              </TouchableOpacity>
+            </View>
+
+            {tasks.length === 0 ? (
+              <Card style={styles.emptyCard}>
+                <Ionicons name="checkmark-circle-outline" size={32} color={COLORS.textMuted} />
+                <Text style={styles.emptyCardTitle}>No tasks assigned</Text>
+                <Text style={styles.emptyCardSub}>
+                  When admin assigns you a task, it will appear here.
+                </Text>
+              </Card>
+            ) : (
+              tasks.slice(0, 3).map((task) => (
+                <Card
+                  key={task._id}
+                  style={styles.taskCard}
+                  onPress={() => navigation.navigate('EmployeeTaskList')}
+                >
+                  <View style={styles.taskCardHeader}>
+                    <Text style={styles.taskCardTitle}>{task.taskName}</Text>
+                    <StatusBadge status={task.status} />
+                  </View>
+                  <Text style={styles.taskCompanyText}>
+                    <Ionicons name="business-outline" size={13} color={COLORS.textSecondary} />{' '}
+                    {task.companyName}
+                  </Text>
+                  <Text style={styles.taskWorkText}>
+                    <Ionicons name="construct-outline" size={13} color={COLORS.textSecondary} />{' '}
+                    {task.work}
+                  </Text>
+                  <View style={styles.taskCardFooter}>
+                    <Text style={styles.taskDateText}>
+                      <Ionicons name="calendar-outline" size={12} color={COLORS.textMuted} />{' '}
+                      {formatDate(task.date)}
+                    </Text>
+                    {task.phoneNumber ? (
+                      <TouchableOpacity
+                        style={styles.callBadgeBtn}
+                        onPress={() => Linking.openURL(`tel:${task.phoneNumber}`)}
+                      >
+                        <Ionicons name="call" size={12} color={COLORS.primary} />
+                        <Text style={styles.callBadgeText}>{task.phoneNumber}</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </Card>
+              ))
+            )}
 
             {/* Leave Balances Status */}
             <Card style={styles.leaveStatusCard} onPress={() => navigation.navigate('MyLeaves')}>
@@ -360,6 +439,64 @@ const styles = StyleSheet.create({
   leaveQuickAction: {
     borderLeftWidth: 4,
     borderLeftColor: COLORS.warning,
+  },
+  taskQuickAction: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#4F46E5',
+  },
+  taskCard: {
+    marginBottom: SPACING.sm,
+    backgroundColor: COLORS.surface,
+  },
+  taskCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  taskCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  taskCompanyText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  taskWorkText: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: '500',
+    marginBottom: 6,
+  },
+  taskCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  taskDateText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  callBadgeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.primarySubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  callBadgeText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   quickActionIcon: {
     width: 44,

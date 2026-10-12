@@ -68,7 +68,22 @@ export const LeaveRequestScreen = ({ navigation }) => {
       Alert.alert(
         'Leave Request Submitted',
         'Your application has been forwarded to administration for sanction.',
-        [{ text: 'OK', onPress: () => navigation.navigate('MyLeaves') }]
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                try {
+                  navigation.navigate('MyLeaves');
+                } catch {
+                  // Fallback
+                }
+              }
+            },
+          },
+        ]
       );
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to submit leave request'));

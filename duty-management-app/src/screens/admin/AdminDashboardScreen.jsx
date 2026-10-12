@@ -167,6 +167,28 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </Card>
             </View>
 
+            {/* Task Management Quick Actions */}
+            <View style={styles.adminQuickActionsRow}>
+              <TouchableOpacity
+                style={[styles.adminQuickActionBtn, { backgroundColor: COLORS.primary }]}
+                onPress={() => navigation.navigate('TaskAssign')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle" size={18} color={COLORS.surface} />
+                <Text style={styles.adminQuickActionText}>Assign Task</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.adminQuickActionBtn, styles.adminSecondaryActionBtn]}
+                onPress={() => navigation.navigate('AdminTaskList')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="clipboard-outline" size={18} color={COLORS.primary} />
+                <Text style={[styles.adminQuickActionText, { color: COLORS.primary }]}>
+                  All Tasks
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Leave Summaries Banner */}
             <Card
               style={styles.leaveBannerCard}
@@ -214,7 +236,11 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </Card>
             ) : (
               recentDuties.map((duty) => (
-                <Card key={duty._id} style={styles.dutyItemCard}>
+                <Card
+                  key={duty._id}
+                  style={styles.dutyItemCard}
+                  onPress={() => navigation.navigate('DutyDetails', { dutyId: duty._id })}
+                >
                   <View style={styles.dutyItemHeader}>
                     <Text style={styles.dutyCustomer}>{duty.customerName}</Text>
                     <StatusBadge status={duty.status} />
@@ -350,6 +376,30 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: SPACING.md,
     marginBottom: SPACING.sm,
+  },
+  adminQuickActionsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  adminQuickActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+    gap: 8,
+  },
+  adminSecondaryActionBtn: {
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  adminQuickActionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.surface,
   },
   metricCard: {
     width: '47.5%',
