@@ -199,9 +199,9 @@ export const unregisterPushNotifications = async () => {
   if (!token) return;
   try {
     await notificationApi.removeDeviceToken(token);
-    await SecureStore.deleteItemAsync('vairavan_device_token').catch(() => {});
+    // Keep device token in SecureStore so subsequent logins on this physical device can re-register immediately
     registeredToken = null;
-    console.log('[NotificationService] Device token removed from backend successfully');
+    console.log('[NotificationService] Device token unlinked from backend user successfully');
   } catch (error) {
     console.warn('[NotificationService] Failed to remove push token:', error.message);
   }

@@ -78,6 +78,28 @@
 ## Change History
 
 ### 2026-10-12
+#### Leave Application Push Notification Await & FCM Token Sanitization
+- What was changed:
+  - In `backend/src/controllers/leaveController.js`:
+    - Updated `createLeave` to wrap FCM notification dispatches (`notifyAdmins` and `sendNotificationToUser`) in `await Promise.allSettled([...])` before returning HTTP 201 response. This eliminates premature execution termination on Vercel serverless where background promises were killed prior to FCM network delivery.
+    - Updated `reviewLeave` to `await notificationService.sendNotificationToUser` before returning HTTP 200 response to guarantee approval/rejection push delivery to employees.
+  - In `backend/src/services/notificationService.js`:
+    - Sanitized `fcmTokens` to strictly include valid alphanumeric strings (>30 chars) and filter out mock/client placeholders (`ExpoClient_`, `Test_`, etc.) preventing FCM `messaging/invalid-argument` errors.
+    - Extended automatic token pruning to prune `messaging/invalid-argument` tokens and awaited database cleanup.
+  - In `duty-management-app/src/utils/notificationService.js`:
+    - Preserved `vairavan_device_token` in `SecureStore` across user logouts so subsequent logins on the physical device immediately restore push token registration with backend.
+  - In MongoDB Atlas (`vairavan_auto23` & `vairavan_auto`):
+    - Pruned invalid test dummy tokens and synchronized active device token to Admin and Employee test accounts.
+- Files changed:
+  - `backend/src/controllers/leaveController.js`
+  - `backend/src/services/notificationService.js`
+  - `duty-management-app/src/utils/notificationService.js`
+  - `project.md`
+- Logic changed: Transitioned leave creation and review notification dispatches from floating background promises to awaited promises, and sanitized FCM multicast recipient tokens.
+- Reason: User reported that manual test notifications worked across screen-off, background, and running states, but leave application notifications were not received due to Vercel serverless container termination before FCM dispatch completion and presence of invalid token placeholders.
+- Impact: Leave application notifications are reliably delivered to both admins and employees across screen-off, background, and foreground states.
+
+### 2026-10-12
 #### Firebase Vercel Credentials Bundling, Leave Push Confirmation & Testing Token Retention
 - What was changed:
   - Created bundled service account credentials fallback (`backend/src/config/firebaseServiceAccount.js`) and imported it into `backend/src/config/firebase.js` to ensure Firebase Admin SDK initializes successfully on Vercel without relying on uncommitted `.gitignore` secret paths.

@@ -20,8 +20,16 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
   const expoTokens = tokens.filter(
     (t) => typeof t === 'string' && (t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken'))
   );
+  // FCM tokens are long alphanumeric/base64 strings (typically > 30 chars) and must not be mock/client placeholders
   const fcmTokens = tokens.filter(
-    (t) => typeof t === 'string' && !t.startsWith('ExponentPushToken') && !t.startsWith('ExpoPushToken')
+    (t) =>
+      typeof t === 'string' &&
+      t.trim().length > 30 &&
+      !t.startsWith('ExponentPushToken') &&
+      !t.startsWith('ExpoPushToken') &&
+      !t.startsWith('ExpoClient_') &&
+      !t.startsWith('Test_') &&
+      !t.startsWith('SAMPLE_')
   );
 
   let totalDelivered = 0;
@@ -64,7 +72,8 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
             if (
               error &&
               (error.code === 'messaging/invalid-registration-token' ||
-                error.code === 'messaging/registration-token-not-registered')
+                error.code === 'messaging/registration-token-not-registered' ||
+                error.code === 'messaging/invalid-argument')
             ) {
               tokensToRemove.push(fcmTokens[idx]);
             }
@@ -72,7 +81,7 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
         });
 
         if (tokensToRemove.length > 0) {
-          User.updateMany(
+          await User.updateMany(
             { deviceTokens: { $in: tokensToRemove } },
             { $pull: { deviceTokens: { $in: tokensToRemove } } }
           ).catch((err) => console.error('[FCM] Error pruning invalid tokens:', err.message));

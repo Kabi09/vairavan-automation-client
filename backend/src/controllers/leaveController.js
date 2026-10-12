@@ -69,24 +69,32 @@ export const createLeave = asyncHandler(async (req, res) => {
     console.error('[Notification] Failed to create in-app notification:', notifErr.message);
   }
 
-  // Notify Admins about the new leave request via FCM
+  // Notify Admins and submitting Employee via FCM (await dispatch to ensure delivery before serverless runtime terminates)
   const notificationPayload = {
     title: 'New Leave Request Submitted',
     body: `${req.user.employeeName} (${req.user.employeeId}) requested leave from ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`,
   };
-  notificationService.notifyAdmins(notificationPayload, {
-    leaveId: leave._id.toString(),
-    employeeId: req.user._id.toString(),
-  }).catch((err) => console.error('[FCM] Error notifying admins on leave submission:', err.message));
-
-  // Also send push confirmation to the submitting employee
-  notificationService.sendNotificationToUser(req.user._id, {
+  const employeePayload = {
     title: 'Leave Request Submitted',
     body: `Your leave request from ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]} was submitted successfully.`,
-  }, {
-    leaveId: leave._id.toString(),
-    status: 'pending',
-  }).catch((err) => console.error('[FCM] Error notifying submitting employee:', err.message));
+  };
+
+  try {
+    await Promise.allSettled([
+      notificationService.notifyAdmins(notificationPayload, {
+        leaveId: leave._id.toString(),
+        employeeId: req.user._id.toString(),
+        type: 'leave_request',
+      }),
+      notificationService.sendNotificationToUser(req.user._id, employeePayload, {
+        leaveId: leave._id.toString(),
+        status: 'pending',
+        type: 'leave_confirmation',
+      }),
+    ]);
+  } catch (pushErr) {
+    console.error('[FCM] Error dispatching leave creation push notifications:', pushErr.message);
+  }
 
   return ApiResponse.created(res, 'Leave request submitted successfully', {
     leave: populatedLeave,
@@ -277,16 +285,21 @@ export const reviewLeave = asyncHandler(async (req, res) => {
     console.error('[Notification] Error updating in-app notifications on leave review:', notifErr.message);
   }
 
-  // Send push notification to the employee
+  // Send push notification to the employee (await dispatch to ensure delivery before serverless runtime terminates)
   if (leave.employee) {
     const notificationPayload = {
       title: `Leave Request ${status === 'approved' ? 'Approved' : 'Rejected'}`,
-      body: `Your leave request from ${leave.startDate.toISOString().split('T')[0]} to ${leave.endDate.toISOString().split('T')[0]} has been ${status}. ${adminRemarks ? `Remarks: ${adminRemarks}` : ''}`,
+      body: `Your leave request from ${leave.startDate.toISOString().split('T')[0]} to ${leave.endDate.toISOString().split('T')[0]} has been ${status}.${adminRemarks ? ` Remarks: ${adminRemarks}` : ''}`,
     };
-    notificationService.sendNotificationToUser(leave.employee._id, notificationPayload, {
-      leaveId: leave._id.toString(),
-      status,
-    }).catch((err) => console.error('[FCM] Error notifying employee on leave decision:', err.message));
+    try {
+      await notificationService.sendNotificationToUser(leave.employee._id, notificationPayload, {
+        leaveId: leave._id.toString(),
+        status,
+        type: 'leave_reviewed',
+      });
+    } catch (pushErr) {
+      console.error('[FCM] Error notifying employee on leave decision:', pushErr.message);
+    }
   }
 
   return ApiResponse.success(res, 200, `Leave request has been ${status} successfully`, {
