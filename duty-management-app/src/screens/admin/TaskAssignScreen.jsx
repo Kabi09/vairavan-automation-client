@@ -25,6 +25,19 @@ import { formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
+const WORK_TYPE_OPTIONS = [
+  { value: 'Installation', label: 'Installation', subtitle: 'New machine setup, assembly & commissioning' },
+  { value: 'Service', label: 'Service', subtitle: 'Standard servicing, oil change & regular checkup' },
+  { value: 'Maintenance', label: 'Maintenance', subtitle: 'Preventive & scheduled routine maintenance' },
+  { value: 'Breakdown', label: 'Breakdown', subtitle: 'Emergency breakdown repair & critical fixes' },
+  { value: 'Repair', label: 'Repair', subtitle: 'Component overhaul & part replacement' },
+  { value: 'Inspection', label: 'Inspection', subtitle: 'Quality audit, health check & diagnostic' },
+  { value: 'Calibration', label: 'Calibration', subtitle: 'Sensor/meter tuning & precision testing' },
+  { value: 'Electrical', label: 'Electrical', subtitle: 'Panel wiring, PLC, motor & drive troubleshooting' },
+  { value: 'Mechanical', label: 'Mechanical', subtitle: 'Hydraulics, pneumatics, belts & alignments' },
+  { value: 'Other', label: 'Other', subtitle: 'Custom site assignment or unique work requirements' },
+];
+
 export const TaskAssignScreen = ({ navigation }) => {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -41,6 +54,8 @@ export const TaskAssignScreen = ({ navigation }) => {
   const [companyName, setCompanyName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [work, setWork] = useState('');
+  const [customWorkDetail, setCustomWorkDetail] = useState('');
+  const [workTypeDropdownVisible, setWorkTypeDropdownVisible] = useState(false);
   const [description, setDescription] = useState('');
 
   const [loading, setLoading] = useState(false);
@@ -112,7 +127,17 @@ export const TaskAssignScreen = ({ navigation }) => {
       errs.phoneNumber = 'Phone number must be exactly 10 digits';
     }
 
-    if (!work.trim()) errs.work = 'Work details / title is required';
+    const effectiveWork =
+      work === 'Other' && customWorkDetail.trim()
+        ? `Other - ${customWorkDetail.trim()}`
+        : work;
+
+    if (!effectiveWork.trim()) {
+      errs.work = 'Please select a work type';
+    }
+    if (work === 'Other' && !customWorkDetail.trim()) {
+      errs.customWork = 'Please specify custom work details';
+    }
 
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -124,13 +149,18 @@ export const TaskAssignScreen = ({ navigation }) => {
     setLoading(true);
     setError('');
 
+    const effectiveWork =
+      work === 'Other' && customWorkDetail.trim()
+        ? `Other - ${customWorkDetail.trim()}`
+        : work;
+
     const payload = {
       employee: selectedEmployee.value || selectedEmployee.id || selectedEmployee._id,
       taskName: taskName.trim(),
       date,
       companyName: companyName.trim(),
       phoneNumber: phoneNumber.replace(/\D/g, '').slice(-10),
-      work: work.trim(),
+      work: effectiveWork.trim(),
       description: description.trim(),
     };
 
@@ -290,17 +320,42 @@ export const TaskAssignScreen = ({ navigation }) => {
               required
             />
 
-            <TextInputField
-              label="Work Details / Type"
-              placeholder="e.g. Hydraulic Line Service & Calibration"
-              value={work}
-              onChangeText={(t) => {
-                setWork(t);
-                if (fieldErrors.work) setFieldErrors((p) => ({ ...p, work: null }));
-              }}
-              error={fieldErrors.work}
-              required
-            />
+            {/* Work Type Dropdown */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>Work Type *</Text>
+              <TouchableOpacity
+                style={[
+                  styles.pickerBtn,
+                  fieldErrors.work && styles.pickerBtnError,
+                ]}
+                onPress={() => setWorkTypeDropdownVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="construct-outline" size={18} color={COLORS.primary} />
+                <Text style={[styles.pickerBtnText, !work && styles.pickerBtnTextPlaceholder]}>
+                  {work || 'Select Work Type (Installation, Service, Maintenance...)'}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+              {fieldErrors.work ? (
+                <Text style={styles.errorText}>{fieldErrors.work}</Text>
+              ) : null}
+            </View>
+
+            {/* Custom Work Detail if Other is chosen */}
+            {work === 'Other' ? (
+              <TextInputField
+                label="Custom Work Type Details *"
+                placeholder="Specify work details (e.g. Retrofitting, Special Inspection...)"
+                value={customWorkDetail}
+                onChangeText={(t) => {
+                  setCustomWorkDetail(t);
+                  if (fieldErrors.customWork) setFieldErrors((p) => ({ ...p, customWork: null }));
+                }}
+                error={fieldErrors.customWork}
+                required
+              />
+            ) : null}
 
             <TextInputField
               label="Detailed Instructions / Description"
@@ -374,6 +429,21 @@ export const TaskAssignScreen = ({ navigation }) => {
           if (fieldErrors.employee) setFieldErrors((p) => ({ ...p, employee: null }));
         }}
       />
+
+      {/* Work Type Dropdown Modal */}
+      <DropdownPickerModal
+        visible={workTypeDropdownVisible}
+        onClose={() => setWorkTypeDropdownVisible(false)}
+        title="Select Work Type"
+        items={WORK_TYPE_OPTIONS}
+        selectedValue={work}
+        showAllOption={false}
+        searchPlaceholder="Search work type (e.g. Installation, Service, Maintenance...)"
+        onSelect={(val) => {
+          setWork(val);
+          if (fieldErrors.work) setFieldErrors((p) => ({ ...p, work: null }));
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -445,6 +515,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text,
     flex: 1,
+  },
+  pickerBtnTextPlaceholder: {
+    color: COLORS.textMuted,
   },
   errorText: {
     fontSize: 11,

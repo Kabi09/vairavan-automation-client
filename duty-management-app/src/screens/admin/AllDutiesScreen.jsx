@@ -550,7 +550,7 @@ export const AllDutiesScreen = ({ route }) => {
 
               {/* Proof Photos */}
               {selectedDuty?.customerProofPhotos?.length > 0 && (
-                <View style={[styles.detailBlock, { marginBottom: SPACING.xxl }]}>
+                <View style={styles.detailBlock}>
                   <Text style={styles.blockLabel}>
                     Service Proof Photos ({selectedDuty.customerProofPhotos.length})
                   </Text>
@@ -566,6 +566,41 @@ export const AllDutiesScreen = ({ route }) => {
                   </ScrollView>
                 </View>
               )}
+
+              {/* Linked Assigned Task */}
+              {selectedDuty?.task && typeof selectedDuty.task === 'object' ? (
+                <View style={[styles.detailBlock, { marginBottom: SPACING.xxl }]}>
+                  <Text style={styles.blockLabel}>Linked Assigned Task</Text>
+                  <View style={styles.linkedTaskModalBox}>
+                    <View style={styles.taskModalHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Ionicons name="clipboard" size={16} color={COLORS.primary} />
+                        <Text style={styles.taskModalTitle}>{selectedDuty.task.taskName}</Text>
+                      </View>
+                      <StatusBadge status={selectedDuty.task.status || 'completed'} />
+                    </View>
+                    {selectedDuty.task.companyName ? (
+                      <Text style={styles.taskModalSub}>Site: {selectedDuty.task.companyName}</Text>
+                    ) : null}
+                    {selectedDuty.task.work ? (
+                      <Text style={styles.taskModalSub}>Work Type: {selectedDuty.task.work}</Text>
+                    ) : null}
+                    {selectedDuty.task.phoneNumber ? (
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(`tel:${selectedDuty.task.phoneNumber}`).catch(() => {})}
+                        style={styles.taskModalPhone}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="call" size={13} color={COLORS.primary} />
+                        <Text style={styles.taskModalPhoneText}>{selectedDuty.task.phoneNumber}</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {selectedDuty.task.description ? (
+                      <Text style={styles.taskModalDesc}>Note: {selectedDuty.task.description}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
             </ScrollView>
           </View>
         </View>
@@ -1077,6 +1112,55 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  linkedTaskModalBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+  },
+  taskModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingBottom: 6,
+  },
+  taskModalTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+  },
+  taskModalSub: {
+    fontSize: 13,
+    color: COLORS.text,
+    marginTop: 3,
+  },
+  taskModalPhone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.primarySubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  taskModalPhoneText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  taskModalDesc: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
 });
 

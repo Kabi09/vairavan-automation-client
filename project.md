@@ -597,6 +597,25 @@
 - Reason: User requested instructions and commands to build and download the Android APK file.
 - Impact: Users can build an installable `.apk` file directly using EAS CLI.
 
+### 2026-10-13
+#### Duty Form Auto-fill Refinement, Task Work Type Dropdown & Duty Details Linked Task View
+- What was changed:
+  - `DutyFormScreen.jsx`: Removed unwanted auto-fills for machine name/model, customer name, and work description when selecting an assigned task. Technicians now manually enter the exact machine/model, on-site customer contact, and work carried out. Retained smart auto-fill for company and 10-digit phone number.
+  - `TaskAssignScreen.jsx`: Converted "Work Type" text input into an intuitive `DropdownPickerModal` featuring predefined categories: `Installation`, `Service`, `Maintenance`, `Breakdown`, `Repair`, `Inspection`, `Calibration`, `Electrical`, `Mechanical`, and `Other`. Added conditional input for custom work specifics when "Other" is chosen.
+  - `DutyDetailsScreen.jsx`: Added dedicated "Assigned Task Details" card at the end of the report screen showing task title, scheduled date, client site, work category, contact phone (with one-touch dial button), status badge, and manager notes.
+  - `AllDutiesScreen.jsx`: Added linked assigned task inspection block at the end of the admin duty detail modal.
+  - `backend/src/controllers/dutyController.js`: Populated `task` (`taskName scheduledDate date companyName phoneNumber work description status`) in `getDutyById`, `getAllDuties`, and `getMyDuties`.
+- Files changed:
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/admin/TaskAssignScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `backend/src/controllers/dutyController.js`
+  - `project.md`
+- Logic changed: Manual entry preserved for machine/work description; work type standardized via picker; task details surfaced in duty inspection views.
+- Reason: User requested manual entry for machine & work description without unwanted default values, task work type dropdown (Installation, Service, Maintenance, etc.), and linked task details shown at the end of duty details.
+- Impact: Streamlined workflow for admins assigning tasks and technicians filing & reviewing duty visit reports.
+
 ### 2026-10-12
 #### Fix Recursive 401 Request Loop on Invalid Login Credentials
 - What was changed:

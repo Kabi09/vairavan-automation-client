@@ -105,30 +105,18 @@ export const DutyFormScreen = ({ navigation, route }) => {
         }
       }
 
-      // 3. Auto-fill Customer / Client Name
-      if (task.companyName) {
-        setCustomerName(task.companyName);
-        if (fieldErrors.customerName) {
-          setFieldErrors((p) => ({ ...p, customerName: null }));
+      // 3. Auto-fill Work Type if task work matches one of the preset categories
+      if (task.work) {
+        const matchedWorkType = APP_CONFIG.WORK_TYPES.find(
+          (wt) => wt.toLowerCase() === task.work.trim().toLowerCase()
+        );
+        if (matchedWorkType) {
+          setWorkType(matchedWorkType);
         }
       }
 
-      // 4. Auto-fill Machine Name (from task title if not already set)
-      if (task.taskName && !machineName) {
-        setMachineName(task.taskName);
-        if (fieldErrors.machineName) {
-          setFieldErrors((p) => ({ ...p, machineName: null }));
-        }
-      }
-
-      // 5. Auto-fill Work Description
-      const descParts = [task.work, task.description].filter(Boolean);
-      if (descParts.length > 0 && !workDescription) {
-        setWorkDescription(descParts.join(' - '));
-        if (fieldErrors.workDescription) {
-          setFieldErrors((p) => ({ ...p, workDescription: null }));
-        }
-      }
+      // Machine name, customer contact name, and work description are NOT auto-filled
+      // so technician enters them manually for the specific on-site service visit.
     }
   };
 
@@ -424,8 +412,8 @@ export const DutyFormScreen = ({ navigation, route }) => {
               </TouchableOpacity>
               <Text style={styles.taskHelperText}>
                 {selectedTaskId
-                  ? 'Task details auto-filled into form fields below.'
-                  : 'Select an assigned task to auto-fill details, or leave as "Not Mentioned".'}
+                  ? 'Company & phone auto-filled. Enter machine name, customer contact & work description below.'
+                  : 'Select an assigned task to link, or leave as "Not Mentioned".'}
               </Text>
             </View>
 
