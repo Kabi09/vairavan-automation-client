@@ -597,6 +597,28 @@
 - Reason: User requested instructions and commands to build and download the Android APK file.
 - Impact: Users can build an installable `.apk` file directly using EAS CLI.
 
+### 2026-10-12
+#### Assigned Task Dropdown and Auto-fill in Duty Submission
+- What was changed:
+  - Added assigned task dropdown picker to `DutyFormScreen.jsx` with default `"Not Mentioned"`.
+  - When an assigned task is selected from the picker, the form automatically auto-fills:
+    - Company (matching active companies list)
+    - Customer contact name (from task company name)
+    - Customer phone number (10-digit sanitized from task phone number)
+    - Machine name (from task name)
+    - Work description (from task work and description)
+  - Allows clearing or switching back to `"Not Mentioned"` for direct unassigned service visits.
+  - Passes `taskId` in the submission payload; backend `dutyController.createDuty` marks the corresponding task as `completed` on successful duty creation.
+  - Added `task` reference (`ObjectId`, ref: `'Task'`) to `backend/src/models/Duty.js`.
+- Files changed:
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `backend/src/models/Duty.js`
+  - `backend/src/controllers/dutyController.js`
+  - `project.md`
+- Logic changed: Auto-fill of duty fields upon assigned task selection and automatic task completion upon duty submission.
+- Reason: User requested adding assigned task dropdown to duty form with default value "Not Mentioned" and auto-filling company, phone, customer.
+- Impact: Streamlines duty reporting for technicians executing assigned jobs while preserving manual entry for unscheduled visits.
+
 ### 2026-10-11
 #### Vercel Database Resolution & Admin Synchronization
 - What was changed:
@@ -718,6 +740,7 @@
   - Interactive Admin Recent Duties: Tapping any item in Recent Duty Activity on Admin Dashboard opens full `DutyDetailsScreen` with customer info, machine details, GPS location, interactive map, signatures, and photos.
   - Admin Task Assignment: Full backend model, validators, controller, FCM push/in-app notification, frontend admin assign form with employee picker, scheduled date picker, task name, company name, 10-digit phone, work, and description.
   - Employee Task Visibility & Status Workflow: Dedicated employee task list screen, phone dialing shortcut, status update transitions ("Start Task", "Mark Done"), and dashboard overview card with quick links.
+  - Duty Form Assigned Task Dropdown & Auto-fill: Dropdown picker in `DutyFormScreen` defaulting to "Not Mentioned"; selecting an assigned task auto-fills company, customer phone, customer name, machine name, and work description; submitting the duty automatically marks the task as completed in the backend.
 - In Progress:
   - None.
 - Pending:

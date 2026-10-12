@@ -31,6 +31,12 @@ const dutySchema = new mongoose.Schema(
       required: [true, 'Employee reference is required'],
       index: true,
     },
+    task: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Task',
+      default: null,
+      index: true,
+    },
     dutyDate: {
       type: Date,
       required: [true, 'Duty date is required'],

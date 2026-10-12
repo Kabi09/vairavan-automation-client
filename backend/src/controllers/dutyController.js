@@ -1,5 +1,6 @@
 import Duty from '../models/Duty.js';
 import Company from '../models/Company.js';
+import Task from '../models/Task.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -45,6 +46,7 @@ export const createDuty = asyncHandler(async (req, res) => {
     latitude,
     longitude,
     accuracy,
+    taskId,
   } = req.body;
 
   // Validate location requirement policy
@@ -98,11 +100,22 @@ export const createDuty = asyncHandler(async (req, res) => {
     };
   }
 
+  if (taskId) {
+    dutyData.task = taskId;
+  }
+
   const duty = await Duty.create(dutyData);
+
+  if (taskId) {
+    await Task.findByIdAndUpdate(taskId, { status: 'completed' }).catch((err) =>
+      console.warn('[Duty] Could not mark linked task completed:', err.message)
+    );
+  }
 
   const populatedDuty = await Duty.findById(duty._id)
     .populate('company', 'companyName location companyPhoneNumber')
-    .populate('employee', 'employeeName employeeId email designation');
+    .populate('employee', 'employeeName employeeId email designation')
+    .populate('task', 'taskName date companyName phoneNumber work status');
 
   return ApiResponse.created(res, 'Duty report submitted successfully', {
     duty: populatedDuty,
