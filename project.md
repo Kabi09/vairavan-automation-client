@@ -111,6 +111,67 @@
 - Impact: App displays the official emblem as launcher icon, splash icon, in-app branding, and delivers rich notification alerts with brand image in the notification shade.
 
 ### 2026-10-12
+#### Full Feature Enhancement: Company Management, Duty Management, Employee Management & PDF/Excel Exports
+- What was changed:
+  1. **Company Management & Role Access**:
+     - Allowed Admin, Staff, and Employee roles to create new companies by updating backend permissions on `POST /api/companies`.
+     - In `duty-management-app`: Enabled company creation for Employees and Staff directly from `DutyFormScreen` with dynamic company reloading via `useFocusEffect`. Registered `CompanyForm` in `EmployeeNavigator`.
+     - Created `CompanyDetailsScreen` in `duty-management-app`:
+       - Tapping any company card in `CompanyListScreen` navigates to `CompanyDetailsScreen`.
+       - Displays company profile (Name, Location, Phone, Active status), assigned staff count, and complete company-related duty history.
+       - Integrated Date filtering (`startDate` and `endDate`) and quick Export buttons (**Export PDF** and **Export Excel**).
+  2. **Duty Management & Approval Removal**:
+     - Completely removed duty approval workflow (Approve, Need Fix, Reject buttons and status decision modals) in compliance with requirements: duties are purely operational field visit records.
+     - Refactored `AllDutiesScreen` with comprehensive filtering:
+       - Filter by Date range (From Date, To Date).
+       - Filter by Employee (technician picker).
+       - Filter by Company (client site picker).
+       - Search by customer name, machine name, and description snippet.
+     - Added **Export PDF** and **Export Excel** action buttons to download filtered duty records.
+     - Tapping any duty opens a read-only modal with all machine details, in/out timings, duty date, GPS coordinates, full work description, customer proof photos, and customer signature.
+  3. **Admin → Employee Management**:
+     - Updated `EmployeeListScreen`: Tapping an employee card navigates to `EmployeeDetailsScreen`.
+     - Created `EmployeeDetailsScreen`:
+       - Header displaying employee profile (Name, ID, Designation, Email, Phone, Status, Joining Date).
+       - Two interactive view buttons: **Leave** and **Work**.
+       - **Leave tab**: Displays that employee's leave requests and approval statuses. Includes **Approve** and **Reject** buttons only for pending requests with remarks input.
+       - **Work tab**: Displays all duty details submitted by that employee with Date filters (From/To Date) and prominent **Export PDF** and **Export Excel** buttons. Pure viewing, no approval buttons.
+  4. **Leave Approval Only**:
+     - Enforced strictly that only leave requests retain **Approve** and **Reject** buttons. Duties, companies, employee work details, and holidays have zero approval/rejection actions.
+  5. **Shared Export Engine**:
+     - Created `src/utils/exportUtils.js` leveraging `expo-print`, `expo-file-system`, and `expo-sharing`:
+       - `exportDutiesToPDF`: Generates branded, styled HTML document featuring company logo, metadata, complete tabular duty summary, GPS tags, photo gallery, and embedded customer signatures, and triggers native file sharing.
+       - `exportDutiesToExcel`: Generates UTF-8 BOM CSV / Excel-compatible spreadsheet containing all 18 duty attributes (Report ID, Date, Employee Name, Employee ID, Company, Location, Customer Name, Phone, Machine Name, Work Type, In Time, Out Time, Work Description, GPS Latitude, Longitude, Accuracy, Signature, Photos Count) and triggers native file sharing.
+  6. **Backend Enhancements & Verification**:
+     - Added `'staff'` to `User.js` role enum and enabled `authorize('employee', 'staff')` across duty and leave submission routes.
+     - Increased duty and leave query limits from 100 to 1000 to support comprehensive export queries.
+     - Verified all 23 backend automated test suites pass without regression.
+- Files changed:
+  - `backend/src/models/User.js`
+  - `backend/src/routes/companyRoutes.js`
+  - `backend/src/routes/dutyRoutes.js`
+  - `backend/src/routes/leaveRoutes.js`
+  - `backend/src/controllers/dutyController.js`
+  - `backend/src/controllers/leaveController.js`
+  - `backend/tests/company.test.js`
+  - `duty-management-app/package.json`
+  - `duty-management-app/src/constants/theme.js`
+  - `duty-management-app/src/context/AuthContext.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/navigation/EmployeeNavigator.jsx`
+  - `duty-management-app/src/screens/admin/CompanyListScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `project.md`
+- Logic changed: Removed approval requirements from duties, added multi-criteria filtering and client-side PDF/Excel document export generation, and created dedicated company and employee work/leave detail views.
+- Reason: User requested updating Duty Management App with full Company Management, Duty viewing without approval workflow, Employee Leave/Work views, and rich PDF & Excel exports.
+- Impact: Clean role-based operations, instant PDF and Excel reports with complete data (including signatures and photos), and streamlined workflow.
+
+### 2026-10-12
 #### Production Cleanup & Removal of Test-Only Artifacts
 - What was changed:
   - Removed temporary manual push tester script `backend/src/scripts/testPush.js` and removed `"test:push"` script from `backend/package.json`.
@@ -407,14 +468,18 @@
   - Global `AuthContext` with login, logout, profile update, role detection, and session restore.
   - Role-based navigation structure (`RootNavigator`, `AdminNavigator`, `EmployeeNavigator`) with bottom tabs and modal stacks.
   - Authentication screen with email/password validation, password masking toggle, and API error messaging.
-  - Admin screens: Dashboard, Company List & Form, Employee List & Form, All Duties Review, Leave Requests Review, Holiday Management.
-  - Employee screens: Dashboard, Duty Form (GPS coordinates, digital touch signature pad, proof photo picker), My Duties, Duty Details, Leave Request, My Leaves, Holiday List.
+  - Admin screens: Dashboard, Company List & Form, Company Details (with duties, staff stats, date filters & PDF/Excel exports), Employee List & Form, Employee Details (with Leave approval & Work duty history with PDF/Excel exports), All Duties (date/employee/company filters & PDF/Excel exports, read-only viewing without approval workflow), Leave Requests Review, Holiday Management.
+  - Employee screens: Dashboard (with upcoming holidays), Duty Form (GPS coordinates, digital touch signature pad, proof photo picker, add company shortcut), My Duties, Duty Details, Leave Request, My Leaves, Holiday List.
+  - Company Management: Allowed Admin, Staff, and Employees to create companies.
+  - Duty Management: Clean submission, complete field data, full admin view without any approval workflow.
+  - Employee Management: Detailed view with dedicated **Leave** and **Work** buttons.
+  - Leave Approval Only: Strictly only leave requests feature Approve and Reject actions.
+  - Client-side PDF and Excel export engine (`src/utils/exportUtils.js`) powered by `expo-print`, `expo-file-system`, and `expo-sharing`.
   - Common screens: Profile and Self-service Change Password.
   - Native permissions configured in `app.json` for Camera, Media Library, and GPS Location.
-  - Push notification service with graceful fallback.
   - Full MongoDB Atlas backend deployment and admin authentication synchronization.
   - EAS Build configuration (`eas.json`) for Android standalone APK generation.
-  - Android APK build compiled and verified functioning on device by user.
+  - 23/23 backend test suites passing.
 - In Progress:
   - None.
 - Pending:

@@ -6,8 +6,10 @@ import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import AllDutiesScreen from '../screens/admin/AllDutiesScreen';
 import CompanyListScreen from '../screens/admin/CompanyListScreen';
 import CompanyFormScreen from '../screens/admin/CompanyFormScreen';
+import CompanyDetailsScreen from '../screens/admin/CompanyDetailsScreen';
 import EmployeeListScreen from '../screens/admin/EmployeeListScreen';
 import EmployeeFormScreen from '../screens/admin/EmployeeFormScreen';
+import EmployeeDetailsScreen from '../screens/admin/EmployeeDetailsScreen';
 import LeaveRequestsScreen from '../screens/admin/LeaveRequestsScreen';
 import HolidayManagementScreen from '../screens/admin/HolidayManagementScreen';
 import DutyDetailsScreen from '../screens/employee/DutyDetailsScreen';
@@ -87,7 +89,9 @@ export const AdminNavigator = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="AdminMainTabs" component={AdminTabs} />
+      <Stack.Screen name="CompanyDetails" component={CompanyDetailsScreen} />
       <Stack.Screen name="CompanyForm" component={CompanyFormScreen} />
+      <Stack.Screen name="EmployeeDetails" component={EmployeeDetailsScreen} />
       <Stack.Screen name="EmployeeForm" component={EmployeeFormScreen} />
       <Stack.Screen name="HolidayManagement" component={HolidayManagementScreen} />
       <Stack.Screen name="DutyDetails" component={DutyDetailsScreen} />

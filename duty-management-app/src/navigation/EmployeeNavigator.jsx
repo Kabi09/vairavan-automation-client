@@ -12,6 +12,7 @@ import HolidayListScreen from '../screens/employee/HolidayListScreen';
 import NotificationsScreen from '../screens/admin/NotificationsScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 import ChangePasswordScreen from '../screens/common/ChangePasswordScreen';
+import CompanyFormScreen from '../screens/admin/CompanyFormScreen';
 import { COLORS } from '../constants/theme';
 
 const Tab = createBottomTabNavigator();
@@ -89,6 +90,7 @@ export const EmployeeNavigator = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="EmployeeMainTabs" component={EmployeeTabs} />
       <Stack.Screen name="DutyForm" component={DutyFormScreen} />
+      <Stack.Screen name="CompanyForm" component={CompanyFormScreen} />
       <Stack.Screen name="DutyDetails" component={DutyDetailsScreen} />
       <Stack.Screen name="LeaveRequest" component={LeaveRequestScreen} />
       <Stack.Screen name="MyLeaves" component={MyLeavesScreen} />

@@ -22,10 +22,10 @@ const router = Router();
 router.use(authenticate);
 
 // Employee submits duty
-router.post('/', authorize('employee'), validateCreateDuty, validate, createDuty);
+router.post('/', authorize('employee', 'staff'), validateCreateDuty, validate, createDuty);
 
 // Employee views own duties
-router.get('/my', authorize('employee'), getMyDuties);
+router.get('/my', authorize('employee', 'staff'), getMyDuties);
 
 // Admin views all duties
 router.get('/', authorize('admin'), getAllDuties);

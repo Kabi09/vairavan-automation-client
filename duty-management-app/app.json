@@ -60,7 +60,8 @@
           "icon": "./assets/notification-icon.png",
           "color": "#0F52BA"
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

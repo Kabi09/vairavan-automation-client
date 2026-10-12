@@ -109,7 +109,7 @@ export const EmployeeListScreen = ({ navigation }) => {
   const renderEmployeeItem = ({ item }) => (
     <Card
       style={styles.employeeCard}
-      onPress={() => navigation.navigate('EmployeeForm', { employee: item })}
+      onPress={() => navigation.navigate('EmployeeDetails', { employee: item })}
     >
       <View style={styles.cardHeader}>
         <View style={styles.avatarCircle}>

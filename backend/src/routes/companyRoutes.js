@@ -23,8 +23,8 @@ router.use(authenticate);
 router.get('/', getCompanies);
 router.get('/:id', validateCompanyIdParam, validate, getCompanyById);
 
-// Admin-only mutations
-router.post('/', authorize('admin'), validateCreateCompany, validate, createCompany);
+// Allow Admin, Staff, and Employees to add companies
+router.post('/', validateCreateCompany, validate, createCompany);
 router.put('/:id', authorize('admin'), validateUpdateCompany, validate, updateCompany);
 router.delete('/:id', authorize('admin'), validateCompanyIdParam, validate, deleteCompany);
 

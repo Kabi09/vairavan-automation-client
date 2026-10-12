@@ -79,7 +79,7 @@ export const CompanyListScreen = ({ navigation }) => {
   const renderCompanyItem = ({ item }) => (
     <Card
       style={styles.companyCard}
-      onPress={() => navigation.navigate('CompanyForm', { company: item })}
+      onPress={() => navigation.navigate('CompanyDetails', { company: item })}
     >
       <View style={styles.cardHeader}>
         <View style={styles.nameContainer}>

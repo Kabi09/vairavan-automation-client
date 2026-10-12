@@ -64,17 +64,19 @@ describe('Company Management Tests', () => {
     assert.equal(duplicateRes.body.success, false);
   });
 
-  it('Employee cannot create a company (403 Forbidden)', async () => {
+  it('Employee should be able to create a company', async () => {
     const res = await request(app)
       .post('/api/companies')
       .set('Authorization', `Bearer ${employeeToken}`)
       .send({
-        companyName: 'Unauthorized Co',
+        companyName: 'Employee Added Co',
         location: 'Salem',
         companyPhoneNumber: '+919876543210',
       });
 
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 201);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.data.company.companyName, 'Employee Added Co');
   });
 
   it('Admin can soft-delete a company', async () => {

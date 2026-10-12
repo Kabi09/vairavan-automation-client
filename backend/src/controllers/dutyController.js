@@ -116,7 +116,7 @@ export const createDuty = asyncHandler(async (req, res) => {
  */
 export const getMyDuties = asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '10', 10)));
+  const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit || '20', 10)));
   const skip = (page - 1) * limit;
 
   const { status, workType, startDate, endDate, companyId } = req.query;
@@ -286,7 +286,7 @@ export const updateDuty = asyncHandler(async (req, res) => {
  */
 export const getAllDuties = asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '10', 10)));
+  const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit || '20', 10)));
   const skip = (page - 1) * limit;
 
   const { employeeId, companyId, workType, status, startDate, endDate, search } = req.query;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import companyApi from '../../api/companyApi';
@@ -59,24 +60,25 @@ export const DutyFormScreen = ({ navigation }) => {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
 
-  useEffect(() => {
-    // Fetch active companies for dropdown
-    const loadCompanies = async () => {
-      try {
-        const res = await companyApi.getCompanies({ status: 'active', limit: 100 });
-        if (res.data?.companies) {
-          setCompanies(res.data.companies);
-          if (res.data.companies.length > 0) {
-            setSelectedCompanyId(res.data.companies[0]._id);
+  useFocusEffect(
+    useCallback(() => {
+      const loadCompanies = async () => {
+        try {
+          const res = await companyApi.getCompanies({ status: 'active', limit: 100 });
+          if (res.data?.companies) {
+            setCompanies(res.data.companies);
+            if (!selectedCompanyId && res.data.companies.length > 0) {
+              setSelectedCompanyId(res.data.companies[0]._id);
+            }
           }
+        } catch (err) {
+          console.warn('Failed to load companies:', err);
         }
-      } catch (err) {
-        console.warn('Failed to load companies:', err);
-      }
-    };
+      };
 
-    loadCompanies();
-  }, []);
+      loadCompanies();
+    }, [selectedCompanyId])
+  );
 
   // Location capture
   const handleCaptureLocation = async () => {
@@ -283,7 +285,17 @@ export const DutyFormScreen = ({ navigation }) => {
             />
 
             {/* Company Selection */}
-            <Text style={styles.fieldLabel}>Client Company *</Text>
+            <View style={styles.companyHeaderRow}>
+              <Text style={styles.fieldLabel}>Client Company *</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('CompanyForm')}
+                style={styles.addCompanyBtn}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
+                <Text style={styles.addCompanyBtnText}>Add Company</Text>
+              </TouchableOpacity>
+            </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -702,6 +714,24 @@ const styles = StyleSheet.create({
     color: COLORS.danger,
     fontSize: 12,
     marginBottom: SPACING.sm,
+  },
+  companyHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  addCompanyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  addCompanyBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });
 
