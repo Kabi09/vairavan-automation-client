@@ -193,7 +193,11 @@ export const getAllLeaves = asyncHandler(async (req, res) => {
   if (startDate || endDate) {
     filter.startDate = {};
     if (startDate) filter.startDate.$gte = new Date(startDate);
-    if (endDate) filter.startDate.$lte = new Date(endDate);
+    if (endDate) {
+      const endD = new Date(endDate);
+      endD.setHours(23, 59, 59, 999);
+      filter.startDate.$lte = endD;
+    }
   }
 
   const [leaves, total] = await Promise.all([

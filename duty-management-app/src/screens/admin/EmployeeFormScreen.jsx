@@ -57,7 +57,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
     }
 
     if (phone.trim() && !isValidPhone(phone)) {
-      errors.phone = 'Please provide a valid phone number';
+      errors.phone = 'Phone number must be exactly 10 digits';
     }
 
     setFieldErrors(errors);
@@ -194,13 +194,15 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
 
             <TextInputField
               label="Phone Number"
-              placeholder="e.g. +91 98765 43210"
+              placeholder="10-digit mobile number"
               value={phone}
               onChangeText={(text) => {
-                setPhone(text);
+                const cleaned = text.replace(/[^0-9]/g, '').slice(0, 10);
+                setPhone(cleaned);
                 if (fieldErrors.phone) setFieldErrors((p) => ({ ...p, phone: null }));
               }}
-              keyboardType="phone-pad"
+              keyboardType="number-pad"
+              maxLength={10}
               error={fieldErrors.phone}
             />
 

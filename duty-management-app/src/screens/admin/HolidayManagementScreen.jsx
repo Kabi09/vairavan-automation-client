@@ -24,6 +24,7 @@ import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
 import ConfirmationDialog from '../../components/ConfirmationDialog';
+import DatePickerModal from '../../components/DatePickerModal';
 import { formatDate, formatISODateOnly, isDateRangeValid } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
@@ -44,6 +45,10 @@ export const HolidayManagementScreen = () => {
   const [notify, setNotify] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Date picker visibility states
+  const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
+  const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -260,21 +265,33 @@ export const HolidayManagementScreen = () => {
                 required
               />
 
-              <TextInputField
-                label="Start Date (YYYY-MM-DD)"
-                placeholder="e.g. 2026-01-14"
-                value={startDate}
-                onChangeText={setStartDate}
-                required
-              />
+              {/* Start Date Picker */}
+              <View style={styles.fieldContainer}>
+                <Text style={styles.fieldLabel}>Start Date *</Text>
+                <TouchableOpacity
+                  style={styles.datePickerBtn}
+                  onPress={() => setStartDatePickerVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.pickerBtnText}>{startDate || 'Select Start Date'}</Text>
+                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+                </TouchableOpacity>
+              </View>
 
-              <TextInputField
-                label="End Date (YYYY-MM-DD)"
-                placeholder="e.g. 2026-01-16"
-                value={endDate}
-                onChangeText={setEndDate}
-                required
-              />
+              {/* End Date Picker */}
+              <View style={styles.fieldContainer}>
+                <Text style={styles.fieldLabel}>End Date *</Text>
+                <TouchableOpacity
+                  style={styles.datePickerBtn}
+                  onPress={() => setEndDatePickerVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.pickerBtnText}>{endDate || 'Select End Date'}</Text>
+                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+                </TouchableOpacity>
+              </View>
 
               <TextInputField
                 label="Description (Optional)"
@@ -318,6 +335,23 @@ export const HolidayManagementScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Date Pickers */}
+      <DatePickerModal
+        visible={startDatePickerVisible}
+        onClose={() => setStartDatePickerVisible(false)}
+        selectedDate={startDate}
+        onSelectDate={(date) => setStartDate(date)}
+        title="Select Holiday Start Date"
+      />
+
+      <DatePickerModal
+        visible={endDatePickerVisible}
+        onClose={() => setEndDatePickerVisible(false)}
+        selectedDate={endDate}
+        onSelectDate={(date) => setEndDate(date)}
+        title="Select Holiday End Date"
+      />
 
       {/* Delete Confirmation */}
       <ConfirmationDialog
@@ -454,6 +488,31 @@ const styles = StyleSheet.create({
   },
   modalBtn: {
     flex: 1,
+  },
+  fieldContainer: {
+    marginBottom: SPACING.md,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  datePickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+  },
+  pickerBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
   },
 });
 

@@ -20,7 +20,8 @@ import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
 import ConfirmationDialog from '../../components/ConfirmationDialog';
 import { extractErrorMessage } from '../../utils/errorUtils';
-import { COLORS, SPACING, RADIUS } from '../../constants/theme';
+import { exportCompaniesToPDF, exportCompaniesToExcel } from '../../utils/exportUtils';
+import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const CompanyListScreen = ({ navigation }) => {
   const [companies, setCompanies] = useState([]);
@@ -74,6 +75,22 @@ export const CompanyListScreen = ({ navigation }) => {
     } finally {
       setDeactivating(false);
     }
+  };
+
+  const handleExportPDF = () => {
+    exportCompaniesToPDF({
+      title: 'Client Companies Directory',
+      subtitle: 'Registered Factory & Client Sites',
+      companies,
+      filterInfo: search ? `Filter: "${search}"` : 'All Client Accounts',
+    });
+  };
+
+  const handleExportExcel = () => {
+    exportCompaniesToExcel({
+      filename: 'Client_Companies',
+      companies,
+    });
   };
 
   const renderCompanyItem = ({ item }) => (
@@ -143,6 +160,27 @@ export const CompanyListScreen = ({ navigation }) => {
           onChangeText={setSearch}
           style={styles.searchBar}
         />
+
+        {/* Export Buttons */}
+        <View style={styles.exportBarRow}>
+          <TouchableOpacity
+            style={[styles.exportBtn, styles.pdfBtn]}
+            onPress={handleExportPDF}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="document-text" size={16} color="#FFFFFF" />
+            <Text style={styles.exportBtnText}>Export PDF</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.exportBtn, styles.excelBtn]}
+            onPress={handleExportExcel}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="grid" size={16} color="#FFFFFF" />
+            <Text style={styles.exportBtnText}>Export Excel</Text>
+          </TouchableOpacity>
+        </View>
 
         <ErrorMessage message={error} onRetry={() => fetchCompanies(search)} />
 
@@ -263,6 +301,33 @@ const styles = StyleSheet.create({
   },
   iconAction: {
     padding: SPACING.xs,
+  },
+  exportBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  exportBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.md,
+    gap: 6,
+  },
+  pdfBtn: {
+    backgroundColor: '#DC2626',
+  },
+  excelBtn: {
+    backgroundColor: '#16A34A',
+  },
+  exportBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
 

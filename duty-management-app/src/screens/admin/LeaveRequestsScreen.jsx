@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import leaveApi from '../../api/leaveApi';
+import employeeApi from '../../api/employeeApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
@@ -21,8 +22,11 @@ import SecondaryButton from '../../components/SecondaryButton';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
-import { formatDate } from '../../utils/dateUtils';
+import DatePickerModal from '../../components/DatePickerModal';
+import DropdownPickerModal from '../../components/DropdownPickerModal';
+import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
+import { exportLeavesToPDF, exportLeavesToExcel } from '../../utils/exportUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 const TABS = [
@@ -33,11 +37,26 @@ const TABS = [
 ];
 
 export const LeaveRequestsScreen = () => {
+  const today = formatISODateOnly();
+
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('pending');
   const [error, setError] = useState('');
+
+  // Date filters (Default: Today)
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+
+  // Employee filter (Default: All)
+  const [employees, setEmployees] = useState([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+
+  // Pickers visibility
+  const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
+  const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
+  const [employeeDropdownVisible, setEmployeeDropdownVisible] = useState(false);
 
   // Review modal
   const [reviewTarget, setReviewTarget] = useState(null);
@@ -45,11 +64,29 @@ export const LeaveRequestsScreen = () => {
   const [remarks, setRemarks] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
 
+  // Load employee list for dropdown filter
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const res = await employeeApi.getEmployees({ limit: 200 });
+        if (res.data?.employees) {
+          setEmployees(res.data.employees);
+        }
+      } catch (err) {
+        console.warn('Failed to load employee list:', err);
+      }
+    };
+    loadEmployees();
+  }, []);
+
   const fetchLeaves = useCallback(async () => {
     try {
       setError('');
-      const params = { limit: 100 };
+      const params = { limit: 200 };
       if (activeTab) params.status = activeTab;
+      if (selectedEmployeeId) params.employeeId = selectedEmployeeId;
+      if (startDate.trim()) params.startDate = startDate.trim();
+      if (endDate.trim()) params.endDate = endDate.trim();
 
       const res = await leaveApi.getAllLeaves(params);
       if (res.data?.leaves) {
@@ -61,7 +98,7 @@ export const LeaveRequestsScreen = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeTab]);
+  }, [activeTab, selectedEmployeeId, startDate, endDate]);
 
   useEffect(() => {
     fetchLeaves();
@@ -70,6 +107,29 @@ export const LeaveRequestsScreen = () => {
   const onRefresh = () => {
     setRefreshing(true);
     fetchLeaves();
+  };
+
+  const handleExportPDF = () => {
+    const selectedEmp = employees.find((e) => e._id === selectedEmployeeId);
+    const filterParts = [];
+    if (selectedEmp) filterParts.push(`Staff: ${selectedEmp.employeeName}`);
+    if (activeTab) filterParts.push(`Status: ${activeTab.toUpperCase()}`);
+    if (startDate || endDate) filterParts.push(`Date: ${startDate || 'Start'} to ${endDate || 'Present'}`);
+    const filterInfo = filterParts.length > 0 ? filterParts.join(' • ') : 'All Leave Requests';
+
+    exportLeavesToPDF({
+      title: 'Company Staff Leave Records',
+      subtitle: 'Official Leave Applications & Sanction Reports',
+      leaves,
+      filterInfo,
+    });
+  };
+
+  const handleExportExcel = () => {
+    exportLeavesToExcel({
+      filename: 'Staff_Leave_Records',
+      leaves,
+    });
   };
 
   const handleOpenReview = (leave) => {
@@ -163,7 +223,88 @@ export const LeaveRequestsScreen = () => {
       />
 
       <View style={styles.container}>
-        {/* Filter Tabs */}
+        {/* Filter & Export Action Toolbar */}
+        <Card style={styles.toolbarCard}>
+          <View style={styles.toolbarTitleRow}>
+            <Text style={styles.toolbarTitle}>Filter & Export Records</Text>
+            {(startDate || endDate || selectedEmployeeId) && (
+              <TouchableOpacity
+                onPress={() => {
+                  setStartDate('');
+                  setEndDate('');
+                  setSelectedEmployeeId('');
+                }}
+              >
+                <Text style={styles.clearDateLink}>Clear Filter</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Date Picker Triggers */}
+          <View style={styles.dateFilterRow}>
+            <View style={{ flex: 1, marginRight: SPACING.xs }}>
+              <Text style={styles.filterFieldLabel}>From Date</Text>
+              <TouchableOpacity
+                style={styles.datePickerTrigger}
+                onPress={() => setStartDatePickerVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar-outline" size={15} color={COLORS.primary} />
+                <Text style={styles.datePickerTriggerText}>{startDate || 'Start Date'}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ flex: 1, marginLeft: SPACING.xs }}>
+              <Text style={styles.filterFieldLabel}>To Date</Text>
+              <TouchableOpacity
+                style={styles.datePickerTrigger}
+                onPress={() => setEndDatePickerVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar-outline" size={15} color={COLORS.primary} />
+                <Text style={styles.datePickerTriggerText}>{endDate || 'To Date'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Employee Dropdown Trigger */}
+          <Text style={[styles.filterFieldLabel, { marginTop: SPACING.xs }]}>Staff Member</Text>
+          <TouchableOpacity
+            style={styles.dropdownTrigger}
+            onPress={() => setEmployeeDropdownVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="person-outline" size={16} color={COLORS.primary} />
+            <Text style={styles.dropdownTriggerText}>
+              {selectedEmployeeId
+                ? employees.find((e) => e._id === selectedEmployeeId)?.employeeName || 'Staff Selected'
+                : 'All Staff (Default)'}
+            </Text>
+            <Ionicons name="chevron-down" size={15} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
+
+          {/* Export Action Buttons */}
+          <View style={styles.exportButtonsRow}>
+            <TouchableOpacity
+              style={[styles.exportBtn, styles.pdfBtn]}
+              onPress={handleExportPDF}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="document-text" size={17} color="#FFFFFF" />
+              <Text style={styles.exportBtnText}>Export PDF</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.exportBtn, styles.excelBtn]}
+              onPress={handleExportExcel}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="grid" size={17} color="#FFFFFF" />
+              <Text style={styles.exportBtnText}>Export Excel</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+
+        {/* Status Filter Tabs */}
         <View style={styles.tabsRow}>
           {TABS.map((tab) => {
             const isSelected = activeTab === tab.key;
@@ -261,6 +402,37 @@ export const LeaveRequestsScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Date Pickers */}
+      <DatePickerModal
+        visible={startDatePickerVisible}
+        onClose={() => setStartDatePickerVisible(false)}
+        selectedDate={startDate}
+        onSelectDate={(date) => setStartDate(date)}
+        title="Select From Date"
+      />
+
+      <DatePickerModal
+        visible={endDatePickerVisible}
+        onClose={() => setEndDatePickerVisible(false)}
+        selectedDate={endDate}
+        onSelectDate={(date) => setEndDate(date)}
+        title="Select To Date"
+      />
+
+      {/* Employee Dropdown */}
+      <DropdownPickerModal
+        visible={employeeDropdownVisible}
+        onClose={() => setEmployeeDropdownVisible(false)}
+        title="Filter by Staff Member"
+        selectedValue={selectedEmployeeId}
+        onSelect={(val) => setSelectedEmployeeId(val)}
+        allOptionLabel="All Staff"
+        options={employees.map((e) => ({
+          label: `${e.employeeName} (${e.employeeId || 'Staff'})`,
+          value: e._id,
+        }))}
+      />
     </SafeAreaView>
   );
 };
@@ -428,6 +600,96 @@ const styles = StyleSheet.create({
   },
   modalBtn: {
     flex: 1,
+  },
+  toolbarCard: {
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  toolbarTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  toolbarTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  clearDateLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  filterFieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  datePickerTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 9,
+  },
+  datePickerTriggerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  dateFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    marginBottom: SPACING.sm,
+  },
+  dropdownTriggerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  exportButtonsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginTop: 2,
+  },
+  exportBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: RADIUS.md,
+    gap: 6,
+    ...SHADOWS.sm,
+  },
+  pdfBtn: {
+    backgroundColor: '#DC2626',
+  },
+  excelBtn: {
+    backgroundColor: '#059669',
+  },
+  exportBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
 

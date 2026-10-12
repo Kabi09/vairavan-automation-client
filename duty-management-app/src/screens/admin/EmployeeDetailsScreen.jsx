@@ -10,6 +10,7 @@ import {
   Image,
   Modal,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,13 +25,20 @@ import SecondaryButton from '../../components/SecondaryButton';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
-import { formatDate } from '../../utils/dateUtils';
+import DatePickerModal from '../../components/DatePickerModal';
+import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
-import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
+import {
+  exportDutiesToPDF,
+  exportDutiesToExcel,
+  exportLeavesToPDF,
+  exportLeavesToExcel,
+} from '../../utils/exportUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const EmployeeDetailsScreen = ({ route, navigation }) => {
   const { employee } = route.params || {};
+  const today = formatISODateOnly();
 
   // Active view: 'leave' or 'work'
   const [activeTab, setActiveTab] = useState('work');
@@ -38,12 +46,16 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
   // Work state
   const [duties, setDuties] = useState([]);
   const [loadingWork, setLoadingWork] = useState(true);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
 
   // Leave state
   const [leaves, setLeaves] = useState([]);
   const [loadingLeaves, setLoadingLeaves] = useState(true);
+
+  // Pickers visibility
+  const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
+  const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
 
   // Leave review modal state
   const [leaveToReview, setLeaveToReview] = useState(null);
@@ -83,10 +95,14 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
     if (!employee?._id) return;
     try {
       setError('');
-      const res = await leaveApi.getAllLeaves({
+      const params = {
         employeeId: employee._id,
         limit: 200,
-      });
+      };
+      if (startDate.trim()) params.startDate = startDate.trim();
+      if (endDate.trim()) params.endDate = endDate.trim();
+
+      const res = await leaveApi.getAllLeaves(params);
       if (res.data?.leaves) {
         setLeaves(res.data.leaves);
       }
@@ -96,7 +112,7 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
       setLoadingLeaves(false);
       setRefreshing(false);
     }
-  }, [employee?._id]);
+  }, [employee?._id, startDate, endDate]);
 
   useEffect(() => {
     if (activeTab === 'work') {
@@ -135,6 +151,29 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
     exportDutiesToExcel({
       filename: `${safeName}_Work_History`,
       duties,
+    });
+  };
+
+  // Leave exports
+  const handleExportLeavePDF = () => {
+    const filterInfo =
+      startDate || endDate
+        ? `From ${startDate || 'Start'} to ${endDate || 'Present'}`
+        : 'All Leave History';
+
+    exportLeavesToPDF({
+      title: `${employee.employeeName} (${employee.employeeId})`,
+      subtitle: `Staff Leave History • ${employee.designation || 'Staff'}`,
+      leaves,
+      filterInfo,
+    });
+  };
+
+  const handleExportLeaveExcel = () => {
+    const safeName = (employee?.employeeName || 'Employee').replace(/\s+/g, '_');
+    exportLeavesToExcel({
+      filename: `${safeName}_Leave_Records`,
+      leaves,
     });
   };
 
@@ -234,53 +273,69 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* If Work Tab is active: Date filters & Export buttons */}
-      {activeTab === 'work' && (
-        <Card style={styles.toolbarCard}>
-          <Text style={styles.toolbarTitle}>Filter & Export Work Records</Text>
-
-          <View style={styles.dateFilterRow}>
-            <View style={{ flex: 1, marginRight: SPACING.xs }}>
-              <TextInputField
-                label="From Date"
-                placeholder="YYYY-MM-DD"
-                value={startDate}
-                onChangeText={setStartDate}
-                style={styles.filterInput}
-              />
-            </View>
-            <View style={{ flex: 1, marginLeft: SPACING.xs }}>
-              <TextInputField
-                label="To Date"
-                placeholder="YYYY-MM-DD"
-                value={endDate}
-                onChangeText={setEndDate}
-                style={styles.filterInput}
-              />
-            </View>
-          </View>
-
-          <View style={styles.exportButtonsRow}>
+      {/* Date Filters & Export Action Toolbar (Supports both Work & Leave records) */}
+      <Card style={styles.toolbarCard}>
+        <View style={styles.toolbarTitleRow}>
+          <Text style={styles.toolbarTitle}>
+            {activeTab === 'work' ? 'Filter & Export Work Records' : 'Filter & Export Leave Records'}
+          </Text>
+          {(startDate || endDate) && (
             <TouchableOpacity
-              style={[styles.exportBtn, styles.pdfBtn]}
-              onPress={handleExportPDF}
+              onPress={() => {
+                setStartDate('');
+                setEndDate('');
+              }}
+            >
+              <Text style={styles.clearDateLink}>Clear Filter</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.dateFilterRow}>
+          <View style={{ flex: 1, marginRight: SPACING.xs }}>
+            <Text style={styles.filterFieldLabel}>From Date</Text>
+            <TouchableOpacity
+              style={styles.datePickerTrigger}
+              onPress={() => setStartDatePickerVisible(true)}
               activeOpacity={0.8}
             >
-              <Ionicons name="document-text" size={18} color="#FFFFFF" />
-              <Text style={styles.exportBtnText}>Export PDF</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.exportBtn, styles.excelBtn]}
-              onPress={handleExportExcel}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="grid" size={18} color="#FFFFFF" />
-              <Text style={styles.exportBtnText}>Export Excel</Text>
+              <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+              <Text style={styles.datePickerTriggerText}>{startDate || 'Start Date'}</Text>
             </TouchableOpacity>
           </View>
-        </Card>
-      )}
+          <View style={{ flex: 1, marginLeft: SPACING.xs }}>
+            <Text style={styles.filterFieldLabel}>To Date</Text>
+            <TouchableOpacity
+              style={styles.datePickerTrigger}
+              onPress={() => setEndDatePickerVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+              <Text style={styles.datePickerTriggerText}>{endDate || 'To Date'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.exportButtonsRow}>
+          <TouchableOpacity
+            style={[styles.exportBtn, styles.pdfBtn]}
+            onPress={activeTab === 'work' ? handleExportPDF : handleExportLeavePDF}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="document-text" size={18} color="#FFFFFF" />
+            <Text style={styles.exportBtnText}>Export PDF</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.exportBtn, styles.excelBtn]}
+            onPress={activeTab === 'work' ? handleExportExcel : handleExportLeaveExcel}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="grid" size={18} color="#FFFFFF" />
+            <Text style={styles.exportBtnText}>Export Excel</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
     </View>
   );
 
@@ -366,14 +421,30 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
               {item.customerName} ({item.customerPhoneNumber})
             </Text>
           </View>
-          {item.location?.latitude && (
+          {item.location?.latitude ? (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>GPS Coordinates:</Text>
-              <Text style={styles.detailValue}>
-                {item.location.latitude.toFixed(4)}, {item.location.longitude.toFixed(4)}
-              </Text>
+              <View style={styles.gpsRow}>
+                <Text style={styles.detailValue}>
+                  {item.location.latitude.toFixed(4)}, {item.location.longitude.toFixed(4)}
+                </Text>
+                <TouchableOpacity
+                  style={styles.openMapChip}
+                  onPress={() => {
+                    const lat = item.location.latitude;
+                    const lng = item.location.longitude;
+                    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`).catch(() => {
+                      Alert.alert('Map Error', 'Unable to open maps application');
+                    });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="map-outline" size={13} color={COLORS.primary} />
+                  <Text style={styles.openMapChipText}>View Map</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
+          ) : null}
         </View>
 
         <View style={styles.descBox}>
@@ -512,6 +583,23 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Date Pickers */}
+      <DatePickerModal
+        visible={startDatePickerVisible}
+        onClose={() => setStartDatePickerVisible(false)}
+        selectedDate={startDate}
+        onSelectDate={(date) => setStartDate(date)}
+        title="Select From Date"
+      />
+
+      <DatePickerModal
+        visible={endDatePickerVisible}
+        onClose={() => setEndDatePickerVisible(false)}
+        selectedDate={endDate}
+        onSelectDate={(date) => setEndDate(date)}
+        title="Select To Date"
+      />
     </SafeAreaView>
   );
 };
@@ -618,18 +706,68 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },
+  toolbarTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
   toolbarTitle: {
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.text,
-    marginBottom: SPACING.xs,
+  },
+  clearDateLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  filterFieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  datePickerTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 9,
+  },
+  datePickerTriggerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
   },
   dateFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: SPACING.xs,
   },
-  filterInput: {
-    marginBottom: 0,
+  gpsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flex: 1,
+  },
+  openMapChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.primarySubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  openMapChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   exportButtonsRow: {
     flexDirection: 'row',

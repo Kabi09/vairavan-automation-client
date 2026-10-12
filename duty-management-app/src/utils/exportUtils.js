@@ -1,6 +1,5 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
 import { Alert } from 'react-native';
 
 const LOGO_URL =
@@ -42,7 +41,64 @@ const escapeCsv = (val) => {
 };
 
 /**
- * Export duty records to a beautifully styled, print-ready PDF with complete fields
+ * Universal file writer compatible with Expo SDK 52/54/57+ and legacy runtimes
+ */
+const writeCsvFileAndShare = async (cleanFilename, csvContent, dialogTitle) => {
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) {
+    Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
+    return;
+  }
+
+  const filenameWithExt = `${cleanFilename}_${Date.now()}.csv`;
+  let fileUri = null;
+
+  // 1. Try legacy expo-file-system (preferred for writeAsStringAsync without deprecation warnings)
+  try {
+    const LegacyFS = require('expo-file-system/legacy');
+    if (LegacyFS && LegacyFS.writeAsStringAsync && LegacyFS.cacheDirectory) {
+      fileUri = `${LegacyFS.cacheDirectory}${filenameWithExt}`;
+      await LegacyFS.writeAsStringAsync(fileUri, csvContent, {
+        encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.UTF8 : 'utf8',
+      });
+    }
+  } catch (legacyErr) {
+    // Fall back to modern File class
+  }
+
+  // 2. Try modern File API from expo-file-system if legacy did not execute
+  if (!fileUri) {
+    try {
+      const ModernFS = require('expo-file-system');
+      if (ModernFS.File && ModernFS.Paths) {
+        const file = new ModernFS.File(ModernFS.Paths.cache, filenameWithExt);
+        if (file.create) file.create();
+        if (file.write) await file.write(csvContent);
+        fileUri = file.uri;
+      } else if (ModernFS.writeAsStringAsync && ModernFS.cacheDirectory) {
+        fileUri = `${ModernFS.cacheDirectory}${filenameWithExt}`;
+        await ModernFS.writeAsStringAsync(fileUri, csvContent, {
+          encoding: 'utf8',
+        });
+      }
+    } catch (modernErr) {
+      console.warn('Modern FS write attempt failed:', modernErr);
+    }
+  }
+
+  if (!fileUri) {
+    throw new Error('Unable to initialize local file system storage for export');
+  }
+
+  await Sharing.shareAsync(fileUri, {
+    mimeType: 'text/csv',
+    dialogTitle,
+    UTI: 'public.comma-separated-values-text',
+  });
+};
+
+/**
+ * Export duty records to PDF
  */
 export const exportDutiesToPDF = async ({
   title = 'Duty Service Report',
@@ -314,7 +370,7 @@ export const exportDutiesToPDF = async ({
         ${rowsHtml}
 
         <div class="footer-note">
-          Official Duty Report Record • Vairavan Automation Automation Client System
+          Official Duty Report Record • Vairavan Automation Client System
         </div>
       </body>
       </html>
@@ -336,7 +392,7 @@ export const exportDutiesToPDF = async ({
 };
 
 /**
- * Export duty records to Excel-compatible CSV file with complete available details
+ * Export duty records to Excel / CSV
  */
 export const exportDutiesToExcel = async ({
   filename = 'Duty_Records',
@@ -344,12 +400,6 @@ export const exportDutiesToExcel = async ({
 }) => {
   if (!duties || duties.length === 0) {
     Alert.alert('No Records', 'There are no duty records to export for the selected filter.');
-    return;
-  }
-
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (!isAvailable) {
-    Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
     return;
   }
 
@@ -421,21 +471,747 @@ export const exportDutiesToExcel = async ({
       ].join(',');
     });
 
-    // Add UTF-8 BOM so Excel opens with proper encoding
     const csvContent = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
-
     const cleanFilename = filename.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileUri = `${FileSystem.cacheDirectory}${cleanFilename}_${Date.now()}.csv`;
+    await writeCsvFileAndShare(cleanFilename, csvContent, `Export ${filename} (Excel/CSV)`);
+  } catch (err) {
+    Alert.alert('Export Failed', err.message || 'Could not generate Excel export');
+  }
+};
 
-    await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-      encoding: FileSystem.EncodingType.UTF8,
+/**
+ * Export leave records to PDF
+ */
+export const exportLeavesToPDF = async ({
+  title = 'Staff Leave Records',
+  subtitle = 'Vairavan Automation Leave Management',
+  leaves = [],
+  filterInfo = '',
+}) => {
+  if (!leaves || leaves.length === 0) {
+    Alert.alert('No Records', 'There are no leave records to export for the selected filter.');
+    return;
+  }
+
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) {
+    Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
+    return;
+  }
+
+  try {
+    const generatedDate = new Date().toLocaleString('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
     });
 
-    await Sharing.shareAsync(fileUri, {
-      mimeType: 'text/csv',
-      dialogTitle: `Export ${filename} (Excel/CSV)`,
-      UTI: 'public.comma-separated-values-text',
+    const rowsHtml = leaves
+      .map((l, index) => {
+        const empName = escapeHtml(l.employee?.employeeName || 'Staff Member');
+        const empId = escapeHtml(l.employee?.employeeId || 'N/A');
+        const empDesig = escapeHtml(l.employee?.designation || 'Staff');
+        const startDate = formatDate(l.startDate);
+        const endDate = formatDate(l.endDate);
+        const reason = escapeHtml(l.reason || 'N/A');
+        const status = (l.status || 'pending').toUpperCase();
+        const remarks = escapeHtml(l.adminRemarks || 'None');
+        const reviewer = escapeHtml(l.adminReviewer?.employeeName || 'Admin');
+
+        const statusColor =
+          status === 'APPROVED' ? '#059669' : status === 'REJECTED' ? '#DC2626' : '#D97706';
+
+        return `
+          <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+            <td style="padding: 8px 6px; text-align: center;">${index + 1}</td>
+            <td style="padding: 8px 6px;">
+              <strong>${empName}</strong><br/>
+              <span style="color: #64748b; font-size: 10px;">ID: ${empId} • ${empDesig}</span>
+            </td>
+            <td style="padding: 8px 6px; white-space: nowrap;">
+              <strong>${startDate}</strong> to <strong>${endDate}</strong>
+            </td>
+            <td style="padding: 8px 6px;">${reason}</td>
+            <td style="padding: 8px 6px; text-align: center;">
+              <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 10px; color: #ffffff; background: ${statusColor};">
+                ${status}
+              </span>
+            </td>
+            <td style="padding: 8px 6px;">
+              ${remarks}
+              ${l.reviewedAt ? `<br/><span style="color: #64748b; font-size: 9px;">By ${reviewer} on ${formatDate(l.reviewedAt)}</span>` : ''}
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(title)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #0f172a;
+            padding: 24px;
+            margin: 0;
+            background: #ffffff;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+          .header-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #1e40af;
+            padding-bottom: 14px;
+            margin-bottom: 16px;
+          }
+          .brand-logo {
+            width: 72px;
+            height: 72px;
+            object-fit: cover;
+            border-radius: 12px;
+          }
+          .title-block {
+            text-align: right;
+          }
+          .title-block h1 {
+            margin: 0;
+            font-size: 20px;
+            color: #1e40af;
+            font-weight: 800;
+          }
+          .title-block p {
+            margin: 2px 0 0 0;
+            color: #475569;
+            font-size: 11px;
+          }
+          .filter-bar {
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 11px;
+            color: #334155;
+            display: flex;
+            justify-content: space-between;
+          }
+          .records-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+          }
+          .records-table th {
+            background: #1e40af;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 11px;
+            padding: 8px 6px;
+            text-align: left;
+          }
+          .footer-note {
+            margin-top: 24px;
+            text-align: center;
+            font-size: 10px;
+            color: #94a3b8;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 8px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header-container">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <img class="brand-logo" src="${LOGO_URL}" alt="Logo" />
+            <div>
+              <div style="font-size: 16px; font-weight: 800; color: #0f172a;">VAIRAVAN AUTOMATION</div>
+              <div style="font-size: 11px; color: #64748b;">Staff Operations & Leave Management</div>
+            </div>
+          </div>
+          <div class="title-block">
+            <h1>${escapeHtml(title)}</h1>
+            <p>${escapeHtml(subtitle)}</p>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div><strong>Filter:</strong> ${escapeHtml(filterInfo || 'All Leave Records')}</div>
+          <div><strong>Total Requests:</strong> ${leaves.length} | <strong>Generated:</strong> ${generatedDate}</div>
+        </div>
+
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th style="width: 5%; text-align: center;">#</th>
+              <th style="width: 25%;">Employee</th>
+              <th style="width: 20%;">Leave Duration</th>
+              <th style="width: 22%;">Reason</th>
+              <th style="width: 13%; text-align: center;">Status</th>
+              <th style="width: 15%;">Admin Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="footer-note">
+          Official Staff Leave Documentation • Vairavan Automation System
+        </div>
+      </body>
+      </html>
+    `;
+
+    const { uri } = await Print.printToFileAsync({
+      html: htmlContent,
+      base64: false,
     });
+
+    await Sharing.shareAsync(uri, {
+      UTI: '.pdf',
+      mimeType: 'application/pdf',
+      dialogTitle: `Export ${title} (PDF)`,
+    });
+  } catch (err) {
+    Alert.alert('Export Failed', err.message || 'Could not generate PDF export');
+  }
+};
+
+/**
+ * Export leave records to Excel / CSV
+ */
+export const exportLeavesToExcel = async ({
+  filename = 'Leave_Records',
+  leaves = [],
+}) => {
+  if (!leaves || leaves.length === 0) {
+    Alert.alert('No Records', 'There are no leave records to export for the selected filter.');
+    return;
+  }
+
+  try {
+    const headers = [
+      'Sl No',
+      'Employee ID',
+      'Employee Name',
+      'Employee Designation',
+      'Employee Email',
+      'Start Date',
+      'End Date',
+      'Reason',
+      'Status',
+      'Admin Remarks',
+      'Reviewed By',
+      'Reviewed At',
+      'Applied Date',
+    ];
+
+    const rows = leaves.map((l, index) => {
+      const empId = l.employee?.employeeId || '';
+      const empName = l.employee?.employeeName || '';
+      const empDesig = l.employee?.designation || '';
+      const empEmail = l.employee?.email || '';
+      const startDate = formatDate(l.startDate);
+      const endDate = formatDate(l.endDate);
+      const reason = l.reason || '';
+      const status = l.status || 'pending';
+      const remarks = l.adminRemarks || '';
+      const reviewer = l.adminReviewer?.employeeName || '';
+      const reviewedAt = l.reviewedAt ? new Date(l.reviewedAt).toISOString() : '';
+      const createdAt = l.createdAt ? new Date(l.createdAt).toISOString() : '';
+
+      return [
+        index + 1,
+        escapeCsv(empId),
+        escapeCsv(empName),
+        escapeCsv(empDesig),
+        escapeCsv(empEmail),
+        escapeCsv(startDate),
+        escapeCsv(endDate),
+        escapeCsv(reason),
+        escapeCsv(status),
+        escapeCsv(remarks),
+        escapeCsv(reviewer),
+        escapeCsv(reviewedAt),
+        escapeCsv(createdAt),
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+    const cleanFilename = filename.replace(/[^a-zA-Z0-9_-]/g, '_');
+    await writeCsvFileAndShare(cleanFilename, csvContent, `Export ${filename} (Excel/CSV)`);
+  } catch (err) {
+    Alert.alert('Export Failed', err.message || 'Could not generate Excel export');
+  }
+};
+
+/**
+ * Export employees to PDF
+ */
+export const exportEmployeesToPDF = async ({
+  title = 'Employee Directory',
+  subtitle = 'Vairavan Automation Staff Records',
+  employees = [],
+  filterInfo = '',
+}) => {
+  if (!employees || employees.length === 0) {
+    Alert.alert('No Records', 'There are no employee records to export.');
+    return;
+  }
+
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) {
+    Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
+    return;
+  }
+
+  try {
+    const generatedDate = new Date().toLocaleString('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+
+    const rowsHtml = employees
+      .map((emp, index) => {
+        const empName = escapeHtml(emp.employeeName || 'N/A');
+        const empId = escapeHtml(emp.employeeId || 'N/A');
+        const designation = escapeHtml(emp.designation || 'Staff');
+        const phone = escapeHtml(emp.phoneNumber || 'N/A');
+        const email = escapeHtml(emp.email || 'N/A');
+        const role = escapeHtml(emp.role || 'employee');
+        const status = (emp.accountStatus || 'active').toUpperCase();
+        const statusColor = status === 'ACTIVE' ? '#059669' : '#DC2626';
+
+        return `
+          <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+            <td style="padding: 8px 6px; text-align: center;">${index + 1}</td>
+            <td style="padding: 8px 6px;">
+              <strong>${empName}</strong><br/>
+              <span style="color: #64748b; font-size: 10px;">ID: ${empId}</span>
+            </td>
+            <td style="padding: 8px 6px;">${designation}</td>
+            <td style="padding: 8px 6px;">${phone}</td>
+            <td style="padding: 8px 6px;">${email}</td>
+            <td style="padding: 8px 6px; text-transform: uppercase;">${role}</td>
+            <td style="padding: 8px 6px; text-align: center;">
+              <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 10px; color: #ffffff; background: ${statusColor};">
+                ${status}
+              </span>
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(title)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #0f172a;
+            padding: 24px;
+            margin: 0;
+            background: #ffffff;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+          .header-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #1e40af;
+            padding-bottom: 14px;
+            margin-bottom: 16px;
+          }
+          .brand-logo {
+            width: 72px;
+            height: 72px;
+            object-fit: cover;
+            border-radius: 12px;
+          }
+          .title-block {
+            text-align: right;
+          }
+          .title-block h1 {
+            margin: 0;
+            font-size: 20px;
+            color: #1e40af;
+            font-weight: 800;
+          }
+          .title-block p {
+            margin: 2px 0 0 0;
+            color: #475569;
+            font-size: 11px;
+          }
+          .filter-bar {
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 11px;
+            color: #334155;
+            display: flex;
+            justify-content: space-between;
+          }
+          .records-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+          }
+          .records-table th {
+            background: #1e40af;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 11px;
+            padding: 8px 6px;
+            text-align: left;
+          }
+          .footer-note {
+            margin-top: 24px;
+            text-align: center;
+            font-size: 10px;
+            color: #94a3b8;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 8px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header-container">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <img class="brand-logo" src="${LOGO_URL}" alt="Logo" />
+            <div>
+              <div style="font-size: 16px; font-weight: 800; color: #0f172a;">VAIRAVAN AUTOMATION</div>
+              <div style="font-size: 11px; color: #64748b;">Human Resources & Staff Directory</div>
+            </div>
+          </div>
+          <div class="title-block">
+            <h1>${escapeHtml(title)}</h1>
+            <p>${escapeHtml(subtitle)}</p>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div><strong>Filter:</strong> ${escapeHtml(filterInfo || 'Active Roster')}</div>
+          <div><strong>Total Staff:</strong> ${employees.length} | <strong>Generated:</strong> ${generatedDate}</div>
+        </div>
+
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th style="width: 5%; text-align: center;">#</th>
+              <th style="width: 25%;">Employee</th>
+              <th style="width: 18%;">Designation</th>
+              <th style="width: 17%;">Phone</th>
+              <th style="width: 20%;">Email</th>
+              <th style="width: 8%;">Role</th>
+              <th style="width: 7%; text-align: center;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="footer-note">
+          Official Staff Directory • Vairavan Automation System
+        </div>
+      </body>
+      </html>
+    `;
+
+    const { uri } = await Print.printToFileAsync({
+      html: htmlContent,
+      base64: false,
+    });
+
+    await Sharing.shareAsync(uri, {
+      UTI: '.pdf',
+      mimeType: 'application/pdf',
+      dialogTitle: `Export ${title} (PDF)`,
+    });
+  } catch (err) {
+    Alert.alert('Export Failed', err.message || 'Could not generate PDF export');
+  }
+};
+
+/**
+ * Export employees to Excel / CSV
+ */
+export const exportEmployeesToExcel = async ({
+  filename = 'Employee_Directory',
+  employees = [],
+}) => {
+  if (!employees || employees.length === 0) {
+    Alert.alert('No Records', 'There are no employee records to export.');
+    return;
+  }
+
+  try {
+    const headers = [
+      'Sl No',
+      'Employee ID',
+      'Employee Name',
+      'Designation',
+      'Phone Number',
+      'Email',
+      'Role',
+      'Status',
+      'Joined Date',
+    ];
+
+    const rows = employees.map((emp, index) => {
+      return [
+        index + 1,
+        escapeCsv(emp.employeeId || ''),
+        escapeCsv(emp.employeeName || ''),
+        escapeCsv(emp.designation || ''),
+        escapeCsv(emp.phoneNumber || ''),
+        escapeCsv(emp.email || ''),
+        escapeCsv(emp.role || 'employee'),
+        escapeCsv(emp.accountStatus || 'active'),
+        escapeCsv(formatDate(emp.createdAt)),
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+    const cleanFilename = filename.replace(/[^a-zA-Z0-9_-]/g, '_');
+    await writeCsvFileAndShare(cleanFilename, csvContent, `Export ${filename} (Excel/CSV)`);
+  } catch (err) {
+    Alert.alert('Export Failed', err.message || 'Could not generate Excel export');
+  }
+};
+
+/**
+ * Export companies to PDF
+ */
+export const exportCompaniesToPDF = async ({
+  title = 'Client Companies Directory',
+  subtitle = 'Vairavan Automation Client Accounts',
+  companies = [],
+  filterInfo = '',
+}) => {
+  if (!companies || companies.length === 0) {
+    Alert.alert('No Records', 'There are no company records to export.');
+    return;
+  }
+
+  const isAvailable = await Sharing.isAvailableAsync();
+  if (!isAvailable) {
+    Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
+    return;
+  }
+
+  try {
+    const generatedDate = new Date().toLocaleString('en-IN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+
+    const rowsHtml = companies
+      .map((c, index) => {
+        const name = escapeHtml(c.companyName || 'N/A');
+        const loc = escapeHtml(c.location || 'N/A');
+        const phone = escapeHtml(c.companyPhoneNumber || 'N/A');
+        const status = (c.status || 'active').toUpperCase();
+        const statusColor = status === 'ACTIVE' ? '#059669' : '#DC2626';
+
+        return `
+          <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+            <td style="padding: 8px 6px; text-align: center;">${index + 1}</td>
+            <td style="padding: 8px 6px;"><strong>${name}</strong></td>
+            <td style="padding: 8px 6px;">${loc}</td>
+            <td style="padding: 8px 6px;">${phone}</td>
+            <td style="padding: 8px 6px; text-align: center;">
+              <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-weight: 700; font-size: 10px; color: #ffffff; background: ${statusColor};">
+                ${status}
+              </span>
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(title)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #0f172a;
+            padding: 24px;
+            margin: 0;
+            background: #ffffff;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+          .header-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #1e40af;
+            padding-bottom: 14px;
+            margin-bottom: 16px;
+          }
+          .brand-logo {
+            width: 72px;
+            height: 72px;
+            object-fit: cover;
+            border-radius: 12px;
+          }
+          .title-block {
+            text-align: right;
+          }
+          .title-block h1 {
+            margin: 0;
+            font-size: 20px;
+            color: #1e40af;
+            font-weight: 800;
+          }
+          .title-block p {
+            margin: 2px 0 0 0;
+            color: #475569;
+            font-size: 11px;
+          }
+          .filter-bar {
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 11px;
+            color: #334155;
+            display: flex;
+            justify-content: space-between;
+          }
+          .records-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+          }
+          .records-table th {
+            background: #1e40af;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 11px;
+            padding: 8px 6px;
+            text-align: left;
+          }
+          .footer-note {
+            margin-top: 24px;
+            text-align: center;
+            font-size: 10px;
+            color: #94a3b8;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 8px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header-container">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <img class="brand-logo" src="${LOGO_URL}" alt="Logo" />
+            <div>
+              <div style="font-size: 16px; font-weight: 800; color: #0f172a;">VAIRAVAN AUTOMATION</div>
+              <div style="font-size: 11px; color: #64748b;">Client Accounts & Corporate Relations</div>
+            </div>
+          </div>
+          <div class="title-block">
+            <h1>${escapeHtml(title)}</h1>
+            <p>${escapeHtml(subtitle)}</p>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div><strong>Filter:</strong> ${escapeHtml(filterInfo || 'Active Client Accounts')}</div>
+          <div><strong>Total Companies:</strong> ${companies.length} | <strong>Generated:</strong> ${generatedDate}</div>
+        </div>
+
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th style="width: 6%; text-align: center;">#</th>
+              <th style="width: 38%;">Company Name</th>
+              <th style="width: 28%;">Location / Site</th>
+              <th style="width: 18%;">Contact Phone</th>
+              <th style="width: 10%; text-align: center;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="footer-note">
+          Official Client Directory • Vairavan Automation System
+        </div>
+      </body>
+      </html>
+    `;
+
+    const { uri } = await Print.printToFileAsync({
+      html: htmlContent,
+      base64: false,
+    });
+
+    await Sharing.shareAsync(uri, {
+      UTI: '.pdf',
+      mimeType: 'application/pdf',
+      dialogTitle: `Export ${title} (PDF)`,
+    });
+  } catch (err) {
+    Alert.alert('Export Failed', err.message || 'Could not generate PDF export');
+  }
+};
+
+/**
+ * Export companies to Excel / CSV
+ */
+export const exportCompaniesToExcel = async ({
+  filename = 'Company_Directory',
+  companies = [],
+}) => {
+  if (!companies || companies.length === 0) {
+    Alert.alert('No Records', 'There are no company records to export.');
+    return;
+  }
+
+  try {
+    const headers = [
+      'Sl No',
+      'Company Name',
+      'Location',
+      'Phone Number',
+      'Status',
+      'Created At',
+    ];
+
+    const rows = companies.map((c, index) => {
+      return [
+        index + 1,
+        escapeCsv(c.companyName || ''),
+        escapeCsv(c.location || ''),
+        escapeCsv(c.companyPhoneNumber || ''),
+        escapeCsv(c.status || 'active'),
+        escapeCsv(formatDate(c.createdAt)),
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+    const cleanFilename = filename.replace(/[^a-zA-Z0-9_-]/g, '_');
+    await writeCsvFileAndShare(cleanFilename, csvContent, `Export ${filename} (Excel/CSV)`);
   } catch (err) {
     Alert.alert('Export Failed', err.message || 'Could not generate Excel export');
   }
@@ -444,4 +1220,10 @@ export const exportDutiesToExcel = async ({
 export default {
   exportDutiesToPDF,
   exportDutiesToExcel,
+  exportLeavesToPDF,
+  exportLeavesToExcel,
+  exportEmployeesToPDF,
+  exportEmployeesToExcel,
+  exportCompaniesToPDF,
+  exportCompaniesToExcel,
 };

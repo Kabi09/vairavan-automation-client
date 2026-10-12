@@ -72,10 +72,73 @@
 - `EmptyState`: Clean empty list placeholder with icon, description, and call-to-action button.
 - `ScreenHeader`: Uniform navigation header with back button, title, and action slot.
 - `ConfirmationDialog`: Accessible modal confirmation dialog for destructive actions (deactivation, deletion).
-- `SignaturePadModal`: Touch SVG drawing canvas modal with Clear and Done actions.
+- `SignaturePadModal`: Touch SVG drawing canvas modal using PanResponder with mutable refs to prevent stroke loss upon finger lift. Supports Clear, Save, and high-fidelity vector rendering.
+- `DatePickerModal`: Reusable modal calendar date picker with year/month pagination, interactive day-of-month grid, and "Today" quick selector returning formatted `YYYY-MM-DD` strings.
+- `TimePickerModal`: Reusable 12-hour/24-hour clock time picker modal with AM/PM toggle, hour/minute selectors, preset quick time slots, and clean `HH:mm` format.
+- `DropdownPickerModal`: Reusable searchable dropdown selection modal supporting "All" defaults, dynamic item filtering, active checkmark highlighting, and full list support.
 - `NotificationsScreen`: Real-time notification feed displaying staff details, leave reason, date range, status badge, and direct inline Approve and Reject actions with admin remarks.
 
 ## Change History
+
+### 2026-10-12
+#### Full Improvements & Bug Fixes: Export Engine, Reusable Calendar & Time Pickers, 10-Digit Validation, Dropdowns & Signature Persistence
+- What was changed:
+  1. **Export Engine & File System Fix**:
+     - Fixed `writeAsStringAsync imported from "expo-file-system" is deprecated` runtime failure.
+     - Implemented resilient write architecture in `exportUtils.js` with fallback to `expo-file-system/legacy` and Expo modern `File` / `Paths` API.
+     - Added comprehensive PDF and Excel exports for Duties, Employees, Companies, and Leaves (`exportDutiesToPDF`, `exportDutiesToExcel`, `exportEmployeesToPDF`, `exportEmployeesToExcel`, `exportCompaniesToPDF`, `exportCompaniesToExcel`, `exportLeavesToPDF`, `exportLeavesToExcel`).
+  2. **Strict 10-Digit Phone Validation**:
+     - Enforced exact 10-digit phone number rules across frontend (`validators.js` and `maxLength={10}` on number-pad inputs in `CompanyFormScreen`, `EmployeeFormScreen`, `DutyFormScreen`) and backend validators (`companyValidator.js`, `dutyValidator.js`, `employeeValidator.js`).
+  3. **Work Type "Other" Custom Input**:
+     - Added conditional text input on `DutyFormScreen` to capture custom work details when "Other" is selected as the work type.
+  4. **Reusable Date & Time Picker Components**:
+     - Created `DatePickerModal.jsx`: Full interactive calendar modal with month/year navigation, day grid, and quick "Today" selector.
+     - Created `TimePickerModal.jsx`: Easy 12h clock picker modal with AM/PM toggle, hour/minute selector grids, preset quick buttons, and formatted output.
+     - Replaced manual text inputs with these reusable components in `DutyFormScreen` (duty date, in time, out time), `LeaveRequestScreen` (start & end dates), `HolidayManagementScreen` (start & end dates), and all screen filter bars.
+  5. **Signature Drawing Persistence**:
+     - Fixed finger-lift stroke disappearance bug in `SignaturePadModal.jsx` by migrating from stale React state within `PanResponder` to mutable `useRef` buffers (`pathsRef` and `currentPathRef`).
+     - Ensured vector signatures render persistently during touch gestures and export cleanly to base64 SVG images.
+  6. **Interactive Duty Details & GPS Location**:
+     - Extracted GPS latitude and longitude coordinates accurately.
+     - Added interactive GPS card with coordinates display, accuracy metric badge, and "Open in Google Maps" button (`Linking.openURL`) across `DutyDetailsScreen`, `AllDutiesScreen`, `CompanyDetailsScreen`, and `EmployeeDetailsScreen`.
+     - Displayed technician and customer signatures alongside uploaded proof photos.
+  7. **Leave Export**:
+     - Added working PDF and Excel export options for leave records with date range filters and employee details in both `LeaveRequestsScreen` (Admin) and `EmployeeDetailsScreen` (Staff leave history tab).
+  8. **Holiday Management**:
+     - Reusable calendar date pickers integrated into Admin `HolidayManagementScreen`.
+     - Confirmed upcoming holidays are clearly presented on Staff and Employee dashboards with date ranges and descriptions.
+  9. **Searchable Dropdowns Defaulting to "All"**:
+     - Created `DropdownPickerModal.jsx` with search capability, active selection highlight, and automatic "All" default.
+     - Integrated into `AllDutiesScreen` (Staff & Company pickers) and `LeaveRequestsScreen` (Employee picker).
+- Files changed:
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/components/DatePickerModal.jsx`
+  - `duty-management-app/src/components/TimePickerModal.jsx`
+  - `duty-management-app/src/components/DropdownPickerModal.jsx`
+  - `duty-management-app/src/components/SignaturePadModal.jsx`
+  - `duty-management-app/src/utils/validators.js`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/LeaveRequestScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/HolidayManagementScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyListScreen.jsx`
+  - `backend/src/validators/companyValidator.js`
+  - `backend/src/validators/dutyValidator.js`
+  - `backend/src/validators/employeeValidator.js`
+  - `backend/src/controllers/leaveController.js`
+  - `project.md`
+- Logic changed:
+  - Upgraded export file writes to handle Expo SDK deprecations without crashes.
+  - Normalized phone validation to strictly 10 digits across all forms and APIs.
+  - State management for signature pad drawing strokes decoupled from re-renders.
+  - Leave date filtering on backend augmented to match end-of-day UTC boundary.
+- Reason: User requested fixing export crashes, default date filters, dropdowns defaulting to "All", 10-digit phone validation, "Other" work type text input, clock/time picker, calendar date picker, signature pad finger-lift fix, interactive map & GPS duty details, leave exports, and holiday display.
+- Impact: All exports, filters, modals, pickers, and drawing flows work reliably without crashes across Android and iOS.
 
 ### 2026-10-12
 #### Brand App Icon & Push Notification Rich Image Integration
@@ -468,13 +531,19 @@
   - Global `AuthContext` with login, logout, profile update, role detection, and session restore.
   - Role-based navigation structure (`RootNavigator`, `AdminNavigator`, `EmployeeNavigator`) with bottom tabs and modal stacks.
   - Authentication screen with email/password validation, password masking toggle, and API error messaging.
-  - Admin screens: Dashboard, Company List & Form, Company Details (with duties, staff stats, date filters & PDF/Excel exports), Employee List & Form, Employee Details (with Leave approval & Work duty history with PDF/Excel exports), All Duties (date/employee/company filters & PDF/Excel exports, read-only viewing without approval workflow), Leave Requests Review, Holiday Management.
+  - Admin screens: Dashboard, Company List & Form, Company Details (with duties, staff stats, date filters & PDF/Excel exports), Employee List & Form, Employee Details (with Leave approval & Work duty history with PDF/Excel exports), All Duties (date/employee/company filters & PDF/Excel exports, read-only viewing without approval workflow), Leave Requests Review (with Date & Staff filters and PDF/Excel exports), Holiday Management.
   - Employee screens: Dashboard (with upcoming holidays), Duty Form (GPS coordinates, digital touch signature pad, proof photo picker, add company shortcut), My Duties, Duty Details, Leave Request, My Leaves, Holiday List.
   - Company Management: Allowed Admin, Staff, and Employees to create companies.
   - Duty Management: Clean submission, complete field data, full admin view without any approval workflow.
   - Employee Management: Detailed view with dedicated **Leave** and **Work** buttons.
   - Leave Approval Only: Strictly only leave requests feature Approve and Reject actions.
-  - Client-side PDF and Excel export engine (`src/utils/exportUtils.js`) powered by `expo-print`, `expo-file-system`, and `expo-sharing`.
+  - Robust client-side PDF and Excel export engine (`src/utils/exportUtils.js`) powered by `expo-print`, legacy/modern `expo-file-system`, and `expo-sharing` supporting Duties, Employees, Companies, and Leaves.
+  - Strict 10-digit phone number validation on all frontend screens and backend endpoints.
+  - Conditional custom work details input when Work Type is "Other".
+  - Reusable `DatePickerModal` and `TimePickerModal` across duty submission, leave requests, holiday management, and date filter bars.
+  - Reusable `DropdownPickerModal` defaulting to "All" with search functionality.
+  - Persistent digital touch signature pad using `PanResponder` refs to prevent finger-lift stroke loss.
+  - Interactive GPS location card with accuracy display and direct "Open in Google Maps" integration.
   - Common screens: Profile and Self-service Change Password.
   - Native permissions configured in `app.json` for Camera, Media Library, and GPS Location.
   - Full MongoDB Atlas backend deployment and admin authentication synchronization.
@@ -499,9 +568,13 @@
   Reason: Complies with styling constraints, delivers optimal mobile performance, and ensures cross-platform consistency.
   Date: 2026-10-11
 
-- Decision: Use `PanResponder` and `react-native-svg` for digital customer signature pad modal instead of WebView canvas.
-  Reason: Avoids external peer-dependency conflicts with modern React 19 / Expo SDK 57 while delivering high-speed native touch drawing.
-  Date: 2026-10-11
+- Decision: PanResponder mutable refs for touch signature pad.
+  Reason: React state closures caused path loss on touchEnd/release events; using mutable refs (`pathsRef`, `currentPathRef`) preserves stroke history across all touch lifecycles.
+  Date: 2026-10-12
+
+- Decision: Resilient fallback file-writing for mobile exports.
+  Reason: `expo-file-system` deprecated `writeAsStringAsync` in newer Expo SDK versions. Employing `expo-file-system/legacy` with fallback to `File`/`Paths` guarantees zero-crash exports across Expo Go and compiled standalone builds.
+  Date: 2026-10-12
 
 - Decision: Centralized Axios interceptor with `expo-secure-store`.
   Reason: Ensures JWT tokens are encrypted at rest on iOS Keychain and Android Keystore, automatically attached to headers, and purged on 401 response codes.

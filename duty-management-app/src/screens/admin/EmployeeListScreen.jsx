@@ -23,6 +23,7 @@ import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
 import ConfirmationDialog from '../../components/ConfirmationDialog';
 import { extractErrorMessage } from '../../utils/errorUtils';
+import { exportEmployeesToPDF, exportEmployeesToExcel } from '../../utils/exportUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const EmployeeListScreen = ({ navigation }) => {
@@ -104,6 +105,20 @@ export const EmployeeListScreen = ({ navigation }) => {
     } finally {
       setResetLoading(false);
     }
+  const handleExportPDF = () => {
+    exportEmployeesToPDF({
+      title: 'Staff Directory',
+      subtitle: 'Employee Profiles & Credentials',
+      employees,
+      filterInfo: search ? `Filter: "${search}"` : 'All Registered Staff',
+    });
+  };
+
+  const handleExportExcel = () => {
+    exportEmployeesToExcel({
+      filename: 'Staff_Directory',
+      employees,
+    });
   };
 
   const renderEmployeeItem = ({ item }) => (
@@ -198,6 +213,27 @@ export const EmployeeListScreen = ({ navigation }) => {
           onChangeText={setSearch}
           style={styles.searchBar}
         />
+
+        {/* Export Buttons */}
+        <View style={styles.exportBarRow}>
+          <TouchableOpacity
+            style={[styles.exportBtn, styles.pdfBtn]}
+            onPress={handleExportPDF}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="document-text" size={16} color="#FFFFFF" />
+            <Text style={styles.exportBtnText}>Export PDF</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.exportBtn, styles.excelBtn]}
+            onPress={handleExportExcel}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="grid" size={16} color="#FFFFFF" />
+            <Text style={styles.exportBtnText}>Export Excel</Text>
+          </TouchableOpacity>
+        </View>
 
         <ErrorMessage message={error} onRetry={() => fetchEmployees(search)} />
 
@@ -432,6 +468,32 @@ const styles = StyleSheet.create({
   },
   modalBtn: {
     flex: 1,
+  },
+  exportBarRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  exportBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: RADIUS.md,
+    gap: 6,
+    ...SHADOWS.sm,
+  },
+  pdfBtn: {
+    backgroundColor: '#DC2626',
+  },
+  excelBtn: {
+    backgroundColor: '#059669',
+  },
+  exportBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
 

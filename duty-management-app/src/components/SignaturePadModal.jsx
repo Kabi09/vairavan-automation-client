@@ -21,21 +21,44 @@ export const SignaturePadModal = ({ visible, onClose, onSave }) => {
   const [paths, setPaths] = useState([]);
   const [currentPath, setCurrentPath] = useState('');
 
+  // Refs prevent stale closure inside PanResponder handlers
+  const pathsRef = useRef([]);
+  const currentPathRef = useRef('');
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
         const { locationX, locationY } = evt.nativeEvent;
-        setCurrentPath(`M${locationX},${locationY}`);
+        const x = Math.round(locationX);
+        const y = Math.round(locationY);
+        const newSegment = `M${x},${y} L${x + 0.1},${y + 0.1}`;
+        currentPathRef.current = newSegment;
+        setCurrentPath(newSegment);
       },
       onPanResponderMove: (evt) => {
         const { locationX, locationY } = evt.nativeEvent;
-        setCurrentPath((prev) => `${prev} L${locationX},${locationY}`);
+        const x = Math.round(locationX);
+        const y = Math.round(locationY);
+        currentPathRef.current += ` L${x},${y}`;
+        setCurrentPath(currentPathRef.current);
       },
       onPanResponderRelease: () => {
-        if (currentPath) {
-          setPaths((prev) => [...prev, currentPath]);
+        if (currentPathRef.current) {
+          const updated = [...pathsRef.current, currentPathRef.current];
+          pathsRef.current = updated;
+          setPaths(updated);
+          currentPathRef.current = '';
+          setCurrentPath('');
+        }
+      },
+      onPanResponderTerminate: () => {
+        if (currentPathRef.current) {
+          const updated = [...pathsRef.current, currentPathRef.current];
+          pathsRef.current = updated;
+          setPaths(updated);
+          currentPathRef.current = '';
           setCurrentPath('');
         }
       },
@@ -43,19 +66,30 @@ export const SignaturePadModal = ({ visible, onClose, onSave }) => {
   ).current;
 
   const handleClear = () => {
+    pathsRef.current = [];
+    currentPathRef.current = '';
     setPaths([]);
     setCurrentPath('');
   };
 
   const handleSave = () => {
-    if (paths.length === 0 && !currentPath) {
+    const allPaths = [...pathsRef.current];
+    if (currentPathRef.current) {
+      allPaths.push(currentPathRef.current);
+    }
+
+    if (allPaths.length === 0) {
       alert('Please draw a signature before saving');
       return;
     }
 
-    // Combine all paths
-    const allPaths = [...paths, ...(currentPath ? [currentPath] : [])];
-    const svgString = `<svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">${allPaths.map((p) => `<path d="${p}" stroke="#0F172A" stroke-width="3" fill="none" stroke-linecap="round"/>`).join('')}</svg>`;
+    // Build standalone SVG string
+    const svgString = `<svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">${allPaths
+      .map(
+        (p) =>
+          `<path d="${p}" stroke="#0F172A" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
+      )
+      .join('')}</svg>`;
     const dataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svgString)}`;
 
     onSave({
@@ -101,7 +135,7 @@ export const SignaturePadModal = ({ visible, onClose, onSave }) => {
               ) : null}
             </Svg>
             <View style={styles.signatureLine} />
-            <Text style={styles.signLabel}>Sign on the line</Text>
+            <Text style={styles.signLabel}>Sign on the line (Stroke count: {paths.length})</Text>
           </View>
 
           <View style={styles.actionsRow}>
@@ -158,8 +192,8 @@ const styles = StyleSheet.create({
     width: CANVAS_WIDTH,
     height: CANVAS_HEIGHT,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
     borderRadius: RADIUS.md,
     alignSelf: 'center',
     overflow: 'hidden',
@@ -178,7 +212,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 12,
     alignSelf: 'center',
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textMuted,
   },
   actionsRow: {

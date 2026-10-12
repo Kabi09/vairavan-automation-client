@@ -9,6 +9,8 @@ import {
   Modal,
   ScrollView,
   Image,
+  Linking,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,12 +23,15 @@ import TextInputField from '../../components/TextInputField';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
-import { formatDate, formatTime } from '../../utils/dateUtils';
+import DatePickerModal from '../../components/DatePickerModal';
+import DropdownPickerModal from '../../components/DropdownPickerModal';
+import { formatDate, formatTime, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const AllDutiesScreen = () => {
+  const today = formatISODateOnly();
   const [duties, setDuties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -38,11 +43,17 @@ export const AllDutiesScreen = () => {
   const [companies, setCompanies] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
 
   // Filter selection modal
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+
+  // Pickers visibility
+  const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
+  const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
+  const [employeeDropdownVisible, setEmployeeDropdownVisible] = useState(false);
+  const [companyDropdownVisible, setCompanyDropdownVisible] = useState(false);
 
   // Read-only Duty Detail Modal (No approval workflow)
   const [selectedDuty, setSelectedDuty] = useState(null);
@@ -301,116 +312,64 @@ export const AllDutiesScreen = () => {
             </View>
 
             <ScrollView style={styles.sheetBody} showsVerticalScrollIndicator={false}>
-              {/* Date Filters */}
-              <Text style={styles.filterSectionLabel}>Date Range</Text>
+              {/* Date Filters with Calendar Pickers */}
+              <Text style={styles.filterSectionLabel}>Date Range (Default: Today)</Text>
               <View style={styles.dateInputsRow}>
                 <View style={{ flex: 1, marginRight: SPACING.xs }}>
-                  <TextInputField
-                    label="From Date"
-                    placeholder="YYYY-MM-DD"
-                    value={startDate}
-                    onChangeText={setStartDate}
-                  />
+                  <Text style={styles.fieldLabelSmall}>From Date</Text>
+                  <TouchableOpacity
+                    style={styles.pickerTriggerBtn}
+                    onPress={() => setStartDatePickerVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+                    <Text style={styles.pickerTriggerText}>{startDate || 'Start Date'}</Text>
+                  </TouchableOpacity>
                 </View>
                 <View style={{ flex: 1, marginLeft: SPACING.xs }}>
-                  <TextInputField
-                    label="To Date"
-                    placeholder="YYYY-MM-DD"
-                    value={endDate}
-                    onChangeText={setEndDate}
-                  />
+                  <Text style={styles.fieldLabelSmall}>To Date</Text>
+                  <TouchableOpacity
+                    style={styles.pickerTriggerBtn}
+                    onPress={() => setEndDatePickerVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+                    <Text style={styles.pickerTriggerText}>{endDate || 'To Date'}</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Employee Filter */}
+              {/* Employee Filter with Reusable Dropdown Picker */}
               <Text style={styles.filterSectionLabel}>Filter By Employee</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.filterChipScroll}
-                contentContainerStyle={styles.filterChipRow}
+              <TouchableOpacity
+                style={styles.dropdownTriggerBtn}
+                onPress={() => setEmployeeDropdownVisible(true)}
+                activeOpacity={0.8}
               >
-                <TouchableOpacity
-                  style={[
-                    styles.pickerChip,
-                    !selectedEmployeeId && styles.pickerChipSelected,
-                  ]}
-                  onPress={() => setSelectedEmployeeId('')}
-                >
-                  <Text
-                    style={[
-                      styles.pickerChipText,
-                      !selectedEmployeeId && styles.pickerChipTextSelected,
-                    ]}
-                  >
-                    All Staff
-                  </Text>
-                </TouchableOpacity>
-                {employees.map((emp) => {
-                  const isSelected = selectedEmployeeId === emp._id;
-                  return (
-                    <TouchableOpacity
-                      key={emp._id}
-                      style={[styles.pickerChip, isSelected && styles.pickerChipSelected]}
-                      onPress={() => setSelectedEmployeeId(emp._id)}
-                    >
-                      <Text
-                        style={[
-                          styles.pickerChipText,
-                          isSelected && styles.pickerChipTextSelected,
-                        ]}
-                      >
-                        {emp.employeeName}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                <Ionicons name="person-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.dropdownTriggerText}>
+                  {selectedEmployeeId
+                    ? employees.find((e) => e._id === selectedEmployeeId)?.employeeName || 'Staff Selected'
+                    : 'All Staff (Default)'}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
 
-              {/* Company Filter */}
+              {/* Company Filter with Reusable Dropdown Picker */}
               <Text style={styles.filterSectionLabel}>Filter By Company</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.filterChipScroll}
-                contentContainerStyle={styles.filterChipRow}
+              <TouchableOpacity
+                style={styles.dropdownTriggerBtn}
+                onPress={() => setCompanyDropdownVisible(true)}
+                activeOpacity={0.8}
               >
-                <TouchableOpacity
-                  style={[
-                    styles.pickerChip,
-                    !selectedCompanyId && styles.pickerChipSelected,
-                  ]}
-                  onPress={() => setSelectedCompanyId('')}
-                >
-                  <Text
-                    style={[
-                      styles.pickerChipText,
-                      !selectedCompanyId && styles.pickerChipTextSelected,
-                    ]}
-                  >
-                    All Companies
-                  </Text>
-                </TouchableOpacity>
-                {companies.map((comp) => {
-                  const isSelected = selectedCompanyId === comp._id;
-                  return (
-                    <TouchableOpacity
-                      key={comp._id}
-                      style={[styles.pickerChip, isSelected && styles.pickerChipSelected]}
-                      onPress={() => setSelectedCompanyId(comp._id)}
-                    >
-                      <Text
-                        style={[
-                          styles.pickerChipText,
-                          isSelected && styles.pickerChipTextSelected,
-                        ]}
-                      >
-                        {comp.companyName}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                <Ionicons name="business-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.dropdownTriggerText}>
+                  {selectedCompanyId
+                    ? companies.find((c) => c._id === selectedCompanyId)?.companyName || 'Company Selected'
+                    : 'All Companies (Default)'}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
 
               <View style={styles.filterActions}>
                 <TouchableOpacity
@@ -491,21 +450,43 @@ export const AllDutiesScreen = () => {
                 </Text>
               </View>
 
-              {/* GPS Coordinates */}
-              {selectedDuty?.location?.latitude && (
+              {/* GPS Coordinates with Interactive Map Button */}
+              {selectedDuty?.location?.latitude ? (
                 <View style={styles.detailBlock}>
-                  <Text style={styles.blockLabel}>GPS Location Tag</Text>
-                  <Text style={styles.blockValue}>
-                    {selectedDuty.location.latitude.toFixed(5)},{' '}
-                    {selectedDuty.location.longitude.toFixed(5)}
-                  </Text>
-                  {selectedDuty.location.accuracy && (
-                    <Text style={styles.blockSub}>
-                      Accuracy: ~{selectedDuty.location.accuracy} meters
-                    </Text>
-                  )}
+                  <Text style={styles.blockLabel}>GPS Location Tag & Interactive Map</Text>
+                  <View style={styles.mapCard}>
+                    <View style={styles.mapInfo}>
+                      <Ionicons name="navigate-circle" size={24} color={COLORS.primary} />
+                      <View>
+                        <Text style={styles.blockValue}>
+                          {selectedDuty.location.latitude.toFixed(5)},{' '}
+                          {selectedDuty.location.longitude.toFixed(5)}
+                        </Text>
+                        {selectedDuty.location.accuracy ? (
+                          <Text style={styles.blockSub}>
+                            Accuracy: ~{selectedDuty.location.accuracy} meters
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.openMapBtn}
+                      onPress={() => {
+                        const lat = selectedDuty.location.latitude;
+                        const lng = selectedDuty.location.longitude;
+                        const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+                        Linking.openURL(url).catch(() => {
+                          Alert.alert('Map Error', 'Unable to open maps application');
+                        });
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.openMapBtnText}>Open in Google Maps</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              )}
+              ) : null}
 
               {/* Work Description */}
               <View style={styles.detailBlock}>
@@ -513,12 +494,24 @@ export const AllDutiesScreen = () => {
                 <Text style={styles.descriptionBox}>{selectedDuty?.workDescription}</Text>
               </View>
 
-              {/* Customer Signature */}
+              {/* Customer Signature Verification */}
               {selectedDuty?.customerSignature?.url ? (
                 <View style={styles.detailBlock}>
                   <Text style={styles.blockLabel}>Customer Signature Verification</Text>
                   <Image
                     source={{ uri: selectedDuty.customerSignature.url }}
+                    style={styles.signatureImage}
+                    resizeMode="contain"
+                  />
+                </View>
+              ) : null}
+
+              {/* Employee/Technician Signature (if uploaded) */}
+              {selectedDuty?.signature?.url && selectedDuty?.signature?.url !== selectedDuty?.customerSignature?.url ? (
+                <View style={styles.detailBlock}>
+                  <Text style={styles.blockLabel}>Employee Signature Verification</Text>
+                  <Image
+                    source={{ uri: selectedDuty.signature.url }}
                     style={styles.signatureImage}
                     resizeMode="contain"
                   />
@@ -547,6 +540,50 @@ export const AllDutiesScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Reusable Date Pickers */}
+      <DatePickerModal
+        visible={startDatePickerVisible}
+        onClose={() => setStartDatePickerVisible(false)}
+        selectedDate={startDate}
+        onSelectDate={(date) => setStartDate(date)}
+        title="Select From Date"
+      />
+
+      <DatePickerModal
+        visible={endDatePickerVisible}
+        onClose={() => setEndDatePickerVisible(false)}
+        selectedDate={endDate}
+        onSelectDate={(date) => setEndDate(date)}
+        title="Select To Date"
+      />
+
+      {/* Reusable Dropdown Pickers */}
+      <DropdownPickerModal
+        visible={employeeDropdownVisible}
+        onClose={() => setEmployeeDropdownVisible(false)}
+        title="Filter by Employee"
+        selectedValue={selectedEmployeeId}
+        onSelect={(val) => setSelectedEmployeeId(val)}
+        allOptionLabel="All Staff"
+        options={employees.map((e) => ({
+          label: `${e.employeeName} (${e.employeeId || 'Staff'})`,
+          value: e._id,
+        }))}
+      />
+
+      <DropdownPickerModal
+        visible={companyDropdownVisible}
+        onClose={() => setCompanyDropdownVisible(false)}
+        title="Filter by Company"
+        selectedValue={selectedCompanyId}
+        onSelect={(val) => setSelectedCompanyId(val)}
+        allOptionLabel="All Companies"
+        options={companies.map((c) => ({
+          label: `${c.companyName} (${c.location || 'Site'})`,
+          value: c._id,
+        }))}
+      />
     </SafeAreaView>
   );
 };
@@ -880,6 +917,74 @@ const styles = StyleSheet.create({
     marginRight: SPACING.sm,
     backgroundColor: COLORS.surfaceAlt,
     marginTop: 4,
+  },
+  fieldLabelSmall: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  pickerTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 10,
+  },
+  pickerTriggerText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  dropdownTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    marginBottom: SPACING.md,
+  },
+  dropdownTriggerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  mapCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginTop: 6,
+  },
+  mapInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  openMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 8,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+  },
+  openMapBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 

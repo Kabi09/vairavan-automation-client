@@ -9,6 +9,7 @@ import {
   ScrollView,
   Image,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,22 +21,28 @@ import TextInputField from '../../components/TextInputField';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
-import { formatDate } from '../../utils/dateUtils';
+import DatePickerModal from '../../components/DatePickerModal';
+import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const CompanyDetailsScreen = ({ route, navigation }) => {
   const { company } = route.params || {};
+  const today = formatISODateOnly();
 
   const [duties, setDuties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  // Date filters
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  // Date filters (Default: Today)
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+
+  // Pickers visibility
+  const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
+  const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
 
   // Selected duty modal for full view
   const [selectedDuty, setSelectedDuty] = useState(null);
@@ -149,26 +156,42 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
 
       {/* Date Filters & Export Action Toolbar */}
       <Card style={styles.toolbarCard}>
-        <Text style={styles.toolbarTitle}>Filter & Export Records</Text>
+        <View style={styles.toolbarTitleRow}>
+          <Text style={styles.toolbarTitle}>Filter & Export Records</Text>
+          {(startDate || endDate) && (
+            <TouchableOpacity
+              onPress={() => {
+                setStartDate('');
+                setEndDate('');
+              }}
+            >
+              <Text style={styles.clearDateLink}>Clear Filter</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         <View style={styles.dateFilterRow}>
           <View style={{ flex: 1, marginRight: SPACING.xs }}>
-            <TextInputField
-              label="From Date"
-              placeholder="YYYY-MM-DD"
-              value={startDate}
-              onChangeText={setStartDate}
-              style={styles.filterInput}
-            />
+            <Text style={styles.filterFieldLabel}>From Date</Text>
+            <TouchableOpacity
+              style={styles.datePickerTrigger}
+              onPress={() => setStartDatePickerVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+              <Text style={styles.datePickerTriggerText}>{startDate || 'Start Date'}</Text>
+            </TouchableOpacity>
           </View>
           <View style={{ flex: 1, marginLeft: SPACING.xs }}>
-            <TextInputField
-              label="To Date"
-              placeholder="YYYY-MM-DD"
-              value={endDate}
-              onChangeText={setEndDate}
-              style={styles.filterInput}
-            />
+            <Text style={styles.filterFieldLabel}>To Date</Text>
+            <TouchableOpacity
+              style={styles.datePickerTrigger}
+              onPress={() => setEndDatePickerVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+              <Text style={styles.datePickerTriggerText}>{endDate || 'To Date'}</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -239,14 +262,30 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
               {item.customerName || 'N/A'} ({item.customerPhoneNumber || 'N/A'})
             </Text>
           </View>
-          {item.location?.latitude && (
+          {item.location?.latitude ? (
             <View style={styles.detailItem}>
               <Text style={styles.detailLabel}>GPS Coordinates:</Text>
-              <Text style={styles.detailValue}>
-                {item.location.latitude.toFixed(4)}, {item.location.longitude.toFixed(4)}
-              </Text>
+              <View style={styles.gpsRow}>
+                <Text style={styles.detailValue}>
+                  {item.location.latitude.toFixed(4)}, {item.location.longitude.toFixed(4)}
+                </Text>
+                <TouchableOpacity
+                  style={styles.openMapChip}
+                  onPress={() => {
+                    const lat = item.location.latitude;
+                    const lng = item.location.longitude;
+                    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`).catch(() => {
+                      Alert.alert('Map Error', 'Unable to open maps application');
+                    });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="map-outline" size={13} color={COLORS.primary} />
+                  <Text style={styles.openMapChipText}>View Map</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Work Description */}
@@ -320,6 +359,23 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
           />
         )}
       </View>
+
+      {/* Date Pickers */}
+      <DatePickerModal
+        visible={startDatePickerVisible}
+        onClose={() => setStartDatePickerVisible(false)}
+        selectedDate={startDate}
+        onSelectDate={(date) => setStartDate(date)}
+        title="Select From Date"
+      />
+
+      <DatePickerModal
+        visible={endDatePickerVisible}
+        onClose={() => setEndDatePickerVisible(false)}
+        selectedDate={endDate}
+        onSelectDate={(date) => setEndDate(date)}
+        title="Select To Date"
+      />
     </SafeAreaView>
   );
 };
@@ -424,23 +480,73 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },
+  toolbarTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
   toolbarTitle: {
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.text,
-    marginBottom: SPACING.xs,
+  },
+  clearDateLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  filterFieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  datePickerTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 9,
+  },
+  datePickerTriggerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
   },
   dateFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: SPACING.xs,
   },
-  filterInput: {
-    marginBottom: 0,
+  gpsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flex: 1,
+  },
+  openMapChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.primarySubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  openMapChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   exportButtonsRow: {
     flexDirection: 'row',
     gap: SPACING.sm,
-    marginTop: SPACING.sm,
+    marginTop: SPACING.xs,
   },
   exportBtn: {
     flex: 1,

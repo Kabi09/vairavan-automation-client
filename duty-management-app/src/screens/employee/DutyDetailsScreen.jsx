@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -127,23 +128,37 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           <Text style={styles.descriptionText}>{duty.workDescription}</Text>
         </Card>
 
-        {/* GPS Location */}
+        {/* GPS Location & Interactive Map */}
         {duty.location?.latitude ? (
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Service Location GPS</Text>
             <View style={styles.locationRow}>
-              <Ionicons name="navigate-circle" size={24} color={COLORS.success} />
-              <View>
+              <Ionicons name="navigate-circle" size={26} color={COLORS.success} />
+              <View style={{ flex: 1 }}>
                 <Text style={styles.coordText}>
                   {duty.location.latitude.toFixed(5)}, {duty.location.longitude.toFixed(5)}
                 </Text>
-                {duty.location.accuracy && (
+                {duty.location.accuracy ? (
                   <Text style={styles.accuracyText}>
                     Accuracy: ~{duty.location.accuracy} meters
                   </Text>
-                )}
+                ) : null}
               </View>
             </View>
+            <TouchableOpacity
+              style={styles.mapOpenBtn}
+              onPress={() => {
+                const lat = duty.location.latitude;
+                const lng = duty.location.longitude;
+                Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`).catch(() => {
+                  Alert.alert('Map Error', 'Unable to open maps application');
+                });
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.mapOpenBtnText}>Open in Google Maps</Text>
+            </TouchableOpacity>
           </Card>
         ) : null}
 
@@ -172,6 +187,20 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
             <View style={styles.signatureBox}>
               <Image
                 source={{ uri: duty.customerSignature.url }}
+                style={styles.signatureImage}
+                resizeMode="contain"
+              />
+            </View>
+          </Card>
+        ) : null}
+
+        {/* Employee Signature (if separately uploaded) */}
+        {duty.signature?.url && duty.signature?.url !== duty.customerSignature?.url ? (
+          <Card style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Employee Signature Verification</Text>
+            <View style={styles.signatureBox}>
+              <Image
+                source={{ uri: duty.signature.url }}
                 style={styles.signatureImage}
                 resizeMode="contain"
               />
@@ -310,6 +339,21 @@ const styles = StyleSheet.create({
   signatureImage: {
     width: '100%',
     height: 90,
+  },
+  mapOpenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.md,
+  },
+  mapOpenBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
 

@@ -26,8 +26,10 @@ export const validateCreateEmployee = [
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
   body('phoneNumber')
-    .optional()
-    .trim(),
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^(?:\+91)?[0-9]{10}$/)
+    .withMessage('Phone number must be exactly 10 digits'),
   body('address')
     .optional()
     .trim(),
@@ -40,8 +42,8 @@ export const validateCreateEmployee = [
     .withMessage('Joining date must be a valid date'),
   body('role')
     .optional()
-    .isIn(['admin', 'employee'])
-    .withMessage('Role must be either admin or employee'),
+    .isIn(['admin', 'employee', 'staff'])
+    .withMessage('Role must be admin, employee, or staff'),
   body('accountStatus')
     .optional()
     .isIn(['active', 'inactive'])
@@ -60,8 +62,10 @@ export const validateUpdateEmployee = [
     .isLength({ max: 100 })
     .withMessage('Employee name cannot exceed 100 characters'),
   body('phoneNumber')
-    .optional()
-    .trim(),
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^(?:\+91)?[0-9]{10}$/)
+    .withMessage('Phone number must be exactly 10 digits'),
   body('address')
     .optional()
     .trim(),

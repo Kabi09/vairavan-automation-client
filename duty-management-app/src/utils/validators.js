@@ -10,8 +10,8 @@ export const isValidEmail = (email) => {
 
 export const isValidPhone = (phone) => {
   if (!phone || typeof phone !== 'string') return false;
-  const regex = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{6,15}$/;
-  return regex.test(phone.trim());
+  const digitsOnly = phone.trim().replace(/\D/g, '');
+  return digitsOnly.length === 10;
 };
 
 export const isValidTimeFormat = (timeStr) => {

@@ -24,6 +24,8 @@ import TextInputField from '../../components/TextInputField';
 import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
 import SignaturePadModal from '../../components/SignaturePadModal';
+import DatePickerModal from '../../components/DatePickerModal';
+import TimePickerModal from '../../components/TimePickerModal';
 import ErrorMessage from '../../components/ErrorMessage';
 import { getTodayDateString, formatISODateOnly } from '../../utils/dateUtils';
 import { isValidPhone, isValidTimeFormat, isTimeOrderValid } from '../../utils/validators';
@@ -40,9 +42,15 @@ export const DutyFormScreen = ({ navigation }) => {
   const [customerPhone, setCustomerPhone] = useState('');
   const [machineName, setMachineName] = useState('');
   const [workType, setWorkType] = useState('Maintenance');
+  const [customWorkDetails, setCustomWorkDetails] = useState('');
   const [inTime, setInTime] = useState('09:30');
   const [outTime, setOutTime] = useState('17:30');
   const [workDescription, setWorkDescription] = useState('');
+
+  // Modals state
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [inTimePickerVisible, setInTimePickerVisible] = useState(false);
+  const [outTimePickerVisible, setOutTimePickerVisible] = useState(false);
 
   // Signature state
   const [signatureData, setSignatureData] = useState(null);
@@ -170,9 +178,12 @@ export const DutyFormScreen = ({ navigation }) => {
     if (!customerPhone.trim()) {
       errors.customerPhone = 'Customer phone is required';
     } else if (!isValidPhone(customerPhone)) {
-      errors.customerPhone = 'Please enter a valid phone number';
+      errors.customerPhone = 'Customer phone must be exactly 10 digits';
     }
     if (!machineName.trim()) errors.machineName = 'Machine name is required';
+    if (workType === 'Other' && !customWorkDetails.trim()) {
+      errors.customWorkDetails = 'Please specify custom work details';
+    }
     if (!isValidTimeFormat(inTime)) errors.inTime = 'In time must be in HH:mm format (e.g. 09:30)';
     if (!isValidTimeFormat(outTime)) errors.outTime = 'Out time must be in HH:mm format (e.g. 17:30)';
     if (isValidTimeFormat(inTime) && isValidTimeFormat(outTime) && !isTimeOrderValid(inTime, outTime)) {
@@ -219,6 +230,11 @@ export const DutyFormScreen = ({ navigation }) => {
       }
 
       // 3. Assemble duty submission payload
+      const effectiveDescription =
+        workType === 'Other' && customWorkDetails.trim()
+          ? `[Work: ${customWorkDetails.trim()}]\n${workDescription.trim()}`
+          : workDescription.trim();
+
       const payload = {
         dutyDate,
         companyId: selectedCompanyId,
@@ -226,9 +242,10 @@ export const DutyFormScreen = ({ navigation }) => {
         customerPhoneNumber: customerPhone.trim(),
         machineName: machineName.trim(),
         workType,
+        customWorkType: workType === 'Other' ? customWorkDetails.trim() : '',
         inTime,
         outTime,
-        workDescription: workDescription.trim(),
+        workDescription: effectiveDescription,
         customerSignature: uploadedSignature,
         customerProofPhotos: uploadedPhotos,
       };
@@ -275,14 +292,25 @@ export const DutyFormScreen = ({ navigation }) => {
           <Card style={styles.formCard}>
             <Text style={styles.sectionHeader}>1. Service Visit Information</Text>
 
-            <TextInputField
-              label="Duty Date (YYYY-MM-DD)"
-              value={dutyDate}
-              onChangeText={setDutyDate}
-              placeholder="e.g. 2026-10-11"
-              error={fieldErrors.dutyDate}
-              required
-            />
+            <View style={styles.datePickerRow}>
+              <View style={{ flex: 1 }}>
+                <TextInputField
+                  label="Duty Date (YYYY-MM-DD)"
+                  value={dutyDate}
+                  onChangeText={setDutyDate}
+                  placeholder="YYYY-MM-DD"
+                  error={fieldErrors.dutyDate}
+                  required
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.calendarIconBtn}
+                onPress={() => setDatePickerVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar" size={20} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
 
             {/* Company Selection */}
             <View style={styles.companyHeaderRow}>
@@ -331,11 +359,18 @@ export const DutyFormScreen = ({ navigation }) => {
             />
 
             <TextInputField
-              label="Customer Phone Number"
-              placeholder="e.g. +91 98765 43210"
+              label="Customer Phone Number (10 Digits)"
+              placeholder="10-digit mobile number"
               value={customerPhone}
-              onChangeText={setCustomerPhone}
-              keyboardType="phone-pad"
+              onChangeText={(t) => {
+                const cleaned = t.replace(/\D/g, '').slice(0, 10);
+                setCustomerPhone(cleaned);
+                if (fieldErrors.customerPhone) {
+                  setFieldErrors((prev) => ({ ...prev, customerPhone: null }));
+                }
+              }}
+              keyboardType="number-pad"
+              maxLength={10}
               error={fieldErrors.customerPhone}
               required
             />
@@ -373,27 +408,55 @@ export const DutyFormScreen = ({ navigation }) => {
               })}
             </View>
 
-            {/* Timings */}
+            {/* If 'Other' selected, display custom work details input */}
+            {workType === 'Other' && (
+              <TextInputField
+                label="Custom Work Details / Specification *"
+                placeholder="e.g. Retrofit Calibration, PLC Programming, Sensor Replacement"
+                value={customWorkDetails}
+                onChangeText={(t) => {
+                  setCustomWorkDetails(t);
+                  if (fieldErrors.customWorkDetails) {
+                    setFieldErrors((prev) => ({ ...prev, customWorkDetails: null }));
+                  }
+                }}
+                error={fieldErrors.customWorkDetails}
+                required
+              />
+            )}
+
+            {/* Timings (Interactive Time Picker Modals) */}
             <View style={styles.timesRow}>
               <View style={styles.timeCol}>
-                <TextInputField
-                  label="In Time (HH:mm)"
-                  placeholder="09:30"
-                  value={inTime}
-                  onChangeText={setInTime}
-                  error={fieldErrors.inTime}
-                  required
-                />
+                <Text style={styles.fieldLabel}>In Time (HH:mm) *</Text>
+                <TouchableOpacity
+                  style={[styles.timePickerCard, fieldErrors.inTime && styles.timePickerCardError]}
+                  onPress={() => setInTimePickerVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.timePickerCardText}>{inTime || '09:30'}</Text>
+                  <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+                </TouchableOpacity>
+                {fieldErrors.inTime ? (
+                  <Text style={styles.errorText}>{fieldErrors.inTime}</Text>
+                ) : null}
               </View>
+
               <View style={styles.timeCol}>
-                <TextInputField
-                  label="Out Time (HH:mm)"
-                  placeholder="17:30"
-                  value={outTime}
-                  onChangeText={setOutTime}
-                  error={fieldErrors.outTime}
-                  required
-                />
+                <Text style={styles.fieldLabel}>Out Time (HH:mm) *</Text>
+                <TouchableOpacity
+                  style={[styles.timePickerCard, fieldErrors.outTime && styles.timePickerCardError]}
+                  onPress={() => setOutTimePickerVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.timePickerCardText}>{outTime || '17:30'}</Text>
+                  <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+                </TouchableOpacity>
+                {fieldErrors.outTime ? (
+                  <Text style={styles.errorText}>{fieldErrors.outTime}</Text>
+                ) : null}
               </View>
             </View>
 
@@ -511,6 +574,30 @@ export const DutyFormScreen = ({ navigation }) => {
         onClose={() => setSignatureModalVisible(false)}
         onSave={(data) => setSignatureData(data)}
       />
+
+      <DatePickerModal
+        visible={datePickerVisible}
+        value={dutyDate}
+        onSelect={setDutyDate}
+        onClose={() => setDatePickerVisible(false)}
+        title="Select Duty Date"
+      />
+
+      <TimePickerModal
+        visible={inTimePickerVisible}
+        value={inTime}
+        onSelect={setInTime}
+        onClose={() => setInTimePickerVisible(false)}
+        title="Select Check-In Time"
+      />
+
+      <TimePickerModal
+        visible={outTimePickerVisible}
+        value={outTime}
+        onSelect={setOutTime}
+        onClose={() => setOutTimePickerVisible(false)}
+        title="Select Check-Out Time"
+      />
     </SafeAreaView>
   );
 };
@@ -542,6 +629,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.text,
     marginBottom: SPACING.xs,
+  },
+  datePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  calendarIconBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primarySubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
   },
   chipScroll: {
     marginBottom: SPACING.md,
@@ -600,9 +701,29 @@ const styles = StyleSheet.create({
   timesRow: {
     flexDirection: 'row',
     gap: SPACING.md,
+    marginBottom: SPACING.md,
   },
   timeCol: {
     flex: 1,
+  },
+  timePickerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+  },
+  timePickerCardError: {
+    borderColor: COLORS.danger,
+  },
+  timePickerCardText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
   },
   locationContainer: {
     backgroundColor: COLORS.surfaceAlt,
@@ -713,7 +834,8 @@ const styles = StyleSheet.create({
   errorText: {
     color: COLORS.danger,
     fontSize: 12,
-    marginBottom: SPACING.sm,
+    marginTop: 2,
+    marginBottom: SPACING.xs,
   },
   companyHeaderRow: {
     flexDirection: 'row',

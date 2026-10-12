@@ -7,14 +7,17 @@ import {
   Platform,
   StyleSheet,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import leaveApi from '../../api/leaveApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
 import TextInputField from '../../components/TextInputField';
 import PrimaryButton from '../../components/PrimaryButton';
 import ErrorMessage from '../../components/ErrorMessage';
+import DatePickerModal from '../../components/DatePickerModal';
 import { formatISODateOnly, isDateRangeValid } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
@@ -27,6 +30,10 @@ export const LeaveRequestScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+
+  // Date picker modals
+  const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
+  const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
 
   const validate = () => {
     const errors = {};
@@ -91,29 +98,39 @@ export const LeaveRequestScreen = ({ navigation }) => {
           <Card style={styles.formCard}>
             <Text style={styles.sectionTitle}>Leave Period</Text>
 
-            <TextInputField
-              label="Start Date (YYYY-MM-DD)"
-              placeholder="e.g. 2026-10-20"
-              value={startDate}
-              onChangeText={(text) => {
-                setStartDate(text);
-                if (fieldErrors.startDate) setFieldErrors((p) => ({ ...p, startDate: null }));
-              }}
-              error={fieldErrors.startDate}
-              required
-            />
+            {/* Start Date Picker */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>Start Date *</Text>
+              <TouchableOpacity
+                style={[styles.datePickerBtn, fieldErrors.startDate && styles.pickerBtnError]}
+                onPress={() => setStartDatePickerVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.pickerBtnText}>{startDate || 'Select Start Date'}</Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+              {fieldErrors.startDate ? (
+                <Text style={styles.errorText}>{fieldErrors.startDate}</Text>
+              ) : null}
+            </View>
 
-            <TextInputField
-              label="End Date (YYYY-MM-DD)"
-              placeholder="e.g. 2026-10-22"
-              value={endDate}
-              onChangeText={(text) => {
-                setEndDate(text);
-                if (fieldErrors.endDate) setFieldErrors((p) => ({ ...p, endDate: null }));
-              }}
-              error={fieldErrors.endDate}
-              required
-            />
+            {/* End Date Picker */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>End Date *</Text>
+              <TouchableOpacity
+                style={[styles.datePickerBtn, fieldErrors.endDate && styles.pickerBtnError]}
+                onPress={() => setEndDatePickerVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.pickerBtnText}>{endDate || 'Select End Date'}</Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+              {fieldErrors.endDate ? (
+                <Text style={styles.errorText}>{fieldErrors.endDate}</Text>
+              ) : null}
+            </View>
 
             <Text style={[styles.sectionTitle, { marginTop: SPACING.md }]}>
               Reason for Absence
@@ -142,6 +159,29 @@ export const LeaveRequestScreen = ({ navigation }) => {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Date Pickers */}
+      <DatePickerModal
+        visible={startDatePickerVisible}
+        onClose={() => setStartDatePickerVisible(false)}
+        selectedDate={startDate}
+        onSelectDate={(date) => {
+          setStartDate(date);
+          if (fieldErrors.startDate) setFieldErrors((p) => ({ ...p, startDate: null }));
+        }}
+        title="Select Start Date"
+      />
+
+      <DatePickerModal
+        visible={endDatePickerVisible}
+        onClose={() => setEndDatePickerVisible(false)}
+        selectedDate={endDate}
+        onSelectDate={(date) => {
+          setEndDate(date);
+          if (fieldErrors.endDate) setFieldErrors((p) => ({ ...p, endDate: null }));
+        }}
+        title="Select End Date"
+      />
     </SafeAreaView>
   );
 };
@@ -170,6 +210,41 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     marginBottom: SPACING.xxl,
+  },
+  fieldContainer: {
+    marginBottom: SPACING.md,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  datePickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+  },
+  pickerBtnError: {
+    borderColor: COLORS.danger,
+    backgroundColor: '#FEF2F2',
+  },
+  pickerBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  errorText: {
+    fontSize: 12,
+    color: COLORS.danger,
+    marginTop: 4,
+    fontWeight: '500',
   },
 });
 

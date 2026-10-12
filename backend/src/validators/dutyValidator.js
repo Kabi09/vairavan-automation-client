@@ -24,8 +24,8 @@ export const validateCreateDuty = [
     .trim()
     .notEmpty()
     .withMessage('Customer phone number is required')
-    .matches(/^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{6,15}$/)
-    .withMessage('Please provide a valid customer phone number'),
+    .matches(/^(?:\+91)?[0-9]{10}$/)
+    .withMessage('Customer phone number must be exactly 10 digits'),
   body('machineName')
     .trim()
     .notEmpty()
@@ -98,8 +98,8 @@ export const validateUpdateDuty = [
   body('customerPhoneNumber')
     .optional()
     .trim()
-    .matches(/^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{6,15}$/)
-    .withMessage('Please provide a valid customer phone number'),
+    .matches(/^(?:\+91)?[0-9]{10}$/)
+    .withMessage('Customer phone number must be exactly 10 digits'),
   body('machineName')
     .optional()
     .trim()
