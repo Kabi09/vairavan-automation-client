@@ -25,6 +25,7 @@ import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
 import SignaturePadModal from '../../components/SignaturePadModal';
 import SignatureImage from '../../components/SignatureImage';
+import ImageViewerModal from '../../components/ImageViewerModal';
 import DatePickerModal from '../../components/DatePickerModal';
 import TimePickerModal from '../../components/TimePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
@@ -32,6 +33,7 @@ import ErrorMessage from '../../components/ErrorMessage';
 import { getTodayDateString, formatISODateOnly } from '../../utils/dateUtils';
 import { isValidPhone, isValidTimeFormat, isTimeOrderValid } from '../../utils/validators';
 import { extractErrorMessage } from '../../utils/errorUtils';
+import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
 import { APP_CONFIG } from '../../constants/config';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
@@ -64,6 +66,14 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const [inTimePickerVisible, setInTimePickerVisible] = useState(false);
   const [outTimePickerVisible, setOutTimePickerVisible] = useState(false);
 
+  // Full-size Image/Signature Preview Modal State
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [previewImageUri, setPreviewImageUri] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [previewSubtitle, setPreviewSubtitle] = useState('');
+  const [previewTimestamp, setPreviewTimestamp] = useState('');
+  const [previewIsSignature, setPreviewIsSignature] = useState(false);
+
   // Signature state
   const [signatureData, setSignatureData] = useState(() => {
     if (dutyToEdit?.customerSignature?.url) {
@@ -72,6 +82,19 @@ export const DutyFormScreen = ({ navigation, route }) => {
         dataUri: dutyToEdit.customerSignature.url,
         publicId: dutyToEdit.customerSignature.publicId || '',
         key: dutyToEdit.customerSignature.key || '',
+        timestamp: dutyToEdit.customerSignature.signedAt
+          ? new Date(dutyToEdit.customerSignature.signedAt).toLocaleDateString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            }) +
+            ', ' +
+            new Date(dutyToEdit.customerSignature.signedAt).toLocaleTimeString('en-IN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            })
+          : '',
       };
     }
     return null;
@@ -93,11 +116,25 @@ export const DutyFormScreen = ({ navigation, route }) => {
         latitude: dutyToEdit.location.latitude,
         longitude: dutyToEdit.location.longitude,
         accuracy: dutyToEdit.location.accuracy || 0,
+        address: dutyToEdit.location.address || '',
       };
     }
     return null;
   });
   const [locating, setLocating] = useState(false);
+
+  // If editing an older report with coordinates but no reverse-geocoded address, resolve on mount
+  useEffect(() => {
+    if (dutyToEdit?.location?.latitude && !dutyToEdit?.location?.address) {
+      reverseGeocodeCoords(dutyToEdit.location.latitude, dutyToEdit.location.longitude)
+        .then((addr) => {
+          if (addr) {
+            setLocationCoords((prev) => (prev ? { ...prev, address: addr } : prev));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [dutyToEdit]);
 
   // Submission state
   const [loading, setLoading] = useState(false);
@@ -142,17 +179,51 @@ export const DutyFormScreen = ({ navigation, route }) => {
         accuracy: Location.Accuracy.Balanced,
       });
 
+      const lat = location.coords.latitude;
+      const lng = location.coords.longitude;
+      const accuracy = Math.round(location.coords.accuracy || 0);
+
+      // Reverse geocode to exact address name
+      const address = await reverseGeocodeCoords(lat, lng);
+
       setLocationCoords({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        accuracy: Math.round(location.coords.accuracy || 0),
+        latitude: lat,
+        longitude: lng,
+        accuracy,
+        address: address || '',
       });
-      Alert.alert('Location Captured', `Coordinates: ${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)}`);
+
+      Alert.alert(
+        'Location Captured',
+        address
+          ? `${address}\n\nCoordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+          : `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      );
     } catch (locErr) {
       Alert.alert('GPS Error', 'Unable to retrieve GPS coordinates. Ensure device location is turned on.');
     } finally {
       setLocating(false);
     }
+  };
+
+  // Lightbox preview openers
+  const handleOpenPhotoPreview = (uri, index) => {
+    setPreviewImageUri(uri);
+    setPreviewTitle(`Proof Photo #${index + 1}`);
+    setPreviewSubtitle(customerName ? `Client: ${customerName}` : 'Service Verification');
+    setPreviewTimestamp(dutyDate || '');
+    setPreviewIsSignature(false);
+    setPreviewModalVisible(true);
+  };
+
+  const handleOpenSignaturePreview = () => {
+    if (!signatureData?.dataUri && !signatureData?.url) return;
+    setPreviewImageUri(signatureData?.dataUri || signatureData?.url || '');
+    setPreviewTitle('Customer Signature');
+    setPreviewSubtitle(customerName ? `Client: ${customerName}` : 'Service Verification');
+    setPreviewTimestamp(signatureData?.timestamp || '');
+    setPreviewIsSignature(true);
+    setPreviewModalVisible(true);
   };
 
   // Image capture / selection
@@ -316,6 +387,9 @@ export const DutyFormScreen = ({ navigation, route }) => {
         payload.latitude = locationCoords.latitude;
         payload.longitude = locationCoords.longitude;
         payload.accuracy = locationCoords.accuracy;
+        if (locationCoords.address) {
+          payload.address = locationCoords.address;
+        }
       }
 
       if (isEditing) {
@@ -547,15 +621,41 @@ export const DutyFormScreen = ({ navigation, route }) => {
             <Text style={styles.sectionHeader}>2. Service Location (GPS)</Text>
             <View style={styles.locationContainer}>
               {locationCoords ? (
-                <View style={styles.locationCapturedRow}>
-                  <Ionicons name="location" size={24} color={COLORS.success} />
-                  <View style={styles.locationInfo}>
-                    <Text style={styles.locationCoordText}>
-                      Lat: {locationCoords.latitude.toFixed(5)}, Lon: {locationCoords.longitude.toFixed(5)}
-                    </Text>
-                    <Text style={styles.locationAccuracyText}>
-                      Accuracy: ~{locationCoords.accuracy}m
-                    </Text>
+                <View style={styles.locationCapturedBlock}>
+                  {locationCoords.address ? (
+                    <View style={styles.exactAddressCard}>
+                      <Ionicons name="location" size={20} color={COLORS.primary} style={{ marginTop: 2 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.exactAddressTitle}>Exact Location Name</Text>
+                        <Text style={styles.exactAddressText}>{locationCoords.address}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.locationCapturedRow}>
+                    <Ionicons name="navigate-circle" size={24} color={COLORS.success} />
+                    <View style={styles.locationInfo}>
+                      <Text style={styles.locationCoordText}>
+                        Lat: {locationCoords.latitude.toFixed(5)}, Lon: {locationCoords.longitude.toFixed(5)}
+                      </Text>
+                      <Text style={styles.locationAccuracyText}>
+                        Accuracy: ~{locationCoords.accuracy}m
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.viewMapChip}
+                      onPress={() =>
+                        openMapLocation(
+                          locationCoords.latitude,
+                          locationCoords.longitude,
+                          customerName || 'Service Visit'
+                        )
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="map-outline" size={14} color="#FFFFFF" />
+                      <Text style={styles.viewMapChipText}>View Map</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               ) : (
@@ -592,9 +692,18 @@ export const DutyFormScreen = ({ navigation, route }) => {
                     <Text style={styles.resignLinkText}>Re-sign</Text>
                   </TouchableOpacity>
                 </View>
-                <View style={styles.signatureThumbBox}>
-                  <SignatureImage uri={signatureData.dataUri} height={90} />
-                </View>
+                <TouchableOpacity
+                  style={styles.signatureThumbBox}
+                  onPress={handleOpenSignaturePreview}
+                  activeOpacity={0.85}
+                >
+                  <SignatureImage
+                    uri={signatureData.dataUri || signatureData.url}
+                    height={100}
+                    timestamp={signatureData.timestamp}
+                    onPress={handleOpenSignaturePreview}
+                  />
+                </TouchableOpacity>
               </View>
             ) : (
               <SecondaryButton
@@ -616,7 +725,15 @@ export const DutyFormScreen = ({ navigation, route }) => {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
               {photos.map((uri, index) => (
                 <View key={index} style={styles.photoThumbContainer}>
-                  <Image source={{ uri }} style={styles.photoThumb} />
+                  <TouchableOpacity
+                    onPress={() => handleOpenPhotoPreview(uri, index)}
+                    activeOpacity={0.85}
+                  >
+                    <Image source={{ uri }} style={styles.photoThumb} />
+                    <View style={styles.photoZoomHint}>
+                      <Ionicons name="expand-outline" size={12} color="#FFFFFF" />
+                    </View>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.removePhotoBtn}
                     onPress={() => handleRemovePhoto(index)}
@@ -648,6 +765,16 @@ export const DutyFormScreen = ({ navigation, route }) => {
         visible={signatureModalVisible}
         onClose={() => setSignatureModalVisible(false)}
         onSave={(data) => setSignatureData(data)}
+      />
+
+      <ImageViewerModal
+        visible={previewModalVisible}
+        onClose={() => setPreviewModalVisible(false)}
+        imageUri={previewImageUri}
+        title={previewTitle}
+        subtitle={previewSubtitle}
+        timestamp={previewTimestamp}
+        isSignature={previewIsSignature}
       />
 
       <DatePickerModal
@@ -806,6 +933,34 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderRadius: RADIUS.md,
   },
+  locationCapturedBlock: {
+    gap: SPACING.xs,
+  },
+  exactAddressCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    padding: SPACING.sm,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: SPACING.xs,
+  },
+  exactAddressTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  exactAddressText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    lineHeight: 18,
+    marginTop: 2,
+  },
   locationCapturedRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -823,6 +978,20 @@ const styles = StyleSheet.create({
   locationAccuracyText: {
     fontSize: 12,
     color: COLORS.textSecondary,
+  },
+  viewMapChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+  },
+  viewMapChipText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   locationEmptyText: {
     fontSize: 13,
@@ -888,6 +1057,14 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: RADIUS.md,
+  },
+  photoZoomHint: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderRadius: 4,
+    padding: 2,
   },
   removePhotoBtn: {
     position: 'absolute',

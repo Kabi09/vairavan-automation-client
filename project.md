@@ -79,6 +79,55 @@
 ## Change History
 
 ### 2026-10-13
+#### Export Verification, Photo/Signature Lightbox Preview, Signature Timestamp Watermark & Exact GPS Location Name
+- What was changed:
+  - **Verified Export Download & Share Sheet Resilience (`exportUtils.js`)**:
+    - Verified direct downloading to device storage and sharing across Android and iOS.
+    - Improved Android Storage Access Framework (SAF) flow with safe cancellation handling: if a user cancels directory selection in the system folder picker, it gracefully opens the native Share sheet (`Sharing.shareAsync`) so the user can easily save to Downloads, Drive, or WhatsApp.
+    - Enhanced PDF export: embedded formatted exact location address, coordinates, and Google Maps link into the Duty Card table. Added a styled timestamp badge (`🕒 DD Mon YYYY, hh:mm A`) in the bottom-right corner of the customer signature box.
+    - Enhanced Excel/CSV export: added `Location Address` and `Signature Timestamp` columns to both CSV header definitions and row serialization.
+  - **Photo & Signature Full-Size Lightbox Preview Modal (`ImageViewerModal.jsx`)**:
+    - Created reusable full-screen modal `ImageViewerModal.jsx` supporting high-definition raster photos and vector SVG signatures.
+    - Features translucent dark backdrop (`rgba(15, 23, 42, 0.96)`), header with title, client/visit subtitle, full-screen image fit, signature verification badge, timestamp pill, and responsive close button.
+    - Enabled click-to-preview on proof photos and signature previews across `DutyFormScreen.jsx`, `DutyDetailsScreen.jsx`, and `AllDutiesScreen.jsx`.
+    - Added visual expand hint badge on all photo and signature thumbnails.
+  - **Signature Bottom-Right Corner Date & Time Watermark**:
+    - In `SignaturePadModal.jsx`: Added live date and time watermark badge in the bottom-right corner of the canvas. Embedded an SVG `<text ...>` element directly into the generated vector XML string at coordinates `(CANVAS_WIDTH - 10, CANVAS_HEIGHT - 8)`. Returns `signedAt` (ISO string) and `timestamp` formatted string.
+    - In `SignatureImage.jsx`: Added `timestamp` badge prop rendered in the bottom-right corner (`position: 'absolute', bottom: 6, right: 8`) with clock icon, and `onPress` prop making signatures interactive.
+    - In backend `Duty.js` model & `dutyValidator.js`: Added `customerSignature.signedAt` (Date) and validated optional timestamp.
+    - In `dutyController.js`: Stored and updated `customerSignature.signedAt` in `createDuty` and `updateDuty`.
+  - **GPS Exact Location Name (Reverse Geocoding) & Map View**:
+    - Created `duty-management-app/src/utils/locationUtils.js` with:
+      - `formatGeocodeAddress(geo)`: Formats reverse-geocoded location data into clean strings (e.g. `Ameyy, Sholinganallur, Chennai, Tamil Nadu, 600119`).
+      - `reverseGeocodeCoords(latitude, longitude)`: Uses `expo-location` with in-memory caching to resolve address components asynchronously.
+      - `openMapLocation(latitude, longitude, label)`: Opens coordinates in device maps (Apple Maps on iOS, geo URI on Android, Google Maps on web/fallback).
+    - In backend `Duty.js` model: Added `location.address` (String, default: '', trim: true).
+    - In backend `dutyValidator.js`: Added `body('address').optional().isString()` for duty creation and updates.
+    - In backend `dutyController.js`: Saved and updated `location.address`, and added `{ 'location.address': searchRegex }` to universal search filters in `getMyDuties` and `getAllDuties`.
+    - In `DutyFormScreen.jsx`: Automatically reverse geocodes coordinates on GPS capture and displays exact location name in GPS card with "View Map" button.
+    - In `DutyDetailsScreen.jsx` & `AllDutiesScreen.jsx`: Displays exact location name card with GPS coordinates, accuracy, and "Open in Google Maps" button.
+- Files changed:
+  - `duty-management-app/src/utils/locationUtils.js`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/components/ImageViewerModal.jsx`
+  - `duty-management-app/src/components/SignatureImage.jsx`
+  - `duty-management-app/src/components/SignaturePadModal.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `backend/src/models/Duty.js`
+  - `backend/src/validators/dutyValidator.js`
+  - `backend/src/controllers/dutyController.js`
+  - `project.md`
+- Logic changed:
+  - Duty GPS capture now automatically resolves and persists readable location names in addition to raw latitude/longitude.
+  - Proof photos and signatures are interactive, opening full-screen lightbox previews with tap feedback.
+  - Signatures carry permanent date/time watermarks in their vector format and display badges in the bottom-right corner.
+  - Export utilities include formatted addresses, signature timestamps, and robust Android SAF download/share fallback.
+- Reason: User requested verifying export downloads, adding click-to-preview lightbox popups for photos and signatures, adding bottom-right corner date and time to signatures, displaying exact location name (e.g. Ameyy, Sholinganallur, Chennai, Tamil Nadu, pincode) instead of only raw coordinates, and adding map view actions.
+- Impact: Highly polished field-service verification with human-readable addresses, interactive proof inspections, watermarked signatures, and verified PDF/Excel downloads.
+
+### 2026-10-13
 #### Duty Management Enhancements: Duty ID, Universal Search, Role-Based Edit & Delete, Dashboard Cleanups
 - What was changed:
   - **Employee Dashboard Updates (`EmployeeDashboardScreen.jsx`)**:

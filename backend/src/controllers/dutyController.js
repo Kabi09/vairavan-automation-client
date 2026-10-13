@@ -47,6 +47,7 @@ export const createDuty = asyncHandler(async (req, res) => {
     latitude,
     longitude,
     accuracy,
+    address,
   } = req.body;
 
   // Validate location requirement policy
@@ -67,6 +68,15 @@ export const createDuty = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Cannot submit duty report for an inactive company');
   }
 
+  const signatureObj = customerSignature
+    ? {
+        url: customerSignature.url || '',
+        publicId: customerSignature.publicId || '',
+        key: customerSignature.key || '',
+        signedAt: customerSignature.signedAt ? new Date(customerSignature.signedAt) : new Date(),
+      }
+    : { url: '', publicId: '', key: '', signedAt: null };
+
   const dutyData = {
     employee: req.user._id, // Authenticated user ID (never client-supplied)
     dutyDate,
@@ -78,7 +88,7 @@ export const createDuty = asyncHandler(async (req, res) => {
     inTime,
     outTime,
     workDescription,
-    customerSignature: customerSignature || { url: '', publicId: '', key: '' },
+    customerSignature: signatureObj,
     customerProofPhotos: Array.isArray(customerProofPhotos) ? customerProofPhotos : [],
     status: 'submitted',
     auditTrail: [
@@ -96,6 +106,7 @@ export const createDuty = asyncHandler(async (req, res) => {
       latitude: Number(latitude),
       longitude: Number(longitude),
       accuracy: accuracy !== undefined && accuracy !== null ? Number(accuracy) : null,
+      address: address ? String(address).trim() : '',
       capturedAt: new Date(),
     };
   }
@@ -163,6 +174,7 @@ export const getMyDuties = asyncHandler(async (req, res) => {
       { machineName: searchRegex },
       { workDescription: searchRegex },
       { workType: searchRegex },
+      { 'location.address': searchRegex },
     ];
 
     if (matchingCompanyIds.length > 0) {
@@ -251,6 +263,7 @@ export const updateDuty = asyncHandler(async (req, res) => {
     latitude,
     longitude,
     accuracy,
+    address,
   } = req.body;
 
   const duty = await Duty.findById(id);
@@ -293,7 +306,16 @@ export const updateDuty = asyncHandler(async (req, res) => {
   if (inTime) duty.inTime = inTime;
   if (outTime) duty.outTime = outTime;
   if (workDescription) duty.workDescription = workDescription;
-  if (customerSignature) duty.customerSignature = customerSignature;
+  if (customerSignature) {
+    duty.customerSignature = {
+      url: customerSignature.url || duty.customerSignature?.url || '',
+      publicId: customerSignature.publicId || duty.customerSignature?.publicId || '',
+      key: customerSignature.key || duty.customerSignature?.key || '',
+      signedAt: customerSignature.signedAt
+        ? new Date(customerSignature.signedAt)
+        : duty.customerSignature?.signedAt || new Date(),
+    };
+  }
   if (customerProofPhotos) duty.customerProofPhotos = customerProofPhotos;
 
   if (latitude !== undefined && longitude !== undefined && latitude !== null && longitude !== null) {
@@ -301,8 +323,11 @@ export const updateDuty = asyncHandler(async (req, res) => {
       latitude: Number(latitude),
       longitude: Number(longitude),
       accuracy: accuracy !== undefined && accuracy !== null ? Number(accuracy) : null,
+      address: address !== undefined ? String(address).trim() : (duty.location?.address || ''),
       capturedAt: new Date(),
     };
+  } else if (address !== undefined && duty.location) {
+    duty.location.address = String(address).trim();
   }
 
   // Reset status to submitted if it was correction_requested
@@ -390,6 +415,7 @@ export const getAllDuties = asyncHandler(async (req, res) => {
       { machineName: searchRegex },
       { workDescription: searchRegex },
       { workType: searchRegex },
+      { 'location.address': searchRegex },
     ];
 
     if (matchingCompanyIds.length > 0) {

@@ -75,6 +75,10 @@ export const validateCreateDuty = [
     .optional({ nullable: true })
     .isFloat({ min: 0 })
     .withMessage('Accuracy must be a non-negative number'),
+  body('address')
+    .optional({ nullable: true })
+    .isString()
+    .withMessage('Address must be a string'),
 ];
 
 export const validateUpdateDuty = [
@@ -122,6 +126,10 @@ export const validateUpdateDuty = [
     .trim()
     .notEmpty()
     .withMessage('Work description cannot be empty'),
+  body('address')
+    .optional({ nullable: true })
+    .isString()
+    .withMessage('Address must be a string'),
 ];
 
 export const validateUpdateDutyStatus = [

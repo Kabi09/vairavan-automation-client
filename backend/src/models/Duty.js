@@ -95,6 +95,7 @@ const dutySchema = new mongoose.Schema(
       url: { type: String, default: '' },
       publicId: { type: String, default: '' },
       key: { type: String, default: '' },
+      signedAt: { type: Date, default: null },
     },
     customerProofPhotos: [
       {
@@ -120,6 +121,11 @@ const dutySchema = new mongoose.Schema(
         type: Number,
         min: [0, 'Accuracy must be a positive number'],
         default: null,
+      },
+      address: {
+        type: String,
+        default: '',
+        trim: true,
       },
       capturedAt: {
         type: Date,

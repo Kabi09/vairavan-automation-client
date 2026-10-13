@@ -61,8 +61,14 @@ const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle,
 
       // Android: Save to user's selected directory (e.g. Downloads) via StorageAccessFramework
       if (Platform.OS === 'android' && LegacyFS && LegacyFS.StorageAccessFramework) {
-        const permissions = await LegacyFS.StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (permissions.granted) {
+        let permissions = null;
+        try {
+          permissions = await LegacyFS.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        } catch (permErr) {
+          permissions = { granted: false };
+        }
+
+        if (permissions && permissions.granted) {
           let base64Data = '';
           if (fileUri) {
             base64Data = await LegacyFS.readAsStringAsync(fileUri, {
@@ -97,6 +103,12 @@ const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle,
             `File saved successfully to your selected folder:\n\n${filename}`
           );
           return;
+        } else {
+          // User backed out of folder selection -> directly open share sheet so user can save or send
+          if (isSharingAvailable && fileUri) {
+            await doShare();
+            return;
+          }
         }
       }
 
@@ -256,10 +268,16 @@ export const exportDutiesToPDF = async ({
 
         const lat = d.location?.latitude;
         const lng = d.location?.longitude;
-        const locationText =
-          lat && lng
-            ? `${lat.toFixed(5)}, ${lng.toFixed(5)}`
-            : 'Not Recorded';
+        const locAddress = d.location?.address ? escapeHtml(d.location.address) : '';
+        const coordsText = lat && lng ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : '';
+        let locationText = 'Not Recorded';
+        if (locAddress && coordsText) {
+          locationText = `${locAddress}<br/><span style="color: #64748b; font-size: 10px;">Coordinates: ${coordsText}</span>`;
+        } else if (locAddress) {
+          locationText = locAddress;
+        } else if (coordsText) {
+          locationText = coordsText;
+        }
         const mapsUrl = lat && lng ? `https://maps.google.com/?q=${lat},${lng}` : null;
 
         const signatureUrl = d.customerSignature?.url || '';
@@ -275,8 +293,15 @@ export const exportDutiesToPDF = async ({
                 .join('')
             : '<span style="color: #64748b; font-size: 11px;">No site proof photos attached</span>';
 
+        const sigTime = d.customerSignature?.signedAt
+          ? formatDate(d.customerSignature.signedAt) + ' ' + (d.customerSignature.signedAt ? new Date(d.customerSignature.signedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '')
+          : (dateStr && outTime ? `${dateStr} ${outTime}` : '');
+
         const signatureHtml = signatureUrl
-          ? `<img src="${escapeHtml(signatureUrl)}" style="max-height: 60px; max-width: 180px; object-fit: contain; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px;" />`
+          ? `<div style="display: inline-block; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; text-align: right;">
+               <img src="${escapeHtml(signatureUrl)}" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" />
+               ${sigTime ? `<div style="font-size: 9px; color: #475569; font-weight: 700; border-top: 1px dashed #e2e8f0; padding-top: 2px;">🕒 ${escapeHtml(sigTime)}</div>` : ''}
+             </div>`
           : '<span style="color: #64748b; font-size: 11px;">No signature recorded</span>';
 
         return `
@@ -541,7 +566,9 @@ export const exportDutiesToExcel = async ({
       'In Time',
       'Out Time',
       'Work Description',
+      'Location Address',
       'GPS Coordinates',
+      'Signature Timestamp',
       'Customer Signature URL',
       'Proof Photos URLs',
       'Created At',
@@ -565,8 +592,24 @@ export const exportDutiesToExcel = async ({
       const lat = d.location?.latitude;
       const lng = d.location?.longitude;
       const coords = lat && lng ? `${lat}, ${lng}` : '';
+      const address = d.location?.address || '';
 
       const signatureUrl = d.customerSignature?.url || '';
+      const sigTime = d.customerSignature?.signedAt
+        ? new Date(d.customerSignature.signedAt).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          }) +
+          ', ' +
+          new Date(d.customerSignature.signedAt).toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          })
+        : d.dutyDate && d.outTime
+        ? `${formatDate(d.dutyDate)} ${d.outTime}`
+        : '';
       const photos = Array.isArray(d.customerProofPhotos)
         ? d.customerProofPhotos.map((p) => p.url).join(' | ')
         : '';
@@ -588,7 +631,9 @@ export const exportDutiesToExcel = async ({
         escapeCsv(inTime),
         escapeCsv(outTime),
         escapeCsv(workDesc),
+        escapeCsv(address),
         escapeCsv(coords),
+        escapeCsv(sigTime),
         escapeCsv(signatureUrl),
         escapeCsv(photos),
         escapeCsv(createdAt),

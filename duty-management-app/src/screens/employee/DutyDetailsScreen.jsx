@@ -7,7 +7,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,8 +18,10 @@ import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import { useAuth } from '../../context/AuthContext';
 import SignatureImage from '../../components/SignatureImage';
+import ImageViewerModal from '../../components/ImageViewerModal';
 import { formatDate, formatTime } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
+import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
 export const DutyDetailsScreen = ({ navigation, route }) => {
@@ -29,6 +30,15 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   const [duty, setDuty] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [resolvedAddress, setResolvedAddress] = useState('');
+
+  // Lightbox preview modal state
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [previewImageUri, setPreviewImageUri] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [previewSubtitle, setPreviewSubtitle] = useState('');
+  const [previewTimestamp, setPreviewTimestamp] = useState('');
+  const [previewIsSignature, setPreviewIsSignature] = useState(false);
 
   useEffect(() => {
     const fetchDuty = async () => {
@@ -36,7 +46,18 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
         setError('');
         const res = await dutyApi.getDutyById(dutyId);
         if (res.data?.duty) {
-          setDuty(res.data.duty);
+          const dutyRecord = res.data.duty;
+          setDuty(dutyRecord);
+
+          if (dutyRecord.location?.address) {
+            setResolvedAddress(dutyRecord.location.address);
+          } else if (dutyRecord.location?.latitude && dutyRecord.location?.longitude) {
+            reverseGeocodeCoords(dutyRecord.location.latitude, dutyRecord.location.longitude)
+              .then((addr) => {
+                if (addr) setResolvedAddress(addr);
+              })
+              .catch(() => {});
+          }
         }
       } catch (err) {
         setError(extractErrorMessage(err, 'Failed to load duty report details'));
@@ -73,6 +94,40 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
     (user && duty?.employee && (duty.employee._id === user._id || duty.employee === user._id));
   const canDelete = isAdmin;
   const displayDutyId = duty.dutyId || ('DUTY-' + duty._id.substring(duty._id.length - 6).toUpperCase());
+
+  const signatureTimestamp = duty.customerSignature?.signedAt
+    ? new Date(duty.customerSignature.signedAt).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }) +
+      ', ' +
+      new Date(duty.customerSignature.signedAt).toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : duty.dutyDate && duty.outTime
+    ? `${formatDate(duty.dutyDate)}, ${formatTime(duty.outTime)}`
+    : '';
+
+  const handleOpenPhotoPreview = (url, index) => {
+    setPreviewImageUri(url);
+    setPreviewTitle(`Proof Photo #${index + 1}`);
+    setPreviewSubtitle(duty.customerName ? `Client: ${duty.customerName}` : 'Service Verification');
+    setPreviewTimestamp(formatDate(duty.dutyDate) || '');
+    setPreviewIsSignature(false);
+    setPreviewModalVisible(true);
+  };
+
+  const handleOpenSignaturePreview = (url, title = 'Customer Signature') => {
+    setPreviewImageUri(url);
+    setPreviewTitle(title);
+    setPreviewSubtitle(duty.customerName ? `Client: ${duty.customerName}` : 'Service Verification');
+    setPreviewTimestamp(signatureTimestamp);
+    setPreviewIsSignature(true);
+    setPreviewModalVisible(true);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -141,6 +196,17 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
         {duty.location?.latitude ? (
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Service Location GPS</Text>
+
+            {resolvedAddress ? (
+              <View style={styles.exactAddressCard}>
+                <Ionicons name="location" size={20} color={COLORS.primary} style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.exactAddressTitle}>Exact Location Name</Text>
+                  <Text style={styles.exactAddressText}>{resolvedAddress}</Text>
+                </View>
+              </View>
+            ) : null}
+
             <View style={styles.locationRow}>
               <Ionicons name="navigate-circle" size={26} color={COLORS.success} />
               <View style={{ flex: 1 }}>
@@ -154,14 +220,15 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
                 ) : null}
               </View>
             </View>
+
             <TouchableOpacity
               style={styles.mapOpenBtn}
               onPress={() => {
-                const lat = duty.location.latitude;
-                const lng = duty.location.longitude;
-                Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`).catch(() => {
-                  Alert.alert('Map Error', 'Unable to open maps application');
-                });
+                openMapLocation(
+                  duty.location.latitude,
+                  duty.location.longitude,
+                  duty.customerName || 'Service Location'
+                );
               }}
               activeOpacity={0.8}
             >
@@ -179,11 +246,20 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
               {duty.customerProofPhotos.map((photo, i) => (
-                <Image
+                <TouchableOpacity
                   key={i}
-                  source={{ uri: photo.url }}
-                  style={styles.photoThumb}
-                />
+                  onPress={() => handleOpenPhotoPreview(photo.url, i)}
+                  activeOpacity={0.85}
+                  style={styles.photoThumbWrap}
+                >
+                  <Image
+                    source={{ uri: photo.url }}
+                    style={styles.photoThumb}
+                  />
+                  <View style={styles.photoZoomHint}>
+                    <Ionicons name="expand-outline" size={12} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           </Card>
@@ -196,7 +272,9 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
             <View style={styles.signatureBox}>
               <SignatureImage
                 uri={duty.customerSignature.url}
-                height={120}
+                height={130}
+                timestamp={signatureTimestamp}
+                onPress={() => handleOpenSignaturePreview(duty.customerSignature.url, 'Customer Signature')}
               />
             </View>
           </Card>
@@ -209,7 +287,9 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
             <View style={styles.signatureBox}>
               <SignatureImage
                 uri={duty.signature.url}
-                height={120}
+                height={130}
+                timestamp={signatureTimestamp}
+                onPress={() => handleOpenSignaturePreview(duty.signature.url, 'Employee Signature')}
               />
             </View>
           </Card>
@@ -265,6 +345,16 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
         )}
 
       </ScrollView>
+
+      <ImageViewerModal
+        visible={previewModalVisible}
+        onClose={() => setPreviewModalVisible(false)}
+        imageUri={previewImageUri}
+        title={previewTitle}
+        subtitle={previewSubtitle}
+        timestamp={previewTimestamp}
+        isSignature={previewIsSignature}
+      />
     </SafeAreaView>
   );
 };
@@ -362,6 +452,31 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 22,
   },
+  exactAddressCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: COLORS.surfaceAlt,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: SPACING.sm,
+  },
+  exactAddressTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  exactAddressText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    lineHeight: 18,
+    marginTop: 2,
+  },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -380,17 +495,28 @@ const styles = StyleSheet.create({
   photosScroll: {
     flexDirection: 'row',
   },
+  photoThumbWrap: {
+    position: 'relative',
+    marginRight: SPACING.sm,
+  },
   photoThumb: {
     width: 110,
     height: 110,
     borderRadius: RADIUS.md,
-    marginRight: SPACING.sm,
     backgroundColor: COLORS.surfaceAlt,
+  },
+  photoZoomHint: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderRadius: 4,
+    padding: 3,
   },
   signatureBox: {
     backgroundColor: COLORS.surfaceAlt,
     borderRadius: RADIUS.md,
-    padding: SPACING.md,
+    padding: SPACING.xs,
     alignItems: 'center',
   },
   signatureImage: {

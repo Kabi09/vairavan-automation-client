@@ -28,11 +28,13 @@ import EmptyState from '../../components/EmptyState';
 import DatePickerModal from '../../components/DatePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
 import SignatureImage from '../../components/SignatureImage';
+import ImageViewerModal from '../../components/ImageViewerModal';
 import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
 import { formatDate, formatTime, formatISODateOnly, getYesterdayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
+import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const AllDutiesScreen = ({ route, navigation }) => {
@@ -74,6 +76,66 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
   // Read-only Duty Detail Modal (No approval workflow)
   const [selectedDuty, setSelectedDuty] = useState(null);
+  const [selectedDutyAddress, setSelectedDutyAddress] = useState('');
+
+  // Lightbox preview modal state
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [previewImageUri, setPreviewImageUri] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [previewSubtitle, setPreviewSubtitle] = useState('');
+  const [previewTimestamp, setPreviewTimestamp] = useState('');
+  const [previewIsSignature, setPreviewIsSignature] = useState(false);
+
+  // Automatically resolve reverse-geocoded location for selected duty
+  useEffect(() => {
+    if (selectedDuty?.location?.address) {
+      setSelectedDutyAddress(selectedDuty.location.address);
+    } else if (selectedDuty?.location?.latitude && selectedDuty?.location?.longitude) {
+      setSelectedDutyAddress('');
+      reverseGeocodeCoords(selectedDuty.location.latitude, selectedDuty.location.longitude)
+        .then((addr) => {
+          if (addr) setSelectedDutyAddress(addr);
+        })
+        .catch(() => {});
+    } else {
+      setSelectedDutyAddress('');
+    }
+  }, [selectedDuty]);
+
+  // Lightbox openers
+  const handleOpenPhotoPreview = (url, index) => {
+    setPreviewImageUri(url);
+    setPreviewTitle(`Proof Photo #${index + 1}`);
+    setPreviewSubtitle(selectedDuty?.customerName ? `Client: ${selectedDuty.customerName}` : 'Service Verification');
+    setPreviewTimestamp(selectedDuty?.dutyDate ? formatDate(selectedDuty.dutyDate) : '');
+    setPreviewIsSignature(false);
+    setPreviewModalVisible(true);
+  };
+
+  const handleOpenSignaturePreview = (url, title = 'Customer Signature') => {
+    const sigTime = selectedDuty?.customerSignature?.signedAt
+      ? new Date(selectedDuty.customerSignature.signedAt).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }) +
+        ', ' +
+        new Date(selectedDuty.customerSignature.signedAt).toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      : selectedDuty?.dutyDate && selectedDuty?.outTime
+      ? `${formatDate(selectedDuty.dutyDate)}, ${formatTime(selectedDuty.outTime)}`
+      : '';
+
+    setPreviewImageUri(url);
+    setPreviewTitle(title);
+    setPreviewSubtitle(selectedDuty?.customerName ? `Client: ${selectedDuty.customerName}` : 'Service Verification');
+    setPreviewTimestamp(sigTime);
+    setPreviewIsSignature(true);
+    setPreviewModalVisible(true);
+  };
 
   // Load filter lists (employees and companies)
   useEffect(() => {
@@ -551,6 +613,17 @@ export const AllDutiesScreen = ({ route, navigation }) => {
               {selectedDuty?.location?.latitude ? (
                 <View style={styles.detailBlock}>
                   <Text style={styles.blockLabel}>GPS Location Tag & Interactive Map</Text>
+
+                  {selectedDutyAddress ? (
+                    <View style={styles.exactAddressCard}>
+                      <Ionicons name="location" size={20} color={COLORS.primary} style={{ marginTop: 2 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.exactAddressTitle}>Exact Location Name</Text>
+                        <Text style={styles.exactAddressText}>{selectedDutyAddress}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+
                   <View style={styles.mapCard}>
                     <View style={styles.mapInfo}>
                       <Ionicons name="navigate-circle" size={24} color={COLORS.primary} />
@@ -569,12 +642,11 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                     <TouchableOpacity
                       style={styles.openMapBtn}
                       onPress={() => {
-                        const lat = selectedDuty.location.latitude;
-                        const lng = selectedDuty.location.longitude;
-                        const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-                        Linking.openURL(url).catch(() => {
-                          Alert.alert('Map Error', 'Unable to open maps application');
-                        });
+                        openMapLocation(
+                          selectedDuty.location.latitude,
+                          selectedDuty.location.longitude,
+                          selectedDuty.customerName || 'Service Location'
+                        );
                       }}
                       activeOpacity={0.8}
                     >
@@ -597,7 +669,25 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                   <Text style={styles.blockLabel}>Customer Signature Verification</Text>
                   <SignatureImage
                     uri={selectedDuty.customerSignature.url}
-                    height={120}
+                    height={130}
+                    timestamp={
+                      selectedDuty.customerSignature?.signedAt
+                        ? new Date(selectedDuty.customerSignature.signedAt).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          }) +
+                          ', ' +
+                          new Date(selectedDuty.customerSignature.signedAt).toLocaleTimeString('en-IN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          })
+                        : selectedDuty.dutyDate && selectedDuty.outTime
+                        ? `${formatDate(selectedDuty.dutyDate)}, ${formatTime(selectedDuty.outTime)}`
+                        : ''
+                    }
+                    onPress={() => handleOpenSignaturePreview(selectedDuty.customerSignature.url, 'Customer Signature')}
                   />
                 </View>
               ) : null}
@@ -608,7 +698,13 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                   <Text style={styles.blockLabel}>Employee Signature Verification</Text>
                   <SignatureImage
                     uri={selectedDuty.signature.url}
-                    height={120}
+                    height={130}
+                    timestamp={
+                      selectedDuty.dutyDate && selectedDuty.outTime
+                        ? `${formatDate(selectedDuty.dutyDate)}, ${formatTime(selectedDuty.outTime)}`
+                        : ''
+                    }
+                    onPress={() => handleOpenSignaturePreview(selectedDuty.signature.url, 'Employee Signature')}
                   />
                 </View>
               ) : null}
@@ -621,12 +717,21 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {selectedDuty.customerProofPhotos.map((photo, i) => (
-                      <Image
+                      <TouchableOpacity
                         key={i}
-                        source={{ uri: photo.url }}
-                        style={styles.proofImage}
-                        resizeMode="cover"
-                      />
+                        onPress={() => handleOpenPhotoPreview(photo.url, i)}
+                        activeOpacity={0.85}
+                        style={styles.proofThumbWrap}
+                      >
+                        <Image
+                          source={{ uri: photo.url }}
+                          style={styles.proofImage}
+                          resizeMode="cover"
+                        />
+                        <View style={styles.photoZoomHint}>
+                          <Ionicons name="expand-outline" size={12} color="#FFFFFF" />
+                        </View>
+                      </TouchableOpacity>
                     ))}
                   </ScrollView>
                 </View>
@@ -914,6 +1019,16 @@ export const AllDutiesScreen = ({ route, navigation }) => {
           id: c._id,
           subtitle: c.companyPhoneNumber || '',
         }))}
+      />
+
+      <ImageViewerModal
+        visible={previewModalVisible}
+        onClose={() => setPreviewModalVisible(false)}
+        imageUri={previewImageUri}
+        title={previewTitle}
+        subtitle={previewSubtitle}
+        timestamp={previewTimestamp}
+        isSignature={previewIsSignature}
       />
     </SafeAreaView>
   );
@@ -1345,6 +1460,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  exactAddressCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    padding: SPACING.sm,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  exactAddressTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  exactAddressText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  proofThumbWrap: {
+    position: 'relative',
+    marginRight: SPACING.sm,
+  },
+  photoZoomHint: {
+    position: 'absolute',
+    bottom: 6,
+    right: 14,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderRadius: 4,
+    padding: 3,
   },
   mapCard: {
     backgroundColor: '#F0FDF4',
