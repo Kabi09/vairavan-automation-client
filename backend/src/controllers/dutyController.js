@@ -1,5 +1,7 @@
+import mongoose from 'mongoose';
 import Duty from '../models/Duty.js';
 import Company from '../models/Company.js';
+import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -119,7 +121,7 @@ export const getMyDuties = asyncHandler(async (req, res) => {
   const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit || '20', 10)));
   const skip = (page - 1) * limit;
 
-  const { status, workType, startDate, endDate, companyId } = req.query;
+  const { status, workType, startDate, endDate, companyId, search } = req.query;
 
   const filter = { employee: req.user._id };
 
@@ -138,6 +140,43 @@ export const getMyDuties = asyncHandler(async (req, res) => {
       const e = new Date(endDate);
       e.setUTCHours(23, 59, 59, 999);
       filter.dutyDate.$lte = e;
+    }
+  }
+
+  if (search && search.trim()) {
+    const trimmed = search.trim();
+    const searchRegex = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+    const matchingCompanies = await Company.find({
+      $or: [
+        { companyName: searchRegex },
+        { companyPhoneNumber: searchRegex },
+        { location: searchRegex },
+      ],
+    }).select('_id');
+    const matchingCompanyIds = matchingCompanies.map((c) => c._id);
+
+    const searchOrConditions = [
+      { dutyId: searchRegex },
+      { customerName: searchRegex },
+      { customerPhoneNumber: searchRegex },
+      { machineName: searchRegex },
+      { workDescription: searchRegex },
+      { workType: searchRegex },
+    ];
+
+    if (matchingCompanyIds.length > 0) {
+      searchOrConditions.push({ company: { $in: matchingCompanyIds } });
+    }
+
+    if (mongoose.Types.ObjectId.isValid(trimmed) && trimmed.length === 24) {
+      searchOrConditions.push({ _id: trimmed });
+    }
+
+    if (filter.$and) {
+      filter.$and.push({ $or: searchOrConditions });
+    } else {
+      filter.$and = [{ $or: searchOrConditions }];
     }
   }
 
@@ -225,8 +264,8 @@ export const updateDuty = asyncHandler(async (req, res) => {
   }
 
   // Edit policy check
-  if (duty.status === 'approved') {
-    throw ApiError.badRequest('Approved duty reports cannot be modified');
+  if (duty.status === 'approved' && req.user.role !== 'admin') {
+    throw ApiError.badRequest('Approved duty reports cannot be modified by employees');
   }
   if (duty.status === 'rejected' && req.user.role !== 'admin') {
     throw ApiError.badRequest('Rejected duty reports cannot be modified by employees');
@@ -273,8 +312,8 @@ export const updateDuty = asyncHandler(async (req, res) => {
 
   duty.auditTrail.push({
     changedBy: req.user._id,
-    action: 'UPDATED',
-    details: 'Duty report updated by employee',
+    action: req.user.role === 'admin' ? 'UPDATED_BY_ADMIN' : 'UPDATED',
+    details: `Duty report updated by ${req.user.role}`,
     timestamp: new Date(),
   });
 
@@ -320,13 +359,55 @@ export const getAllDuties = asyncHandler(async (req, res) => {
     }
   }
 
-  if (search) {
-    const searchRegex = new RegExp(search.trim(), 'i');
-    filter.$or = [
+  if (search && search.trim()) {
+    const trimmed = search.trim();
+    const searchRegex = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+    const [matchingCompanies, matchingEmployees] = await Promise.all([
+      Company.find({
+        $or: [
+          { companyName: searchRegex },
+          { companyPhoneNumber: searchRegex },
+          { location: searchRegex },
+        ],
+      }).select('_id'),
+      User.find({
+        $or: [
+          { employeeName: searchRegex },
+          { employeeId: searchRegex },
+          { email: searchRegex },
+        ],
+      }).select('_id'),
+    ]);
+
+    const matchingCompanyIds = matchingCompanies.map((c) => c._id);
+    const matchingEmployeeIds = matchingEmployees.map((e) => e._id);
+
+    const searchOrConditions = [
+      { dutyId: searchRegex },
       { customerName: searchRegex },
+      { customerPhoneNumber: searchRegex },
       { machineName: searchRegex },
       { workDescription: searchRegex },
+      { workType: searchRegex },
     ];
+
+    if (matchingCompanyIds.length > 0) {
+      searchOrConditions.push({ company: { $in: matchingCompanyIds } });
+    }
+    if (matchingEmployeeIds.length > 0) {
+      searchOrConditions.push({ employee: { $in: matchingEmployeeIds } });
+    }
+
+    if (mongoose.Types.ObjectId.isValid(trimmed) && trimmed.length === 24) {
+      searchOrConditions.push({ _id: trimmed });
+    }
+
+    if (filter.$and) {
+      filter.$and.push({ $or: searchOrConditions });
+    } else {
+      filter.$and = [{ $or: searchOrConditions }];
+    }
   }
 
   const [duties, total] = await Promise.all([
@@ -401,6 +482,26 @@ export const updateDutyStatus = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Delete duty report (Admin only)
+ * @route   DELETE /api/duties/:id
+ * @access  Private/Admin
+ */
+export const deleteDuty = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const duty = await Duty.findById(id);
+  if (!duty) {
+    throw ApiError.notFound('Duty report not found');
+  }
+
+  await Duty.findByIdAndDelete(id);
+
+  return ApiResponse.success(res, 200, 'Duty report deleted successfully', {
+    deletedDutyId: id,
+  });
+});
+
 export default {
   createDuty,
   getMyDuties,
@@ -408,4 +509,5 @@ export default {
   updateDuty,
   getAllDuties,
   updateDutyStatus,
+  deleteDuty,
 };

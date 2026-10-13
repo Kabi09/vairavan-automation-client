@@ -290,7 +290,14 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
             {/* Today's Duty Reports */}
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionHeaderTitle}>Today's Duty Visits</Text>
-              <Text style={styles.countBadge}>{todayDuties.length} logged</Text>
+              <TouchableOpacity
+                style={styles.viewAllBtn}
+                onPress={() => navigation.navigate('MyDutiesTab')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.linkText}>View All</Text>
+                <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+              </TouchableOpacity>
             </View>
 
             {todayDuties.length === 0 ? (
@@ -309,7 +316,12 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                   onPress={() => navigation.navigate('DutyDetails', { dutyId: duty._id })}
                 >
                   <View style={styles.dutyTop}>
-                    <Text style={styles.customerText}>{duty.customerName}</Text>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.customerText}>{duty.customerName}</Text>
+                      <Text style={styles.dutyIdBadgeText}>
+                        {duty.dutyId || `DUTY-${duty._id.slice(-6).toUpperCase()}`}
+                      </Text>
+                    </View>
                     <StatusBadge status={duty.status} />
                   </View>
                   <Text style={styles.machineText}>
@@ -319,37 +331,6 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                     <Ionicons name="time-outline" size={13} color={COLORS.textMuted} />{' '}
                     {formatTime(duty.inTime)} - {formatTime(duty.outTime)} ({duty.workType})
                   </Text>
-                </Card>
-              ))
-            )}
-
-            {/* Recent Duty Submissions */}
-            <View style={[styles.sectionHeaderRow, { marginTop: SPACING.md }]}>
-              <Text style={styles.sectionHeaderTitle}>Recent Activity</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('MyDutiesTab')}>
-                <Text style={styles.linkText}>View History</Text>
-              </TouchableOpacity>
-            </View>
-
-            {recentDuties.length === 0 ? (
-              <Card style={styles.emptyCard}>
-                <Text style={styles.emptyCardSub}>No past duty reports on record.</Text>
-              </Card>
-            ) : (
-              recentDuties.slice(0, 4).map((duty) => (
-                <Card
-                  key={duty._id}
-                  style={styles.dutyCard}
-                  onPress={() => navigation.navigate('DutyDetails', { dutyId: duty._id })}
-                >
-                  <View style={styles.dutyTop}>
-                    <Text style={styles.customerText}>{duty.customerName}</Text>
-                    <StatusBadge status={duty.status} />
-                  </View>
-                  <View style={styles.dutyBottom}>
-                    <Text style={styles.workTypeText}>{duty.workType}</Text>
-                    <Text style={styles.dateText}>{formatDate(duty.dutyDate)}</Text>
-                  </View>
                 </Card>
               ))
             )}
@@ -696,6 +677,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  dutyIdBadgeText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '700',
+    marginTop: 1,
   },
   emptyCard: {
     alignItems: 'center',

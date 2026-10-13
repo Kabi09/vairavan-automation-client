@@ -240,6 +240,7 @@ export const exportDutiesToPDF = async ({
 
     const rowsHtml = duties
       .map((d, index) => {
+        const dutyId = escapeHtml(d.dutyId || ('DUTY-' + (d._id || '').slice(-6).toUpperCase()));
         const empName = escapeHtml(d.employee?.employeeName || 'N/A');
         const empId = escapeHtml(d.employee?.employeeId || 'N/A');
         const compName = escapeHtml(d.company?.companyName || 'N/A');
@@ -281,7 +282,7 @@ export const exportDutiesToPDF = async ({
         return `
           <div class="duty-card">
             <div class="card-header">
-              <span class="record-badge">#${index + 1}</span>
+              <span class="record-badge">${dutyId}</span>
               <span class="duty-date"><strong>Date:</strong> ${dateStr}</span>
               <span class="duty-time"><strong>Time:</strong> ${inTime} - ${outTime}</span>
               <span class="work-badge">${workType}</span>
@@ -290,6 +291,7 @@ export const exportDutiesToPDF = async ({
             <table class="card-table">
               <tr>
                 <td style="width: 50%;">
+                  <strong>Duty ID:</strong> ${dutyId}<br/>
                   <strong>Employee:</strong> ${empName} (${empId})<br/>
                   <strong>Company:</strong> ${compName} ${compLoc ? `• ${compLoc}` : ''}<br/>
                   <strong>Customer Contact:</strong> ${customer} (${customerPhone})<br/>
@@ -525,6 +527,7 @@ export const exportDutiesToExcel = async ({
   try {
     const headers = [
       'Sl No',
+      'Duty ID',
       'Duty Date',
       'Employee ID',
       'Employee Name',
@@ -545,6 +548,7 @@ export const exportDutiesToExcel = async ({
     ];
 
     const rows = duties.map((d, index) => {
+      const dutyId = d.dutyId || ('DUTY-' + (d._id || '').slice(-6).toUpperCase());
       const empId = d.employee?.employeeId || '';
       const empName = d.employee?.employeeName || '';
       const empDesig = d.employee?.designation || '';
@@ -570,6 +574,7 @@ export const exportDutiesToExcel = async ({
 
       return [
         index + 1,
+        escapeCsv(dutyId),
         formatDate(d.dutyDate),
         escapeCsv(empId),
         escapeCsv(empName),

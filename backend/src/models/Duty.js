@@ -25,6 +25,13 @@ const auditTrailSchema = new mongoose.Schema(
 
 const dutySchema = new mongoose.Schema(
   {
+    dutyId: {
+      type: String,
+      trim: true,
+      index: true,
+      unique: true,
+      sparse: true,
+    },
     employee: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -153,12 +160,24 @@ const dutySchema = new mongoose.Schema(
     timestamps: true,
     toJSON: {
       transform: (doc, ret) => {
+        if (!ret.dutyId && ret._id) {
+          ret.dutyId = `DUTY-${ret._id.toString().slice(-6).toUpperCase()}`;
+        }
         delete ret.__v;
         return ret;
       },
     },
   }
 );
+
+// Pre-save hook to generate readable dutyId if not already set
+dutySchema.pre('save', function (next) {
+  if (!this.dutyId) {
+    const idHex = (this._id || new mongoose.Types.ObjectId()).toString();
+    this.dutyId = `DUTY-${idHex.slice(-6).toUpperCase()}`;
+  }
+  if (typeof next === 'function') next();
+});
 
 // Compound indexes for performant querying
 dutySchema.index({ employee: 1, dutyDate: -1 });

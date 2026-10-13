@@ -78,6 +78,57 @@
 
 ## Change History
 
+### 2026-10-13
+#### Duty Management Enhancements: Duty ID, Universal Search, Role-Based Edit & Delete, Dashboard Cleanups
+- What was changed:
+  - **Employee Dashboard Updates (`EmployeeDashboardScreen.jsx`)**:
+    - Removed the "Recent Activity" section as requested.
+    - Added a "View All" right-corner navigation button on the "Today's Duty Visits" section, routing employees directly to `MyDutiesTab` to inspect all duty reports.
+    - Displayed human-readable `dutyId` badge on each today duty card.
+  - **Status Chips Removal & Direct Duty Listing (`MyDutiesScreen.jsx`)**:
+    - Removed status filter tabs/chips (`All`, `Submitted`, `Approved`, `Needs Fix`, `Rejected`). The screen now directly presents all logged duties in full.
+  - **Universal Search on Admin & Employee Duty Screens**:
+    - In `MyDutiesScreen.jsx`: Added a universal search bar filtering by Duty ID, company name, customer phone, customer name, machine name, work type, and work description.
+    - In `AllDutiesScreen.jsx`: Enhanced the search bar and backend query to match Duty ID, company name, phone number, customer name, employee name, machine name, work type, and work description.
+    - In backend `dutyController.js`: Enhanced `getAllDuties` and `getMyDuties` with multi-field search conditions matching Duty ID, phone, name, machine, description, and related company/employee records.
+  - **Role-Based Edit & Delete Permissions**:
+    - **Admin Permissions**: Can both **Edit** and **Delete** duty reports.
+      - Added `DELETE /api/duties/:id` endpoint in backend (`dutyRoutes.js` and `dutyController.js`) restricted to Admin with ID validation.
+      - Updated `PUT /api/duties/:id` in `dutyController.js` to allow Admins to edit any duty report regardless of approval status.
+      - Added "Edit" and "Delete" quick action buttons on duty cards and inside the full report modal in `AllDutiesScreen.jsx`.
+      - Added "Edit" and "Delete" buttons in `DutyDetailsScreen.jsx` for Admins.
+    - **Employee Permissions**: Can **only Edit** their own duties (no deletion).
+      - Added "Edit" action button on duty cards in `MyDutiesScreen.jsx` and inside `DutyDetailsScreen.jsx`.
+    - **DutyFormScreen Edit Mode**:
+      - Updated `DutyFormScreen.jsx` to accept `route.params.dutyToEdit`, prefilling date, company, customer contact, equipment, work type, timings, work description, existing Cloudflare R2 signatures, proof photos, and coordinates.
+      - Routes submissions to `dutyApi.updateDuty(id, payload)` with feedback alerts.
+      - Registered `DutyForm` screen in `AdminNavigator.jsx` so Admins can edit duty reports seamlessly.
+  - **Duty ID Generation & Export Integration**:
+    - In `Duty.js` model: Added indexed `dutyId` field with pre-save generator fallback (`DUTY-${_id.slice(-6).toUpperCase()}`) and `toJSON` fallback.
+    - In `exportUtils.js`: Added `Duty ID` column into both PDF export card headers/tables and Excel spreadsheet headers/rows.
+  - **Automated Tests**:
+    - Added unit and integration tests in `backend/tests/duty.test.js` validating Admin duty edit, Admin duty deletion, and verifying that employees cannot delete duty reports. All 34 backend tests pass with 0 errors.
+- Files changed:
+  - `backend/src/models/Duty.js`
+  - `backend/src/controllers/dutyController.js`
+  - `backend/src/routes/dutyRoutes.js`
+  - `backend/tests/duty.test.js`
+  - `duty-management-app/src/api/dutyApi.js`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Removed duty status tabs for employee viewing; duty lists display all duties with real-time multi-field search.
+  - Admin granted full edit and delete powers; employee restricted to editing own records.
+  - Duty reports are stamped with human-readable Duty IDs which export directly to PDF and Excel.
+- Reason: User requested removing recent activity on employee dashboard, adding right-corner "View All" navigation on today's duty section, removing duty status filter chips to show all duties, adding role-based Edit & Delete (Admin can edit & delete, Employee can only edit), generating & exporting Duty ID, and providing universal search across both Admin and Employee duty views.
+- Impact: Streamlined operational duty workflow, instant cross-field search by ID/company/phone/name/machine, rich exports with Duty ID, and clean role-based data management.
+
 ### 2026-10-12
 #### Fix Task Employee Assignment, Add Company Picker to Task Assign, Default Duty List Filter, and Resolve Dropdown Filters
 - What was changed:

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import dutyApi from '../../api/dutyApi';
 import employeeApi from '../../api/employeeApi';
 import companyApi from '../../api/companyApi';
@@ -34,7 +35,7 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
-export const AllDutiesScreen = ({ route }) => {
+export const AllDutiesScreen = ({ route, navigation }) => {
   const today = formatISODateOnly();
   const yesterday = getYesterdayDateString();
   const initialFilterToday = Boolean(route?.params?.filterToday);
@@ -119,9 +120,11 @@ export const AllDutiesScreen = ({ route }) => {
     }
   }, [search, selectedEmployeeId, selectedCompanyId, startDate, endDate]);
 
-  useEffect(() => {
-    fetchDuties();
-  }, [fetchDuties]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchDuties();
+    }, [fetchDuties])
+  );
 
   useEffect(() => {
     if (route?.params?.filterToday) {
@@ -136,6 +139,68 @@ export const AllDutiesScreen = ({ route }) => {
     setRefreshing(true);
     fetchDuties();
   };
+
+  // Delete duty handler (Admin only)
+  const handleDeleteDuty = (dutyId) => {
+    Alert.alert(
+      'Delete Duty Report',
+      'Are you sure you want to permanently delete this duty record? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await dutyApi.deleteDuty(dutyId);
+              setDuties((prev) => prev.filter((d) => d._id !== dutyId));
+              if (selectedDuty?._id === dutyId) {
+                setSelectedDuty(null);
+              }
+              Alert.alert('Deleted', 'Duty report has been permanently deleted.');
+            } catch (err) {
+              Alert.alert('Delete Failed', extractErrorMessage(err, 'Failed to delete duty report'));
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Edit duty handler
+  const handleEditDuty = (duty) => {
+    setSelectedDuty(null);
+    navigation.navigate('DutyForm', { dutyToEdit: duty });
+  };
+
+  // Client-side real-time multi-field search filter
+  const filteredDuties = duties.filter((d) => {
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    const dutyId = (d.dutyId || ('DUTY-' + (d._id || '').slice(-6))).toLowerCase();
+    const rawId = (d._id || '').toLowerCase();
+    const compName = (d.company?.companyName || '').toLowerCase();
+    const custName = (d.customerName || '').toLowerCase();
+    const phone = (d.customerPhoneNumber || '').toLowerCase();
+    const empName = (d.employee?.employeeName || '').toLowerCase();
+    const empId = (d.employee?.employeeId || '').toLowerCase();
+    const machine = (d.machineName || '').toLowerCase();
+    const workType = (d.workType || '').toLowerCase();
+    const desc = (d.workDescription || '').toLowerCase();
+
+    return (
+      dutyId.includes(q) ||
+      rawId.includes(q) ||
+      compName.includes(q) ||
+      custName.includes(q) ||
+      phone.includes(q) ||
+      empName.includes(q) ||
+      empId.includes(q) ||
+      machine.includes(q) ||
+      workType.includes(q) ||
+      desc.includes(q)
+    );
+  });
 
   // Filter Modal Controls
   const openFilterModal = () => {
@@ -196,46 +261,80 @@ export const AllDutiesScreen = ({ route }) => {
     });
   };
 
-  const renderDutyItem = ({ item }) => (
-    <Card style={styles.dutyCard} onPress={() => setSelectedDuty(item)}>
-      <View style={styles.cardHeader}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.customerName}>{item.customerName}</Text>
-          <Text style={styles.companyName}>
-            <Ionicons name="business-outline" size={13} color={COLORS.textSecondary} />{' '}
-            {item.company?.companyName || 'Client Site'}
-          </Text>
-        </View>
-        <View style={styles.dateBadge}>
-          <Ionicons name="calendar-outline" size={12} color={COLORS.primary} />
-          <Text style={styles.dateBadgeText}>{formatDate(item.dutyDate)}</Text>
-        </View>
-      </View>
+  const renderDutyItem = ({ item }) => {
+    const dutyId = item.dutyId || ('DUTY-' + (item._id || '').slice(-6).toUpperCase());
 
-      <Text style={styles.machineRow}>
-        <Ionicons name="hardware-chip-outline" size={13} color={COLORS.textSecondary} />{' '}
-        {item.machineName} • <Text style={styles.workTypeLabel}>{item.workType}</Text>
-      </Text>
-
-      <Text style={styles.descriptionSnippet} numberOfLines={2}>
-        {item.workDescription}
-      </Text>
-
-      <View style={styles.cardFooter}>
-        <View style={styles.employeeInfo}>
-          <Ionicons name="person-outline" size={13} color={COLORS.primary} />
-          <Text style={styles.employeeText}>
-            {item.employee?.employeeName || 'Staff'} ({item.employee?.employeeId})
-          </Text>
+    return (
+      <Card style={styles.dutyCard} onPress={() => setSelectedDuty(item)}>
+        <View style={styles.cardHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.idRow}>
+              <Text style={styles.dutyIdBadge}>{dutyId}</Text>
+            </View>
+            <Text style={styles.customerName}>{item.customerName}</Text>
+            <Text style={styles.companyName}>
+              <Ionicons name="business-outline" size={13} color={COLORS.textSecondary} />{' '}
+              {item.company?.companyName || 'Client Site'}
+            </Text>
+          </View>
+          <View style={styles.dateBadge}>
+            <Ionicons name="calendar-outline" size={12} color={COLORS.primary} />
+            <Text style={styles.dateBadgeText}>{formatDate(item.dutyDate)}</Text>
+          </View>
         </View>
 
-        <Text style={styles.timeText}>
-          <Ionicons name="time-outline" size={12} color={COLORS.textMuted} />{' '}
-          {formatTime(item.inTime)} - {formatTime(item.outTime)}
+        <Text style={styles.machineRow}>
+          <Ionicons name="hardware-chip-outline" size={13} color={COLORS.textSecondary} />{' '}
+          {item.machineName} • <Text style={styles.workTypeLabel}>{item.workType}</Text>
         </Text>
-      </View>
-    </Card>
-  );
+
+        <Text style={styles.descriptionSnippet} numberOfLines={2}>
+          {item.workDescription}
+        </Text>
+
+        <View style={styles.cardFooter}>
+          <View style={styles.employeeInfo}>
+            <Ionicons name="person-outline" size={13} color={COLORS.primary} />
+            <Text style={styles.employeeText}>
+              {item.employee?.employeeName || 'Staff'} ({item.employee?.employeeId})
+            </Text>
+          </View>
+
+          <Text style={styles.timeText}>
+            <Ionicons name="time-outline" size={12} color={COLORS.textMuted} />{' '}
+            {formatTime(item.inTime)} - {formatTime(item.outTime)}
+          </Text>
+        </View>
+
+        {/* Admin Quick Action Buttons */}
+        <View style={styles.cardActionsRow}>
+          <TouchableOpacity
+            style={styles.cardActionEditBtn}
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              handleEditDuty(item);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="create-outline" size={14} color={COLORS.primary} />
+            <Text style={styles.cardActionEditText}>Edit</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.cardActionDeleteBtn}
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              handleDeleteDuty(item._id);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={14} color={COLORS.danger} />
+            <Text style={styles.cardActionDeleteText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -269,9 +368,9 @@ export const AllDutiesScreen = ({ route }) => {
       />
 
       <View style={styles.container}>
-        {/* Search Bar */}
+        {/* Universal Search Bar */}
         <TextInputField
-          placeholder="Search customer, machine, or description..."
+          placeholder="Search by ID, company, phone, name, machine..."
           value={search}
           onChangeText={setSearch}
           style={styles.searchBar}
@@ -281,7 +380,7 @@ export const AllDutiesScreen = ({ route }) => {
         <View style={styles.exportToolbar}>
           <View style={styles.countWrap}>
             <Text style={styles.countText}>
-              <Text style={styles.countHighlight}>{duties.length}</Text> reports
+              <Text style={styles.countHighlight}>{filteredDuties.length}</Text> reports
             </Text>
             {hasActiveFilters && (
               <TouchableOpacity onPress={clearFilters} style={styles.clearFilterLink}>
@@ -362,7 +461,7 @@ export const AllDutiesScreen = ({ route }) => {
           <LoadingIndicator message="Loading duty records..." />
         ) : (
           <FlatList
-            data={duties}
+            data={filteredDuties}
             keyExtractor={(item) => item._id}
             renderItem={renderDutyItem}
             contentContainerStyle={styles.listContent}
@@ -401,7 +500,9 @@ export const AllDutiesScreen = ({ route }) => {
           <View style={styles.detailSheet}>
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.sheetTitle}>Duty Report Details</Text>
+                <Text style={styles.sheetTitle}>
+                  Duty Report #{selectedDuty?.dutyId || ('DUTY-' + (selectedDuty?._id || '').slice(-6).toUpperCase())}
+                </Text>
                 <Text style={styles.sheetSub}>
                   {selectedDuty?.customerName} • {formatDate(selectedDuty?.dutyDate)}
                 </Text>
@@ -532,6 +633,27 @@ export const AllDutiesScreen = ({ route }) => {
               )}
 
             </ScrollView>
+
+            {/* Admin Action Buttons */}
+            <View style={styles.modalActionFooter}>
+              <TouchableOpacity
+                style={[styles.modalActionBtn, styles.modalEditBtn]}
+                onPress={() => handleEditDuty(selectedDuty)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="create-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.modalActionBtnText}>Edit Report</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalActionBtn, styles.modalDeleteBtn]}
+                onPress={() => handleDeleteDuty(selectedDuty._id)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.modalActionBtnText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1367,6 +1489,89 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+  },
+  idRow: {
+    marginBottom: 4,
+  },
+  dutyIdBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+    backgroundColor: COLORS.primarySubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+    alignSelf: 'flex-start',
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceAlt,
+  },
+  cardActionEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.primarySubtle,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  cardActionEditText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  cardActionDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  cardActionDeleteText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.danger,
+  },
+  modalActionFooter: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  modalActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+  },
+  modalEditBtn: {
+    backgroundColor: COLORS.primary,
+  },
+  modalDeleteBtn: {
+    backgroundColor: COLORS.danger,
+    maxWidth: 110,
+  },
+  modalActionBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
 

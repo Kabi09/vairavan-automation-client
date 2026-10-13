@@ -13,6 +13,7 @@ import EmployeeDetailsScreen from '../screens/admin/EmployeeDetailsScreen';
 import LeaveRequestsScreen from '../screens/admin/LeaveRequestsScreen';
 import HolidayManagementScreen from '../screens/admin/HolidayManagementScreen';
 import DutyDetailsScreen from '../screens/employee/DutyDetailsScreen';
+import DutyFormScreen from '../screens/employee/DutyFormScreen';
 import NotificationsScreen from '../screens/admin/NotificationsScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 import ChangePasswordScreen from '../screens/common/ChangePasswordScreen';
@@ -97,6 +98,7 @@ export const AdminNavigator = () => {
       <Stack.Screen name="EmployeeForm" component={EmployeeFormScreen} />
       <Stack.Screen name="HolidayManagement" component={HolidayManagementScreen} />
       <Stack.Screen name="DutyDetails" component={DutyDetailsScreen} />
+      <Stack.Screen name="DutyForm" component={DutyFormScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />

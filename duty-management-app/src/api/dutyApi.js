@@ -30,6 +30,11 @@ export const dutyApi = {
     const res = await apiClient.patch(`/duties/${id}/status`, statusData);
     return res.data;
   },
+
+  deleteDuty: async (id) => {
+    const res = await apiClient.delete(`/duties/${id}`);
+    return res.data;
+  },
 };
 
 export default dutyApi;

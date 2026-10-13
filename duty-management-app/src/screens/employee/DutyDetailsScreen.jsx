@@ -17,6 +17,7 @@ import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
+import { useAuth } from '../../context/AuthContext';
 import SignatureImage from '../../components/SignatureImage';
 import { formatDate, formatTime } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
@@ -24,6 +25,7 @@ import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
 export const DutyDetailsScreen = ({ navigation, route }) => {
   const { dutyId } = route.params;
+  const { user, isAdmin } = useAuth();
   const [duty, setDuty] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -66,11 +68,17 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
     );
   }
 
+  const canEdit =
+    isAdmin ||
+    (user && duty?.employee && (duty.employee._id === user._id || duty.employee === user._id));
+  const canDelete = isAdmin;
+  const displayDutyId = duty.dutyId || ('DUTY-' + duty._id.substring(duty._id.length - 6).toUpperCase());
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
         title="Duty Visit Details"
-        subtitle={`Report #${duty._id.substring(duty._id.length - 6).toUpperCase()}`}
+        subtitle={`Report #${displayDutyId}`}
         onBack={() => navigation.goBack()}
       />
 
@@ -206,6 +214,55 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
             </View>
           </Card>
         ) : null}
+
+        {/* Action Buttons: Admin has Edit + Delete, Employee has Edit */}
+        {(canEdit || canDelete) && (
+          <View style={styles.actionRow}>
+            {canEdit && (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.editBtn]}
+                onPress={() => navigation.navigate('DutyForm', { dutyToEdit: duty })}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="create-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>Edit Duty Report</Text>
+              </TouchableOpacity>
+            )}
+
+            {canDelete && (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.deleteBtn]}
+                onPress={() => {
+                  Alert.alert(
+                    'Delete Duty Report',
+                    'Are you sure you want to permanently delete this duty record?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await dutyApi.deleteDuty(duty._id);
+                            Alert.alert('Deleted', 'Duty report deleted successfully.', [
+                              { text: 'OK', onPress: () => navigation.goBack() },
+                            ]);
+                          } catch (delErr) {
+                            Alert.alert('Delete Failed', extractErrorMessage(delErr, 'Failed to delete duty'));
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.actionBtnText}>Delete</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
       </ScrollView>
     </SafeAreaView>
@@ -354,6 +411,33 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.xl,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: RADIUS.md,
+  },
+  editBtn: {
+    backgroundColor: COLORS.primary,
+  },
+  deleteBtn: {
+    backgroundColor: COLORS.danger,
+    maxWidth: 110,
+  },
+  actionBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
 

@@ -156,4 +156,78 @@ describe('Duty Management Tests', () => {
     assert.equal(res.status, 400);
     assert.match(res.body.message, /Approved duty reports cannot be modified/i);
   });
+
+  it('Admin CAN modify an approved duty report', async () => {
+    const duty = await Duty.create({
+      employee: employee1.user._id,
+      dutyDate: new Date('2026-10-11'),
+      company: testCompany._id,
+      customerName: 'Locked Report',
+      customerPhoneNumber: '+919876543210',
+      machineName: 'Lathe M1',
+      workType: 'Repair',
+      inTime: '10:00',
+      outTime: '14:00',
+      workDescription: 'Work completed',
+      status: 'approved',
+    });
+
+    const res = await request(app)
+      .put(`/api/duties/${duty._id}`)
+      .set('Authorization', `Bearer ${adminUser.token}`)
+      .send({
+        workDescription: 'Admin updated the description',
+      });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.duty.workDescription, 'Admin updated the description');
+  });
+
+  it('Admin should be able to delete a duty report', async () => {
+    const duty = await Duty.create({
+      employee: employee1.user._id,
+      dutyDate: new Date('2026-10-11'),
+      company: testCompany._id,
+      customerName: 'To Be Deleted',
+      customerPhoneNumber: '+919876543210',
+      machineName: 'Lathe M1',
+      workType: 'Repair',
+      inTime: '10:00',
+      outTime: '14:00',
+      workDescription: 'Work to delete',
+      status: 'submitted',
+    });
+
+    const res = await request(app)
+      .delete(`/api/duties/${duty._id}`)
+      .set('Authorization', `Bearer ${adminUser.token}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.deletedDutyId, duty._id.toString());
+
+    const check = await Duty.findById(duty._id);
+    assert.equal(check, null);
+  });
+
+  it('Employee cannot delete a duty report', async () => {
+    const duty = await Duty.create({
+      employee: employee1.user._id,
+      dutyDate: new Date('2026-10-11'),
+      company: testCompany._id,
+      customerName: 'Employee Duty',
+      customerPhoneNumber: '+919876543210',
+      machineName: 'Lathe M1',
+      workType: 'Repair',
+      inTime: '10:00',
+      outTime: '14:00',
+      workDescription: 'Work description',
+      status: 'submitted',
+    });
+
+    const res = await request(app)
+      .delete(`/api/duties/${duty._id}`)
+      .set('Authorization', `Bearer ${employee1.token}`);
+
+    assert.equal(res.status, 403);
+  });
 });

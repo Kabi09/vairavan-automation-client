@@ -6,6 +6,7 @@ import {
   updateDuty,
   getAllDuties,
   updateDutyStatus,
+  deleteDuty,
 } from '../controllers/dutyController.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
@@ -33,10 +34,13 @@ router.get('/', authorize('admin'), getAllDuties);
 // View single duty (ownership checked inside controller)
 router.get('/:id', validateDutyIdParam, validate, getDutyById);
 
-// Employee edits own duty
+// Edit duty (owner employee or admin)
 router.put('/:id', validateUpdateDuty, validate, updateDuty);
 
 // Admin changes duty review status
 router.patch('/:id/status', authorize('admin'), validateUpdateDutyStatus, validate, updateDutyStatus);
+
+// Admin deletes duty report
+router.delete('/:id', authorize('admin'), validateDutyIdParam, validate, deleteDuty);
 
 export default router;

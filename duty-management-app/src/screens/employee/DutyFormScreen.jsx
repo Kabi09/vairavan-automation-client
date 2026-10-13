@@ -36,18 +36,28 @@ import { APP_CONFIG } from '../../constants/config';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
 export const DutyFormScreen = ({ navigation, route }) => {
+  const dutyToEdit = route?.params?.dutyToEdit;
+  const isEditing = Boolean(dutyToEdit);
+
   // Form fields
-  const [dutyDate, setDutyDate] = useState(getTodayDateString());
+  const [dutyDate, setDutyDate] = useState(() => {
+    if (dutyToEdit?.dutyDate) {
+      return formatISODateOnly(dutyToEdit.dutyDate) || String(dutyToEdit.dutyDate).slice(0, 10);
+    }
+    return getTodayDateString();
+  });
   const [companies, setCompanies] = useState([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [machineName, setMachineName] = useState('');
-  const [workType, setWorkType] = useState('Maintenance');
+  const [selectedCompanyId, setSelectedCompanyId] = useState(() => {
+    return dutyToEdit?.company?._id || dutyToEdit?.company || '';
+  });
+  const [customerName, setCustomerName] = useState(() => dutyToEdit?.customerName || '');
+  const [customerPhone, setCustomerPhone] = useState(() => dutyToEdit?.customerPhoneNumber || '');
+  const [machineName, setMachineName] = useState(() => dutyToEdit?.machineName || '');
+  const [workType, setWorkType] = useState(() => dutyToEdit?.workType || 'Maintenance');
   const [customWorkDetails, setCustomWorkDetails] = useState('');
-  const [inTime, setInTime] = useState('09:30');
-  const [outTime, setOutTime] = useState('17:30');
-  const [workDescription, setWorkDescription] = useState('');
+  const [inTime, setInTime] = useState(() => dutyToEdit?.inTime || '09:30');
+  const [outTime, setOutTime] = useState(() => dutyToEdit?.outTime || '17:30');
+  const [workDescription, setWorkDescription] = useState(() => dutyToEdit?.workDescription || '');
 
   // Modals state
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -55,14 +65,38 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const [outTimePickerVisible, setOutTimePickerVisible] = useState(false);
 
   // Signature state
-  const [signatureData, setSignatureData] = useState(null);
+  const [signatureData, setSignatureData] = useState(() => {
+    if (dutyToEdit?.customerSignature?.url) {
+      return {
+        url: dutyToEdit.customerSignature.url,
+        dataUri: dutyToEdit.customerSignature.url,
+        publicId: dutyToEdit.customerSignature.publicId || '',
+        key: dutyToEdit.customerSignature.key || '',
+      };
+    }
+    return null;
+  });
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
 
-  // Photos state (local uris)
-  const [photos, setPhotos] = useState([]);
+  // Photos state (local uris or existing urls)
+  const [photos, setPhotos] = useState(() => {
+    if (dutyToEdit?.customerProofPhotos?.length > 0) {
+      return dutyToEdit.customerProofPhotos.map((p) => p.url);
+    }
+    return [];
+  });
 
   // GPS Location state
-  const [locationCoords, setLocationCoords] = useState(null);
+  const [locationCoords, setLocationCoords] = useState(() => {
+    if (dutyToEdit?.location?.latitude) {
+      return {
+        latitude: dutyToEdit.location.latitude,
+        longitude: dutyToEdit.location.longitude,
+        accuracy: dutyToEdit.location.accuracy || 0,
+      };
+    }
+    return null;
+  });
   const [locating, setLocating] = useState(false);
 
   // Submission state
@@ -205,40 +239,56 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setError('');
 
     try {
-      let uploadedSignature = { url: '', publicId: '' };
+      let uploadedSignature = { url: '', publicId: '', key: '' };
       let uploadedPhotos = [];
 
-      // 1. Upload signature if captured
+      // 1. Process customer signature
       if (signatureData) {
-        try {
-          const sigRes = await uploadApi.uploadSignature(signatureData);
-          if (sigRes.data?.signature?.url) {
-            uploadedSignature = sigRes.data.signature;
-          } else if (sigRes.signature?.url) {
-            uploadedSignature = sigRes.signature;
-          }
-        } catch (uploadSigErr) {
-          console.warn('Signature upload error:', uploadSigErr);
-          if (signatureData.dataUri) {
-            uploadedSignature = {
-              url: signatureData.dataUri,
-              publicId: 'inline-signature',
-              key: 'inline-signature',
-            };
+        if (signatureData.url && signatureData.url.startsWith('http') && !signatureData.svgPaths) {
+          // Reusing existing Cloudflare R2 uploaded signature
+          uploadedSignature = {
+            url: signatureData.url,
+            publicId: signatureData.publicId || '',
+            key: signatureData.key || '',
+          };
+        } else {
+          try {
+            const sigRes = await uploadApi.uploadSignature(signatureData);
+            if (sigRes.data?.signature?.url) {
+              uploadedSignature = sigRes.data.signature;
+            } else if (sigRes.signature?.url) {
+              uploadedSignature = sigRes.signature;
+            }
+          } catch (uploadSigErr) {
+            console.warn('Signature upload error:', uploadSigErr);
+            if (signatureData.dataUri) {
+              uploadedSignature = {
+                url: signatureData.dataUri,
+                publicId: 'inline-signature',
+                key: 'inline-signature',
+              };
+            }
           }
         }
       }
 
-      // 2. Upload proof photos if attached
-      if (photos.length > 0) {
+      // 2. Process proof photos (retain existing URLs, upload newly captured)
+      const existingPhotos = photos
+        .filter((uri) => uri.startsWith('http'))
+        .map((url) => ({ url, publicId: '', key: '' }));
+      const newPhotoUris = photos.filter((uri) => !uri.startsWith('http'));
+
+      if (newPhotoUris.length > 0) {
         try {
-          const photosRes = await uploadApi.uploadProofPhotos(photos);
-          if (photosRes.data?.photos) {
-            uploadedPhotos = photosRes.data.photos;
-          }
+          const photosRes = await uploadApi.uploadProofPhotos(newPhotoUris);
+          const newlyUploaded = photosRes.data?.photos || [];
+          uploadedPhotos = [...existingPhotos, ...newlyUploaded];
         } catch (uploadPhotosErr) {
           console.warn('Photos upload error:', uploadPhotosErr);
+          uploadedPhotos = existingPhotos;
         }
+      } else {
+        uploadedPhotos = existingPhotos;
       }
 
       // 3. Assemble duty submission payload
@@ -268,15 +318,23 @@ export const DutyFormScreen = ({ navigation, route }) => {
         payload.accuracy = locationCoords.accuracy;
       }
 
-      await dutyApi.createDuty(payload);
-
-      Alert.alert(
-        'Duty Report Submitted',
-        'Your service visit report has been submitted successfully for manager review.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      if (isEditing) {
+        await dutyApi.updateDuty(dutyToEdit._id, payload);
+        Alert.alert(
+          'Duty Report Updated',
+          'Your service visit report has been updated successfully.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      } else {
+        await dutyApi.createDuty(payload);
+        Alert.alert(
+          'Duty Report Submitted',
+          'Your service visit report has been submitted successfully for manager review.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      }
     } catch (err) {
-      setError(extractErrorMessage(err, 'Failed to submit duty report'));
+      setError(extractErrorMessage(err, isEditing ? 'Failed to update duty report' : 'Failed to submit duty report'));
     } finally {
       setLoading(false);
     }
@@ -285,8 +343,8 @@ export const DutyFormScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
-        title="Submit Duty Report"
-        subtitle="Log service visit and customer verification"
+        title={isEditing ? 'Edit Duty Report' : 'Submit Duty Report'}
+        subtitle={isEditing ? `Report #${(dutyToEdit.dutyId || dutyToEdit._id.slice(-6)).toUpperCase()}` : 'Log service visit and customer verification'}
         onBack={() => navigation.goBack()}
       />
 
@@ -578,7 +636,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
           </Card>
 
           <PrimaryButton
-            title="Submit Duty Report"
+            title={isEditing ? 'Save Changes' : 'Submit Duty Report'}
             onPress={handleSubmit}
             loading={loading}
             style={styles.submitBtn}
