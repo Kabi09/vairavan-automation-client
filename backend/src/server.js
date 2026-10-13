@@ -12,7 +12,7 @@ dotenv.config();
 import app from './app.js';
 import { connectDB, disconnectDB } from './config/db.js';
 import { initializeFirebase } from './config/firebase.js';
-import { configureCloudinary } from './config/cloudinary.js';
+import { initializeR2 } from './config/r2.js';
 
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
@@ -24,7 +24,7 @@ const startServer = async () => {
     await connectDB();
 
     // 2. Initialize external cloud services (graceful fallback if unconfigured)
-    configureCloudinary();
+    initializeR2();
     initializeFirebase();
 
     // 3. Start listening on configured port

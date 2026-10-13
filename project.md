@@ -3,9 +3,7 @@
 ## Project Overview
 - Project purpose: Employee Duty Management System for Vairavan Automation. Provides full field-service duty tracking, company client directory, employee lifecycle management, leave approvals, holiday calendar, customer signatures, proof photo uploads, and real-time dashboard analytics.
 - Technology stack:
-  - Backend: Node.js (v18+), Express.js (ES Modules), MongoDB Atlas, Mongoose ODM, JWT (`jsonwebtoken`), bcryptjs, express-validator, Helmet, CORS, express-rate-limit, Cloudinary, Firebase Admin SDK (FCM).
-- Technology stack:
-  - Backend: Node.js (v18+), Express.js (ES Modules), MongoDB Atlas, Mongoose ODM, JWT (`jsonwebtoken`), bcryptjs, express-validator, Helmet, CORS, express-rate-limit, Cloudinary, Firebase Admin SDK (FCM). Deployed at `https://vairavan-automation-client.vercel.app/api`.
+  - Backend: Node.js (v18+), Express.js (ES Modules), MongoDB Atlas, Mongoose ODM, JWT (`jsonwebtoken`), bcryptjs, express-validator, Helmet, CORS, express-rate-limit, Cloudflare R2 (@aws-sdk/client-s3), Firebase Admin SDK (FCM). Deployed at `https://vairavan-automation-client.vercel.app/api`.
   - Mobile App Frontend: React Native (0.86), Expo SDK 57, React 19, React Navigation 7 (Native Stack & Bottom Tabs), Axios, `expo-secure-store`, `expo-location`, `expo-image-picker`, `react-native-svg` (touch signature pad), React Native StyleSheet (centralized design tokens). Pure JavaScript (.js and .jsx) — No TypeScript, No Tailwind.
 
 ## Project Structure
@@ -596,6 +594,49 @@
 - Logic changed: Configured cloud and local Android APK compilation settings.
 - Reason: User requested instructions and commands to build and download the Android APK file.
 - Impact: Users can build an installable `.apk` file directly using EAS CLI.
+
+### 2026-10-13
+#### Migration: Cloudinary to Cloudflare R2 Object Storage (AWS S3-Compatible API)
+- What was changed:
+  - Removed Cloudinary dependency (`cloudinary`) from both `backend/package.json` and root `package.json`.
+  - Installed `@aws-sdk/client-s3` in backend and root workspaces.
+  - Removed legacy Cloudinary files: `backend/src/config/cloudinary.js` and `backend/src/services/cloudinaryService.js`.
+  - Created `backend/src/config/r2.js` configuring S3Client with endpoint `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`, auto region, credentials, bucket name, and public URL helpers. Added mock mode detection for dev/tests.
+  - Created `backend/src/services/r2Service.js` with `uploadBufferToR2`, `deleteFromR2`, `getFileStreamFromR2`, and collision-resistant `generateR2Key` (`uploads/{timestamp}-{hex}-{sanitizedName}`).
+  - Updated `backend/src/controllers/uploadController.js` to upload customer signatures and service proof photos directly to Cloudflare R2, returning `{ url, key, publicId }` for backwards compatibility.
+  - Updated `backend/src/routes/uploadRoutes.js` with streaming fallback route `GET /api/uploads/file/*` and wildcard object key deletion `DELETE /api/uploads/:key(*)`.
+  - Updated `backend/src/models/Duty.js` to include `key` alongside `publicId` in `customerSignature` and `customerProofPhotos`.
+  - Updated `backend/src/server.js` and health check route `GET /api/health` in `backend/src/routes/index.js` to report Cloudflare R2 status.
+  - Replaced Cloudinary environment variables with Cloudflare R2 credentials across `.env`, `.env.example`, and `backend/.env`:
+    `R2_ACCOUNT_ID=your_cloudflare_account_id`
+    `R2_ACCESS_KEY_ID=your_r2_access_key_id`
+    `R2_SECRET_ACCESS_KEY=your_r2_secret_access_key`
+    `R2_BUCKET_NAME=your_r2_bucket_name`
+    `R2_PUBLIC_URL=https://pub-yourbucketid.r2.dev`
+  - Added full test suite in `backend/tests/upload.test.js` verifying key generation, buffer uploads, deletion, and multipart API endpoints. All 7 tests pass.
+- Files changed:
+  - `backend/package.json`
+  - `package.json`
+  - `backend/src/config/r2.js`
+  - `backend/src/services/r2Service.js`
+  - `backend/src/controllers/uploadController.js`
+  - `backend/src/routes/uploadRoutes.js`
+  - `backend/src/routes/index.js`
+  - `backend/src/server.js`
+  - `backend/src/models/Duty.js`
+  - `backend/src/controllers/dutyController.js`
+  - `backend/src/services/notificationService.js`
+  - `backend/.env`
+  - `backend/.env.example`
+  - `.env`
+  - `backend/tests/upload.test.js`
+  - `backend/README.md`
+  - `duty-management-app/README.md`
+  - `backend/postman/vairavan-automation-api.postman_collection.json`
+  - `project.md`
+- Logic changed: Switched binary storage from proprietary Cloudinary upload streams to AWS S3-compatible Cloudflare R2 object storage with zero egress fees and high-durability cloud storage.
+- Reason: User requested migration from Cloudinary to Cloudflare R2, removal of all Cloudinary-related code, implementation of Cloudflare R2 using documentation, and addition of demo environment variable values.
+- Impact: Stateless, zero-egress cloud storage via Cloudflare R2; backward-compatible API responses for existing mobile clients.
 
 ### 2026-10-13
 #### Fix StatusBadge Import in AllDutiesScreen

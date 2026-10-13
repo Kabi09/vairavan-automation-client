@@ -1,6 +1,9 @@
 node_modules/
 .env
 .env.*
+!.env.example
+!backend/.env.example
+!duty-management-app/.env.example
 backend/.env
 uploads/
 coverage/

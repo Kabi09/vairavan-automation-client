@@ -78,7 +78,7 @@ export const createDuty = asyncHandler(async (req, res) => {
     inTime,
     outTime,
     workDescription,
-    customerSignature: customerSignature || { url: '', publicId: '' },
+    customerSignature: customerSignature || { url: '', publicId: '', key: '' },
     customerProofPhotos: Array.isArray(customerProofPhotos) ? customerProofPhotos : [],
     status: 'submitted',
     auditTrail: [

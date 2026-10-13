@@ -37,7 +37,9 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
 
   const logoImageUrl =
     notificationPayload.imageUrl ||
-    'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
+    (process.env.R2_PUBLIC_URL
+      ? `${process.env.R2_PUBLIC_URL.replace(/\/+$/, '')}/vairavan_app/app_logo.png`
+      : 'https://pub-yourbucketid.r2.dev/vairavan_app/app_logo.png');
 
   // 1. Deliver native FCM tokens via Firebase Admin SDK
   if (fcmTokens.length > 0) {

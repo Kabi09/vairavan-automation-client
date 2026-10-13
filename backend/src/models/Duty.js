@@ -93,11 +93,13 @@ const dutySchema = new mongoose.Schema(
     customerSignature: {
       url: { type: String, default: '' },
       publicId: { type: String, default: '' },
+      key: { type: String, default: '' },
     },
     customerProofPhotos: [
       {
         url: { type: String, required: true },
         publicId: { type: String, default: '' },
+        key: { type: String, default: '' },
       },
     ],
     location: {

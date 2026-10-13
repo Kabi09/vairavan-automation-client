@@ -12,6 +12,7 @@ import notificationRoutes from './notificationRoutes.js';
 import taskRoutes from './taskRoutes.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import { connectDB } from '../config/db.js';
+import { isR2Configured, getR2BucketName, getR2PublicUrl } from '../config/r2.js';
 
 const router = Router();
 
@@ -42,6 +43,11 @@ router.get('/health', async (req, res) => {
     database: dbStatusMap[dbState] || 'unknown',
     hasMongoUri: !!process.env.MONGODB_URI,
     dbError,
+    cloudflareR2: {
+      configured: isR2Configured(),
+      bucket: getR2BucketName(),
+      publicUrlConfigured: Boolean(getR2PublicUrl()),
+    },
   });
 });
 

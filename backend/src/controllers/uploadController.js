@@ -1,10 +1,10 @@
-import cloudinaryService from '../services/cloudinaryService.js';
+import r2Service from '../services/r2Service.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
 /**
- * @desc    Upload customer signature image
+ * @desc    Upload customer signature image to Cloudflare R2
  * @route   POST /api/uploads/signature
  * @access  Private (Employee / Admin)
  */
@@ -13,22 +13,23 @@ export const uploadSignature = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Please provide a signature image file in the "signature" field');
   }
 
-  const result = await cloudinaryService.uploadBufferToCloudinary(req.file.buffer, {
+  const result = await r2Service.uploadBufferToR2(req.file.buffer, {
     folder: 'vairavan-automation/signatures',
-    public_id: `sig_${req.user.employeeId}_${Date.now()}`,
-    tags: ['signature', req.user.employeeId],
+    originalName: req.file.originalname || `sig_${req.user?.employeeId || 'emp'}.png`,
+    mimeType: req.file.mimetype || 'image/png',
   });
 
-  return ApiResponse.created(res, 'Signature uploaded successfully', {
+  return ApiResponse.created(res, 'Signature uploaded successfully to Cloudflare R2', {
     signature: {
       url: result.url,
-      publicId: result.publicId,
+      key: result.key,
+      publicId: result.key, // Backward compatibility for existing mobile models
     },
   });
 });
 
 /**
- * @desc    Upload service proof photos (up to 5)
+ * @desc    Upload service proof photos to Cloudflare R2 (up to 5)
  * @route   POST /api/uploads/proof-photos
  * @access  Private (Employee / Admin)
  */
@@ -38,10 +39,10 @@ export const uploadProofPhotos = asyncHandler(async (req, res) => {
   }
 
   const uploadPromises = req.files.map((file, index) =>
-    cloudinaryService.uploadBufferToCloudinary(file.buffer, {
+    r2Service.uploadBufferToR2(file.buffer, {
       folder: 'vairavan-automation/proofs',
-      public_id: `proof_${req.user.employeeId}_${Date.now()}_${index}`,
-      tags: ['proof_photo', req.user.employeeId],
+      originalName: file.originalname || `proof_${req.user?.employeeId || 'emp'}_${index}.jpg`,
+      mimeType: file.mimetype || 'image/jpeg',
     })
   );
 
@@ -49,33 +50,54 @@ export const uploadProofPhotos = asyncHandler(async (req, res) => {
 
   const photos = results.map((r) => ({
     url: r.url,
-    publicId: r.publicId,
+    key: r.key,
+    publicId: r.key, // Backward compatibility for existing mobile models
   }));
 
-  return ApiResponse.created(res, `${photos.length} photo(s) uploaded successfully`, {
+  return ApiResponse.created(res, `${photos.length} photo(s) uploaded successfully to Cloudflare R2`, {
     photos,
   });
 });
 
 /**
- * @desc    Delete an uploaded image asset by publicId
- * @route   DELETE /api/uploads/:publicId
+ * @desc    Delete an uploaded image asset from Cloudflare R2 by key (or publicId)
+ * @route   DELETE /api/uploads/:key(*)
  * @access  Private
  */
 export const deleteUploadedAsset = asyncHandler(async (req, res) => {
-  const { publicId } = req.params;
+  const key = req.params.key || req.params.publicId || req.params[0];
 
-  if (!publicId) {
-    throw ApiError.badRequest('Public ID is required');
+  if (!key) {
+    throw ApiError.badRequest('Object key or public ID is required');
   }
 
-  await cloudinaryService.deleteFromCloudinary(publicId);
+  await r2Service.deleteFromR2(key);
 
-  return ApiResponse.success(res, 200, 'Image deleted successfully');
+  return ApiResponse.success(res, 200, `Image '${key}' deleted successfully from Cloudflare R2`);
+});
+
+/**
+ * @desc    Streaming proxy fallback for private R2 buckets
+ * @route   GET /api/uploads/file/*
+ * @access  Public / Private
+ */
+export const streamUploadedFile = asyncHandler(async (req, res) => {
+  const key = req.params[0];
+
+  if (!key) {
+    throw ApiError.badRequest('Object key is required');
+  }
+
+  const { Body, ContentType } = await r2Service.getFileStreamFromR2(key);
+
+  res.setHeader('Content-Type', ContentType || 'image/jpeg');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  Body.pipe(res);
 });
 
 export default {
   uploadSignature,
   uploadProofPhotos,
   deleteUploadedAsset,
+  streamUploadedFile,
 };

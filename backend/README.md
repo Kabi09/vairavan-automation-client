@@ -1,6 +1,6 @@
 # Vairavan Automation — Employee Duty Management System Backend API
 
-Production-ready REST API backend for the Employee Duty Management System built with Node.js, Express.js (ES Modules), MongoDB Atlas, Mongoose, JWT authentication, and Cloudinary.
+Production-ready REST API backend for the Employee Duty Management System built with Node.js, Express.js (ES Modules), MongoDB Atlas, Mongoose, JWT authentication, and Cloudflare R2 (AWS S3-Compatible API).
 
 ---
 
@@ -13,7 +13,7 @@ Production-ready REST API backend for the Employee Duty Management System built 
 | **Database** | MongoDB Atlas / Mongoose | ODM with strict schemas, indexing, and validation |
 | **Authentication** | JWT (`jsonwebtoken`) | Bearer Access Tokens + Rotated Refresh Tokens |
 | **Security** | Helmet, CORS, bcryptjs | Rate limiting (`express-rate-limit`), password hashing |
-| **File Storage** | Cloudinary + Multer | In-memory buffering for signature & proof photos |
+| **File Storage** | Cloudflare R2 + Multer | S3-compatible in-memory buffering for signature & proof photos |
 | **Validation** | express-validator | Param, query, and request body validation |
 | **Push Notifications** | Firebase Admin SDK | FCM multicast delivery with automatic token cleanup |
 | **Testing** | Node.js Test Runner + Supertest | Automated in-memory database test harness |
@@ -36,7 +36,7 @@ backend/
 │   ├── server.js             # Server startup, DB connection, graceful shutdown
 │   ├── config/
 │   │   ├── db.js             # Mongoose MongoDB connection & disconnect
-│   │   ├── cloudinary.js     # Cloudinary SDK configuration
+│   │   ├── r2.js             # Cloudflare R2 S3-compatible SDK configuration
 │   │   └── firebase.js       # Firebase Admin SDK modular configuration
 │   ├── controllers/
 │   │   ├── authController.js        # Login, profile, password change, refresh
@@ -74,7 +74,7 @@ backend/
 │   │   ├── uploadRoutes.js
 │   │   └── notificationRoutes.js
 │   ├── services/
-│   │   ├── cloudinaryService.js   # Cloudinary buffer upload & deletion
+│   │   ├── r2Service.js           # Cloudflare R2 buffer upload & deletion
 │   │   └── notificationService.js # Firebase Cloud Messaging sender
 │   ├── validators/
 │   │   ├── authValidator.js
@@ -117,9 +117,11 @@ cp .env.example .env
 | `RATE_LIMIT_WINDOW_MS` | Rate limit window in milliseconds | `900000` (15 mins) |
 | `RATE_LIMIT_MAX_REQUESTS`| Max requests per window per IP | `200` |
 | `AUTH_RATE_LIMIT_MAX` | Max login attempts per 15 minutes | `10` |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary account cloud name | `your_cloud_name` |
-| `CLOUDINARY_API_KEY` | Cloudinary API Key | `your_api_key` |
-| `CLOUDINARY_API_SECRET` | Cloudinary API Secret | `your_api_secret` |
+| `R2_ACCOUNT_ID` | Cloudflare account identifier | `your_cloudflare_account_id` |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 S3 Access Key ID | `your_r2_access_key_id` |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 S3 Secret Access Key | `your_r2_secret_access_key` |
+| `R2_BUCKET_NAME` | Cloudflare R2 target bucket | `your_r2_bucket_name` |
+| `R2_PUBLIC_URL` | Base public URL for serving images | `https://pub-yourbucketid.r2.dev` |
 | `REQUIRE_DUTY_LOCATION` | Enforce GPS coordinates on duty submission | `false` |
 | `ALLOW_OVERNIGHT_DUTY` | Allow duty outTime earlier than inTime | `false` |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Optional inline JSON service account | `{ ... }` |
@@ -199,7 +201,7 @@ npm test
 | `PATCH`| `/api/duties/:id/status` | Admin | Review duty (approved/rejected/correction) |
 | `POST`| `/api/uploads/signature` | Authenticated | Upload customer signature (image) |
 | `POST`| `/api/uploads/proof-photos`| Authenticated | Upload customer proof photos (max 5) |
-| `DELETE`| `/api/uploads/:publicId` | Authenticated | Delete uploaded Cloudinary asset |
+| `DELETE`| `/api/uploads/:key` | Authenticated | Delete uploaded Cloudflare R2 asset |
 | `POST`| `/api/leaves` | Employee | Submit leave request |
 | `GET` | `/api/leaves/my` | Employee | View own leave requests |
 | `GET` | `/api/leaves/:id` | Admin / Owner | View single leave request |
@@ -339,38 +341,18 @@ Follow these steps to deploy this backend on Render Web Services:
    - `JWT_SECRET` = (Generate a strong 32+ character key)
    - `JWT_REFRESH_SECRET` = (Generate a strong 32+ character key)
    - `CORS_ORIGIN` = `*` (or your mobile client domain)
-   - `CLOUDINARY_CLOUD_NAME` = (Your Cloudinary cloud name)
-   - `CLOUDINARY_API_KEY` = (Your Cloudinary API key)
-   - `CLOUDINARY_API_SECRET` = (Your Cloudinary API secret)
-   - `ADMIN_EMAIL` = `admin@vairavan.com`
-   - `ADMIN_PASSWORD` = (Strong initial password)
-4. **Deploy**: Render will build the service and start `src/server.js`.
-5. **Run Seed Script (One Time)**:
-   - In Render Shell tab, run:
-     ```bash
-     npm run seed:admin
-     ```
-   - This creates your initial admin account safely.
+   - `R2_ACCOUNT_ID` = (Your Cloudflare Account ID)
+   - `R2_ACCESS_KEY_ID` = (Your Cloudflare R2 Access Key ID)
+   - `R2_SECRET_ACCESS_KEY` = (Your Cloudflare R2 Secret Access Key)
+   - `R2_BUCKET_NAME` = (Your Cloudflare R2 Bucket Name)
+   - `R2_PUBLIC_URL` = `https://pub-xxxx.r2.dev`
 
-> [!NOTE]
-> **Render Free Tier Notice**:
-> Render's Free web services spin down after 15 minutes of inactivity. When a new incoming request arrives, a cold start of 30-50 seconds may occur before responding. Do not rely on uninterrupted free hosting for critical production SLAs.
-
----
-
-## 8. Third-Party Integrations Setup
-
-### MongoDB Atlas Setup:
-1. Log in to [cloud.mongodb.com](https://cloud.mongodb.com).
-2. Create a Free Cluster (M0).
-3. Under **Database Access**, create a user with `Read and write to any database` privileges.
-4. Under **Network Access**, add `0.0.0.0/0` (Allow access from anywhere, required for Render dynamic IP egress).
-5. Copy connection string and paste into `MONGODB_URI`.
-
-### Cloudinary Setup:
-1. Register free at [cloudinary.com](https://cloudinary.com).
-2. In Dashboard, copy **Cloud name**, **API Key**, and **API Secret**.
-3. Set in `.env`.
+### Cloudflare R2 Setup:
+1. Log in to [dash.cloudflare.com](https://dash.cloudflare.com) and go to **R2**.
+2. Create an R2 bucket (e.g., `vairavan-automation`).
+3. Enable **Public Access** (R2.dev subdomain or custom domain).
+4. Generate an R2 API Token with **Object Read & Write** permissions.
+5. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, and `R2_PUBLIC_URL` in `.env`.
 
 ### Firebase Admin FCM Setup (Optional):
 1. Go to [Firebase Console](https://console.firebase.google.com).

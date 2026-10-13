@@ -27,7 +27,7 @@ A complete, modern, production-ready mobile application for Employee Duty Manage
   - Machine name, work type picker (`Electrical`, `Mechanical`, `Installation`, `Maintenance`, `Repair`, `Other`).
   - Shift time selection (`inTime` and `outTime`), work description.
   - **GPS Location Capture**: One-tap GPS coordinate fetch (`latitude`, `longitude`) via `expo-location`.
-  - **Digital Signature Pad**: Custom smooth touch canvas built with `react-native-svg` and `PanResponder` to capture real customer signatures and upload to Cloudinary.
+  - **Digital Signature Pad**: Custom smooth touch canvas built with `react-native-svg` and `PanResponder` to capture real customer signatures and upload to Cloudflare R2.
   - **Proof Photos**: Multiple site photo attachments via `expo-image-picker` with live thumbnail preview and deletion.
 - **Duty History**: Comprehensive list of past reports with status badges and full details screen.
 - **Leave Management**: Submit leave requests with reason and date range validation, track status (`pending`, `approved`, `rejected`), and cancel pending applications.
@@ -67,7 +67,7 @@ duty-management-app/
     │   ├── leaveApi.js            # Leave application & approval endpoints
     │   ├── holidayApi.js          # Holiday calendar endpoints
     │   ├── dashboardApi.js        # Admin & Employee analytics
-    │   ├── uploadApi.js           # Cloudinary multipart upload endpoints
+    │   ├── uploadApi.js           # Cloudflare R2 multipart upload endpoints
     │   └── notificationApi.js     # FCM push token registration
     ├── components/
     │   ├── Card.jsx               # Elevated card container
