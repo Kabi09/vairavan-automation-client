@@ -1025,11 +1025,31 @@
 - Reason: User reported: (1) Duty signature not stored and not shown to admin; (2) Calendar modal only supported previous/next clicks, needed month and year click grids.
 - Impact: High-fidelity customer signatures stored and visible across all admin and employee views; fast, intuitive date picking for birthdates and historical dates.
 
+### 2026-10-13
+#### Display Employee Small Avatar in Birthday Highlights & Celebrations
+- What was changed:
+  - **Admin Dashboard Birthday Banner**:
+    - Updated top celebration card in `AdminDashboardScreen.jsx` to render the employee's circular avatar photo with festive emoji badge (`🎂`), or stacked circular avatars with initials fallback if multiple colleagues share a birthday today.
+  - **Employee Dashboard Birthday Celebrations**:
+    - Updated personal birthday banner (`isMyBirthday`) in `EmployeeDashboardScreen.jsx` to display the logged-in user's profile avatar photo with celebratory badge (`🎉`).
+    - Updated team birthday banner (`todayBirthdays`) to display the birthday colleague's avatar with cake badge (`🎂`).
+  - **Monthly Highlights Modal**:
+    - Updated `thisMonthBirthdays` list in `EmployeeDashboardScreen.jsx` modal to display the colleague's circular avatar photo (`b.avatar`) via `<Image>` with initial letters fallback.
+- Files changed:
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Birthday representations now prioritize real user avatar images across all dashboard banners and modals.
+- Reason: User requested: "birthday -that employee small avator also show ; fix".
+- Impact: Engaging, visually personal birthday celebrations with employee photos.
+
 ## Current Progress
 - Completed:
   - Duty customer signature upload to Cloudflare R2 supporting both JSON SVG strings and multipart files.
   - Universal `SignatureImage` component rendering vector SVGs and raster images across Employee Duty Details, Admin All Duties modal, Company Details, and Employee Details screens.
   - Interactive DatePickerModal with instant Month selector grid (12 months) and scrollable Year selector grid (1950 - 2050).
+  - Employee small avatar rendering across Admin and Employee birthday celebration banners and Monthly Highlights modal.
   - 31/31 backend unit tests passing; 0 undeclared variables across all mobile screens.
 - In Progress:
   - None.

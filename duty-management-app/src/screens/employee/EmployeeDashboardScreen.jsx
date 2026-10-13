@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Modal,
+  Image,
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -124,10 +125,26 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
         {isMyBirthday ? (
           <Card style={styles.personalBirthdayCard}>
             <View style={styles.birthdayRow}>
-              <View style={styles.birthdayIconWrap}>
-                <Ionicons name="gift" size={26} color="#D97706" />
+              <View style={styles.birthdayAvatarWrapper}>
+                {user?.avatar ? (
+                  <Image
+                    source={{
+                      uri: typeof user.avatar === 'string' ? user.avatar : user.avatar.url,
+                    }}
+                    style={styles.birthdayAvatarImg}
+                  />
+                ) : (
+                  <View style={styles.birthdayAvatarLettersWrap}>
+                    <Text style={styles.birthdayAvatarLetters}>
+                      {(user?.employeeName || 'U').substring(0, 2).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.birthdayBadgeMini}>
+                  <Text style={{ fontSize: 9 }}>🎉</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, marginLeft: SPACING.md }}>
                 <Text style={styles.personalBirthdayTitle}>Happy Birthday, {user?.employeeName}! 🎂</Text>
                 <Text style={styles.personalBirthdaySub}>
                   Wishing you a joyful celebration and another great year of success!
@@ -138,10 +155,56 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
         ) : todayBirthdays.length > 0 ? (
           <Card style={styles.teamBirthdayCard}>
             <View style={styles.birthdayRow}>
-              <View style={styles.birthdayIconWrap}>
-                <Ionicons name="gift" size={24} color="#D97706" />
-              </View>
-              <View style={{ flex: 1 }}>
+              {todayBirthdays.length === 1 ? (
+                <View style={styles.birthdayAvatarWrapper}>
+                  {todayBirthdays[0].avatar ? (
+                    <Image
+                      source={{
+                        uri:
+                          typeof todayBirthdays[0].avatar === 'string'
+                            ? todayBirthdays[0].avatar
+                            : todayBirthdays[0].avatar.url,
+                      }}
+                      style={styles.birthdayAvatarImg}
+                    />
+                  ) : (
+                    <View style={styles.birthdayAvatarLettersWrap}>
+                      <Text style={styles.birthdayAvatarLetters}>
+                        {(todayBirthdays[0].employeeName || 'U').substring(0, 2).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.birthdayBadgeMini}>
+                    <Text style={{ fontSize: 9 }}>🎂</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.multiAvatarRow}>
+                  {todayBirthdays.slice(0, 3).map((b, idx) => {
+                    const avUrl = typeof b.avatar === 'string' ? b.avatar : b.avatar?.url;
+                    return (
+                      <View
+                        key={b._id || idx}
+                        style={[styles.stackedAvatar, { marginLeft: idx > 0 ? -12 : 0 }]}
+                      >
+                        {avUrl ? (
+                          <Image source={{ uri: avUrl }} style={styles.stackedAvatarImg} />
+                        ) : (
+                          <View style={styles.stackedAvatarLettersWrap}>
+                            <Text style={styles.stackedAvatarLetters}>
+                              {(b.employeeName || 'U').substring(0, 1).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                  <View style={styles.birthdayBadgeMini}>
+                    <Text style={{ fontSize: 9 }}>🎂</Text>
+                  </View>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: SPACING.md }}>
                 <Text style={styles.teamBirthdayTitle}>Today's Team Birthday! 🎂</Text>
                 <Text style={styles.teamBirthdaySub}>
                   {todayBirthdays.map((b) => `${b.employeeName} (${b.designation || 'Staff'})`).join(', ')}
@@ -405,16 +468,25 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                   </Text>
                 </View>
               ) : (
-                thisMonthBirthdays.map((b) => (
-                  <Card key={b._id} style={styles.birthdayMemberCard}>
-                    <View style={styles.birthdayMemberRow}>
-                      <View style={styles.birthdayMemberAvatar}>
-                        <Text style={styles.birthdayMemberLetters}>
-                          {(b.employeeName || 'U').substring(0, 2).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: SPACING.sm }}>
-                        <Text style={styles.birthdayMemberName}>{b.employeeName}</Text>
+                thisMonthBirthdays.map((b) => {
+                  const avUrl = typeof b.avatar === 'string' ? b.avatar : b.avatar?.url;
+                  return (
+                    <Card key={b._id} style={styles.birthdayMemberCard}>
+                      <View style={styles.birthdayMemberRow}>
+                        <View style={styles.birthdayMemberAvatar}>
+                          {avUrl ? (
+                            <Image
+                              source={{ uri: avUrl }}
+                              style={styles.birthdayMemberAvatarImg}
+                            />
+                          ) : (
+                            <Text style={styles.birthdayMemberLetters}>
+                              {(b.employeeName || 'U').substring(0, 2).toUpperCase()}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                          <Text style={styles.birthdayMemberName}>{b.employeeName}</Text>
                         <Text style={styles.birthdayMemberMeta}>
                           {b.designation || 'Colleague'} • ID: {b.employeeId}
                         </Text>
@@ -428,7 +500,8 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                       </View>
                     </View>
                   </Card>
-                ))
+                );
+              })
               )}
 
               <TouchableOpacity
@@ -734,6 +807,79 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: SPACING.md,
   },
+  birthdayAvatarWrapper: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+  },
+  birthdayAvatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  birthdayAvatarLettersWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  birthdayAvatarLetters: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  birthdayBadgeMini: {
+    position: 'absolute',
+    bottom: -3,
+    right: -3,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 9,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    elevation: 2,
+  },
+  multiAvatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+    paddingRight: 6,
+  },
+  stackedAvatar: {
+    position: 'relative',
+    elevation: 2,
+  },
+  stackedAvatarImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  stackedAvatarLettersWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stackedAvatarLetters: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B45309',
+  },
   personalBirthdayTitle: {
     fontSize: 15,
     fontWeight: '800',
@@ -883,6 +1029,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  birthdayMemberAvatarImg: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
   },
   birthdayMemberLetters: {
     fontSize: 13,
