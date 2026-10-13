@@ -79,6 +79,48 @@
 ## Change History
 
 ### 2026-10-13
+#### Signature Preview & Clipping Fix, PDF Export Spinner & Delay Fix, Staff Today/Clear Filter, Centered Filter Modal & Lifted Bottom Nav Bar
+- What was changed:
+  - **Signature Click & Clipping Resolution (`SignatureImage.jsx`, `SignaturePadModal.jsx`, `DutyDetailsScreen.jsx`, `AllDutiesScreen.jsx`, `ImageViewerModal.jsx`)**:
+    - Fixed click event propagation by setting `pointerEvents="none"` on the inner container wrapped in `TouchableOpacity`, preventing native `react-native-svg` responder elements from swallowing tap events and ensuring tapping any signature thumbnail reliably opens the full-screen `ImageViewerModal`.
+    - Added fallback checks for `duty.customerSignature` (supporting object `{ url, signedAt }` or string representations, and fallback to `duty.signature`).
+    - Resolved signature cutoff / clipping issue by adding `viewBox="0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}"` and `preserveAspectRatio="xMidYMid meet"` in `SignaturePadModal.jsx` SVG generator.
+    - Added `ensureSvgResponsive(xml)` in `SignatureImage.jsx` to dynamically inject `viewBox` and `preserveAspectRatio` for existing stored SVGs missing `viewBox`, ensuring vector signatures scale without getting clipped on any screen.
+    - Updated `ImageViewerModal.jsx` to constrain signature width to `100%` rather than fixed overflow widths.
+  - **PDF Export Acceleration & Loading Spinner (`exportUtils.js`, `ExportLoadingModal.jsx`, `AllDutiesScreen.jsx`, `EmployeeDetailsScreen.jsx`, `CompanyDetailsScreen.jsx`)**:
+    - Created reusable `ExportLoadingModal.jsx` displaying an animated activity indicator, report icon, title, and descriptive message during PDF and Excel generation.
+    - Integrated `ExportLoadingModal` and async loading state into `AllDutiesScreen.jsx`, `EmployeeDetailsScreen.jsx`, and `CompanyDetailsScreen.jsx`.
+    - Accelerated PDF generation in `exportUtils.js`: inlined SVG signatures directly into HTML to eliminate data URL re-parsing, limited embedded proof photos to 3 thumbnails per card with `loading="lazy"`, and added `onerror="this.style.display='none'"` to remote images so network timeouts don't hang document compilation.
+  - **Admin Staff View: Today & Clear Filter Quick Action Chips (`EmployeeDetailsScreen.jsx`)**:
+    - Added quick-toggle chips **[ Today ]** and **[ Clear Filter ]** to the filter toolbar header for specific employee work and leave views.
+    - Admin can seamlessly switch between today's duties and all logged records with a single tap, with active chip highlighting.
+  - **Centered Duty Filter Popup Modal (`AllDutiesScreen.jsx`)**:
+    - Created `centeredModalOverlay` with `justifyContent: 'center', alignItems: 'center'` and switched the filter popup modal from bottom-aligned sheet style to a centered dialog card on all screen resolutions.
+  - **Lifted Responsive Bottom Navigation Bar (`AdminNavigator.jsx`, `EmployeeNavigator.jsx`)**:
+    - Integrated `useSafeAreaInsets()` from `react-native-safe-area-context` in both `AdminTabs` and `EmployeeTabs`.
+    - Enforced safe bottom spacing: `bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 10)` and `barHeight = 60 + bottomInset`.
+    - Added elevated shadow and `paddingBottom: bottomInset + 4` lifting the bottom tab bar above system navigation bars (Android gesture pills and 3-button nav bars, iPhone home indicator) across all mobile devices.
+- Files changed:
+  - `duty-management-app/src/components/SignatureImage.jsx`
+  - `duty-management-app/src/components/SignaturePadModal.jsx`
+  - `duty-management-app/src/components/ImageViewerModal.jsx`
+  - `duty-management-app/src/components/ExportLoadingModal.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyDetailsScreen.jsx`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/navigation/EmployeeNavigator.jsx`
+  - `project.md`
+- Logic changed:
+  - Signatures are rendered with responsive SVG viewBox attributes and unblocked touch responders.
+  - Export actions provide live visual feedback via `ExportLoadingModal` while inlining SVGs for near-instant PDF generation.
+  - Bottom navigation bar height dynamically adapts to device safe area insets to stay fully visible.
+- Reason: User requested fixing signature click in details page, fixing signature clipping, accelerating PDF export delay with a loading spinner, adding Today / Clear Filter quick actions for specific employees, centering the duties filter popup, and moving the bottom navigation bar up so it is not hidden on their phone.
+- Impact: Flawless signature inspection, fast and transparent PDF/Excel exports, instant staff date filtering, and perfectly visible bottom tabs across all mobile devices.
+
+### 2026-10-13
 #### Export Verification, Photo/Signature Lightbox Preview, Signature Timestamp Watermark & Exact GPS Location Name
 - What was changed:
   - **Verified Export Download & Share Sheet Resilience (`exportUtils.js`)**:

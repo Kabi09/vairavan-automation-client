@@ -23,6 +23,7 @@ import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
 import DatePickerModal from '../../components/DatePickerModal';
 import SignatureImage from '../../components/SignatureImage';
+import ExportLoadingModal from '../../components/ExportLoadingModal';
 import { formatDate, formatISODateOnly, getYesterdayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
@@ -37,6 +38,7 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [exportingType, setExportingType] = useState(null); // 'PDF' | 'Excel' | null
 
   // Date filters (Default: '' to show all duties for this specific company)
   const [startDate, setStartDate] = useState('');
@@ -82,26 +84,38 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
     fetchCompanyDuties();
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const filterInfo =
       startDate || endDate
         ? `From ${startDate || 'Start'} to ${endDate || 'Present'}`
         : 'All Company Records';
 
-    exportDutiesToPDF({
-      title: `${company.companyName} - Duty Report`,
-      subtitle: `Company Service History • ${company.location || 'Site Records'}`,
-      duties,
-      filterInfo,
-    });
+    try {
+      setExportingType('PDF');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await exportDutiesToPDF({
+        title: `${company.companyName} - Duty Report`,
+        subtitle: `Company Service History • ${company.location || 'Site Records'}`,
+        duties,
+        filterInfo,
+      });
+    } finally {
+      setExportingType(null);
+    }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     const safeName = (company?.companyName || 'Company').replace(/\s+/g, '_');
-    exportDutiesToExcel({
-      filename: `${safeName}_Duties`,
-      duties,
-    });
+    try {
+      setExportingType('Excel');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await exportDutiesToExcel({
+        filename: `${safeName}_Duties`,
+        duties,
+      });
+    } finally {
+      setExportingType(null);
+    }
   };
 
   // Distinct employees who worked at this company
@@ -484,6 +498,11 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
           setEndDate(date);
         }}
         title="Select Single Date"
+      />
+
+      <ExportLoadingModal
+        visible={Boolean(exportingType)}
+        type={exportingType}
       />
     </SafeAreaView>
   );

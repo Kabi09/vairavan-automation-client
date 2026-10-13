@@ -29,6 +29,7 @@ import DatePickerModal from '../../components/DatePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
 import SignatureImage from '../../components/SignatureImage';
 import ImageViewerModal from '../../components/ImageViewerModal';
+import ExportLoadingModal from '../../components/ExportLoadingModal';
 import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
 import { formatDate, formatTime, formatISODateOnly, getYesterdayDateString } from '../../utils/dateUtils';
@@ -46,6 +47,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
+  const [exportingType, setExportingType] = useState(null); // 'PDF' | 'Excel' | null
 
   // Active filter state
   const [employees, setEmployees] = useState([]);
@@ -295,7 +297,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
   };
 
   // Export actions
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const selectedEmpObj = employees.find((e) => e._id === selectedEmployeeId);
     const selectedCompObj = companies.find((c) => c._id === selectedCompanyId);
 
@@ -308,19 +310,31 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
     const filterInfo = filterDetails.length > 0 ? filterDetails.join(' • ') : 'All Submissions';
 
-    exportDutiesToPDF({
-      title: 'Duty Field Records',
-      subtitle: 'Complete Field Visit & Operational Work Reports',
-      duties,
-      filterInfo,
-    });
+    try {
+      setExportingType('PDF');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await exportDutiesToPDF({
+        title: 'Duty Field Records',
+        subtitle: 'Complete Field Visit & Operational Work Reports',
+        duties,
+        filterInfo,
+      });
+    } finally {
+      setExportingType(null);
+    }
   };
 
-  const handleExportExcel = () => {
-    exportDutiesToExcel({
-      filename: 'Field_Duty_Records',
-      duties,
-    });
+  const handleExportExcel = async () => {
+    try {
+      setExportingType('Excel');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await exportDutiesToExcel({
+        filename: 'Field_Duty_Records',
+        duties,
+      });
+    } finally {
+      setExportingType(null);
+    }
   };
 
   const renderDutyItem = ({ item }) => {
@@ -664,11 +678,11 @@ export const AllDutiesScreen = ({ route, navigation }) => {
               </View>
 
               {/* Customer Signature Verification */}
-              {selectedDuty?.customerSignature?.url ? (
+              {(selectedDuty?.customerSignature?.url || (typeof selectedDuty?.customerSignature === 'string' && selectedDuty?.customerSignature)) ? (
                 <View style={styles.detailBlock}>
                   <Text style={styles.blockLabel}>Customer Signature Verification</Text>
                   <SignatureImage
-                    uri={selectedDuty.customerSignature.url}
+                    uri={selectedDuty.customerSignature?.url || selectedDuty.customerSignature}
                     height={130}
                     timestamp={
                       selectedDuty.customerSignature?.signedAt
@@ -687,7 +701,10 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                         ? `${formatDate(selectedDuty.dutyDate)}, ${formatTime(selectedDuty.outTime)}`
                         : ''
                     }
-                    onPress={() => handleOpenSignaturePreview(selectedDuty.customerSignature.url, 'Customer Signature')}
+                    onPress={() => {
+                      const sigUrl = selectedDuty.customerSignature?.url || selectedDuty.customerSignature;
+                      handleOpenSignaturePreview(sigUrl, 'Customer Signature');
+                    }}
                   />
                 </View>
               ) : null}
@@ -763,14 +780,14 @@ export const AllDutiesScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-      {/* Filter Popup Modal */}
+      {/* Filter Popup Modal (Centered on Screen) */}
       <Modal
         visible={filterModalVisible}
         transparent
         animationType="fade"
         onRequestClose={() => setFilterModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View style={styles.centeredModalOverlay}>
           <View style={styles.filterPopupCard}>
             {/* Header */}
             <View style={styles.filterPopupHeader}>
@@ -1030,6 +1047,11 @@ export const AllDutiesScreen = ({ route, navigation }) => {
         timestamp={previewTimestamp}
         isSignature={previewIsSignature}
       />
+
+      <ExportLoadingModal
+        visible={Boolean(exportingType)}
+        type={exportingType}
+      />
     </SafeAreaView>
   );
 };
@@ -1266,6 +1288,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.overlay,
     justifyContent: 'flex-end',
+  },
+  centeredModalOverlay: {
+    flex: 1,
+    backgroundColor: COLORS.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.md,
   },
   filterSheet: {
     backgroundColor: COLORS.card,

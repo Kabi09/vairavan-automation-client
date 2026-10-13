@@ -27,6 +27,7 @@ import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
 import DatePickerModal from '../../components/DatePickerModal';
 import SignatureImage from '../../components/SignatureImage';
+import ExportLoadingModal from '../../components/ExportLoadingModal';
 import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import {
@@ -49,6 +50,7 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
   const [loadingWork, setLoadingWork] = useState(true);
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
+  const [exportingType, setExportingType] = useState(null); // 'PDF' | 'Excel' | null
 
   // Leave state
   const [leaves, setLeaves] = useState([]);
@@ -133,49 +135,73 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
   };
 
   // Work exports
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const filterInfo =
       startDate || endDate
         ? `From ${startDate || 'Start'} to ${endDate || 'Present'}`
         : 'All Submissions';
 
-    exportDutiesToPDF({
-      title: `${employee.employeeName} (${employee.employeeId})`,
-      subtitle: `Employee Work History • ${employee.designation || 'Staff'}`,
-      duties,
-      filterInfo,
-    });
+    try {
+      setExportingType('PDF');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await exportDutiesToPDF({
+        title: `${employee.employeeName} (${employee.employeeId})`,
+        subtitle: `Employee Work History • ${employee.designation || 'Staff'}`,
+        duties,
+        filterInfo,
+      });
+    } finally {
+      setExportingType(null);
+    }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     const safeName = (employee?.employeeName || 'Employee').replace(/\s+/g, '_');
-    exportDutiesToExcel({
-      filename: `${safeName}_Work_History`,
-      duties,
-    });
+    try {
+      setExportingType('Excel');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await exportDutiesToExcel({
+        filename: `${safeName}_Work_History`,
+        duties,
+      });
+    } finally {
+      setExportingType(null);
+    }
   };
 
   // Leave exports
-  const handleExportLeavePDF = () => {
+  const handleExportLeavePDF = async () => {
     const filterInfo =
       startDate || endDate
         ? `From ${startDate || 'Start'} to ${endDate || 'Present'}`
         : 'All Leave History';
 
-    exportLeavesToPDF({
-      title: `${employee.employeeName} (${employee.employeeId})`,
-      subtitle: `Staff Leave History • ${employee.designation || 'Staff'}`,
-      leaves,
-      filterInfo,
-    });
+    try {
+      setExportingType('PDF');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await exportLeavesToPDF({
+        title: `${employee.employeeName} (${employee.employeeId})`,
+        subtitle: `Staff Leave History • ${employee.designation || 'Staff'}`,
+        leaves,
+        filterInfo,
+      });
+    } finally {
+      setExportingType(null);
+    }
   };
 
-  const handleExportLeaveExcel = () => {
+  const handleExportLeaveExcel = async () => {
     const safeName = (employee?.employeeName || 'Employee').replace(/\s+/g, '_');
-    exportLeavesToExcel({
-      filename: `${safeName}_Leave_Records`,
-      leaves,
-    });
+    try {
+      setExportingType('Excel');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await exportLeavesToExcel({
+        filename: `${safeName}_Leave_Records`,
+        leaves,
+      });
+    } finally {
+      setExportingType(null);
+    }
   };
 
   // Leave approval / rejection
@@ -278,18 +304,61 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
       <Card style={styles.toolbarCard}>
         <View style={styles.toolbarTitleRow}>
           <Text style={styles.toolbarTitle}>
-            {activeTab === 'work' ? 'Filter & Export Work Records' : 'Filter & Export Leave Records'}
+            {activeTab === 'work' ? 'Work Records' : 'Leave Records'}
           </Text>
-          {(startDate || endDate) && (
+          <View style={styles.quickFilterGroup}>
             <TouchableOpacity
+              style={[
+                styles.quickFilterChip,
+                startDate === today && endDate === today && styles.quickFilterChipActive,
+              ]}
+              onPress={() => {
+                setStartDate(today);
+                setEndDate(today);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="today"
+                size={12}
+                color={startDate === today && endDate === today ? '#FFFFFF' : COLORS.primary}
+              />
+              <Text
+                style={[
+                  styles.quickFilterChipText,
+                  startDate === today && endDate === today && styles.quickFilterChipTextActive,
+                ]}
+              >
+                Today
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.quickFilterChip,
+                !startDate && !endDate && styles.quickFilterChipActive,
+              ]}
               onPress={() => {
                 setStartDate('');
                 setEndDate('');
               }}
+              activeOpacity={0.8}
             >
-              <Text style={styles.clearDateLink}>Clear Filter</Text>
+              <Ionicons
+                name="filter-outline"
+                size={12}
+                color={!startDate && !endDate ? '#FFFFFF' : COLORS.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.quickFilterChipText,
+                  !startDate && !endDate && styles.quickFilterChipTextActive,
+                ]}
+              >
+                Clear Filter
+              </Text>
             </TouchableOpacity>
-          )}
+          </View>
         </View>
 
         <View style={styles.dateFilterRow}>
@@ -601,6 +670,11 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
         onSelectDate={(date) => setEndDate(date)}
         title="Select To Date"
       />
+
+      <ExportLoadingModal
+        visible={Boolean(exportingType)}
+        type={exportingType}
+      />
     </SafeAreaView>
   );
 };
@@ -718,10 +792,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
   },
-  clearDateLink: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.primary,
+  quickFilterGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  quickFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  quickFilterChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  quickFilterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  quickFilterChipTextActive: {
+    color: '#FFFFFF',
   },
   filterFieldLabel: {
     fontSize: 11,

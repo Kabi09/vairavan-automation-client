@@ -80,8 +80,8 @@ export const ImageViewerModal = ({
                 <View style={styles.signatureCanvasWrap}>
                   <SignatureImage
                     uri={imageUri}
-                    height={Math.min(320, SCREEN_HEIGHT * 0.45)}
-                    width={SCREEN_WIDTH - 48}
+                    height={Math.min(280, SCREEN_HEIGHT * 0.42)}
+                    width="100%"
                     timestamp={timestamp}
                   />
                 </View>

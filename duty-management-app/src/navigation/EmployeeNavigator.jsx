@@ -1,6 +1,8 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import EmployeeDashboardScreen from '../screens/employee/EmployeeDashboardScreen';
 import MyDutiesScreen from '../screens/employee/MyDutiesScreen';
@@ -19,6 +21,11 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 const EmployeeTabs = () => {
+  const insets = useSafeAreaInsets();
+  // Safe responsive bottom spacing across all mobile devices
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 10);
+  const barHeight = 60 + bottomInset;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -28,13 +35,20 @@ const EmployeeTabs = () => {
         tabBarStyle: {
           backgroundColor: COLORS.card,
           borderTopColor: COLORS.border,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 6,
+          borderTopWidth: 1,
+          height: barHeight,
+          paddingBottom: bottomInset + 4,
+          paddingTop: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 6,
+          elevation: 12,
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '600',
+          fontWeight: '700',
+          marginTop: -2,
         },
         tabBarIcon: ({ color, size, focused }) => {
           let iconName = 'grid-outline';

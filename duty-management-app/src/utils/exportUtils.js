@@ -280,15 +280,20 @@ export const exportDutiesToPDF = async ({
         }
         const mapsUrl = lat && lng ? `https://maps.google.com/?q=${lat},${lng}` : null;
 
-        const signatureUrl = d.customerSignature?.url || '';
+        const signatureUrl =
+          d.customerSignature?.url ||
+          (typeof d.customerSignature === 'string' ? d.customerSignature : '') ||
+          d.signature?.url ||
+          '';
         const proofPhotos = Array.isArray(d.customerProofPhotos) ? d.customerProofPhotos : [];
+        const photosToRender = proofPhotos.slice(0, 3);
 
         const photosHtml =
-          proofPhotos.length > 0
-            ? proofPhotos
+          photosToRender.length > 0
+            ? photosToRender
                 .map(
                   (p) =>
-                    `<img src="${escapeHtml(p.url)}" style="width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; margin-top: 6px;" />`
+                    `<img src="${escapeHtml(p.url)}" style="width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; margin-top: 6px;" loading="lazy" onerror="this.style.display='none'" />`
                 )
                 .join('')
             : '<span style="color: #64748b; font-size: 11px;">No site proof photos attached</span>';
@@ -297,9 +302,26 @@ export const exportDutiesToPDF = async ({
           ? formatDate(d.customerSignature.signedAt) + ' ' + (d.customerSignature.signedAt ? new Date(d.customerSignature.signedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '')
           : (dateStr && outTime ? `${dateStr} ${outTime}` : '');
 
+        let signatureBodyHtml = '';
+        if (signatureUrl) {
+          if (signatureUrl.startsWith('data:image/svg+xml;utf8,') || signatureUrl.startsWith('data:image/svg+xml,')) {
+            try {
+              const prefixMatch = /^data:image\/svg\+xml(;utf8)?,/;
+              const rawSvg = decodeURIComponent(signatureUrl.replace(prefixMatch, ''));
+              signatureBodyHtml = `<div style="max-height: 60px; max-width: 180px; display: inline-block;">${rawSvg}</div>`;
+            } catch {
+              signatureBodyHtml = `<img src="${escapeHtml(signatureUrl)}" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" loading="lazy" onerror="this.style.display='none'" />`;
+            }
+          } else if (signatureUrl.trim().startsWith('<svg')) {
+            signatureBodyHtml = `<div style="max-height: 60px; max-width: 180px; display: inline-block;">${signatureUrl}</div>`;
+          } else {
+            signatureBodyHtml = `<img src="${escapeHtml(signatureUrl)}" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" loading="lazy" onerror="this.style.display='none'" />`;
+          }
+        }
+
         const signatureHtml = signatureUrl
           ? `<div style="display: inline-block; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; text-align: right;">
-               <img src="${escapeHtml(signatureUrl)}" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" />
+               ${signatureBodyHtml}
                ${sigTime ? `<div style="font-size: 9px; color: #475569; font-weight: 700; border-top: 1px dashed #e2e8f0; padding-top: 2px;">🕒 ${escapeHtml(sigTime)}</div>` : ''}
              </div>`
           : '<span style="color: #64748b; font-size: 11px;">No signature recorded</span>';
@@ -492,7 +514,7 @@ export const exportDutiesToPDF = async ({
       <body>
         <div class="header-container">
           <div style="display: flex; align-items: center; gap: 12px;">
-            <img class="brand-logo" src="${LOGO_URL}" alt="Logo" />
+            <img class="brand-logo" src="${LOGO_URL}" alt="Logo" onerror="this.style.display='none'" />
             <div>
               <div style="font-size: 16px; font-weight: 800; color: #0f172a;">VAIRAVAN AUTOMATION</div>
               <div style="font-size: 11px; color: #64748b;">Industrial Field Service & Duty Management</div>

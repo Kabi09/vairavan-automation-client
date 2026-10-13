@@ -266,15 +266,25 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
         )}
 
         {/* Customer Signature */}
-        {duty.customerSignature?.url ? (
+        {(duty.customerSignature?.url || (typeof duty.customerSignature === 'string' && duty.customerSignature) || duty.signature?.url) ? (
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Customer Signature Verification</Text>
             <View style={styles.signatureBox}>
               <SignatureImage
-                uri={duty.customerSignature.url}
+                uri={
+                  duty.customerSignature?.url ||
+                  (typeof duty.customerSignature === 'string' ? duty.customerSignature : '') ||
+                  duty.signature?.url
+                }
                 height={130}
                 timestamp={signatureTimestamp}
-                onPress={() => handleOpenSignaturePreview(duty.customerSignature.url, 'Customer Signature')}
+                onPress={() => {
+                  const sigUrl =
+                    duty.customerSignature?.url ||
+                    (typeof duty.customerSignature === 'string' ? duty.customerSignature : '') ||
+                    duty.signature?.url;
+                  handleOpenSignaturePreview(sigUrl, 'Customer Signature');
+                }}
               />
             </View>
           </Card>
@@ -514,6 +524,8 @@ const styles = StyleSheet.create({
     padding: 3,
   },
   signatureBox: {
+    width: '100%',
+    alignSelf: 'stretch',
     backgroundColor: COLORS.surfaceAlt,
     borderRadius: RADIUS.md,
     padding: SPACING.xs,

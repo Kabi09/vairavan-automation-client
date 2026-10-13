@@ -4,6 +4,36 @@ import { SvgUri, SvgXml } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS } from '../constants/theme';
 
+/**
+ * Ensures raw SVG strings have a responsive viewBox and preserveAspectRatio
+ * so signatures are never cropped or cut off regardless of container dimensions.
+ */
+const ensureSvgResponsive = (xml) => {
+  if (!xml || typeof xml !== 'string') return xml;
+  let cleanXml = xml;
+
+  // If no viewBox is present, derive it from width and height
+  if (!cleanXml.includes('viewBox')) {
+    const wMatch = cleanXml.match(/width="([0-9.]+)"/);
+    const hMatch = cleanXml.match(/height="([0-9.]+)"/);
+    if (wMatch && hMatch) {
+      const w = wMatch[1];
+      const h = hMatch[1];
+      cleanXml = cleanXml.replace(
+        /<svg([^>]*)>/,
+        `<svg$1 viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">`
+      );
+    }
+  } else if (!cleanXml.includes('preserveAspectRatio')) {
+    cleanXml = cleanXml.replace(
+      /<svg([^>]*)>/,
+      '<svg$1 preserveAspectRatio="xMidYMid meet">'
+    );
+  }
+
+  return cleanXml;
+};
+
 export const SignatureImage = ({
   uri,
   url,
@@ -36,7 +66,8 @@ export const SignatureImage = ({
       try {
         const prefixMatch = /^data:image\/svg\+xml(;utf8)?,/;
         const rawXml = decodeURIComponent(targetUri.replace(prefixMatch, ''));
-        return <SvgXml xml={rawXml} width={width} height={height} />;
+        const responsiveXml = ensureSvgResponsive(rawXml);
+        return <SvgXml xml={responsiveXml} width={width} height={height} />;
       } catch {}
     }
 
@@ -48,7 +79,8 @@ export const SignatureImage = ({
       try {
         const base64Str = targetUri.replace('data:image/svg+xml;base64,', '');
         const rawXml = typeof atob === 'function' ? atob(base64Str) : base64Str;
-        return <SvgXml xml={rawXml} width={width} height={height} />;
+        const responsiveXml = ensureSvgResponsive(rawXml);
+        return <SvgXml xml={responsiveXml} width={width} height={height} />;
       } catch {}
     }
 
@@ -58,7 +90,8 @@ export const SignatureImage = ({
       targetUri.trim().startsWith('<svg') &&
       targetUri.includes('</svg>')
     ) {
-      return <SvgXml xml={targetUri} width={width} height={height} />;
+      const responsiveXml = ensureSvgResponsive(targetUri);
+      return <SvgXml xml={responsiveXml} width={width} height={height} />;
     }
 
     // 4. Remote SVG URL (.svg)
@@ -109,8 +142,27 @@ export const SignatureImage = ({
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
-        {content}
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.85}
+        style={[styles.touchable, style]}
+      >
+        <View pointerEvents="none" style={[styles.container, { height }]}>
+          {renderCore()}
+
+          {/* Bottom Right Corner: Date & Time Watermark */}
+          {timestamp ? (
+            <View style={styles.timestampBadge}>
+              <Ionicons name="time-outline" size={11} color="#475569" />
+              <Text style={styles.timestampText}>{timestamp}</Text>
+            </View>
+          ) : null}
+
+          {/* Tap to expand hint */}
+          <View style={styles.expandHint}>
+            <Ionicons name="expand-outline" size={12} color="#64748B" />
+          </View>
+        </View>
       </TouchableOpacity>
     );
   }
@@ -119,6 +171,10 @@ export const SignatureImage = ({
 };
 
 const styles = StyleSheet.create({
+  touchable: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
   container: {
     width: '100%',
     backgroundColor: '#FFFFFF',

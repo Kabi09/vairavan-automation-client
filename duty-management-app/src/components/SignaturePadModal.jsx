@@ -113,8 +113,8 @@ export const SignaturePadModal = ({ visible, onClose, onSave }) => {
     const now = new Date();
     const timestampStr = formatSignatureTimestamp(now);
 
-    // Build standalone SVG string with embedded watermark text in the bottom-right corner
-    const svgString = `<svg width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xmlns="http://www.w3.org/2000/svg">${allPaths
+    // Build standalone SVG string with responsive viewBox and embedded watermark text in the bottom-right corner
+    const svgString = `<svg viewBox="0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${allPaths
       .map(
         (p) =>
           `<path d="${p}" stroke="#0F172A" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
