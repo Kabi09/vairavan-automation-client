@@ -51,6 +51,11 @@ export const AllDutiesScreen = ({ route }) => {
   const [startDate, setStartDate] = useState(initialFilterToday ? today : '');
   const [endDate, setEndDate] = useState(initialFilterToday ? today : '');
 
+  // Whether filter modal criteria are active
+  const hasActiveFilters = Boolean(
+    startDate || endDate || selectedEmployeeId || selectedCompanyId
+  );
+
   // Filter popup modal & draft filter state
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [draftStartDate, setDraftStartDate] = useState(initialFilterToday ? today : '');

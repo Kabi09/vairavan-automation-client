@@ -69,9 +69,17 @@ const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle,
               encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
             });
           } else if (content) {
-            base64Data = typeof btoa !== 'undefined'
-              ? btoa(unescape(encodeURIComponent(content)))
-              : Buffer.from(content, 'utf-8').toString('base64');
+            try {
+              const tempCachePath = `${LegacyFS.cacheDirectory || ''}temp_export_${Date.now()}`;
+              await LegacyFS.writeAsStringAsync(tempCachePath, content, {
+                encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.UTF8 : 'utf8',
+              });
+              base64Data = await LegacyFS.readAsStringAsync(tempCachePath, {
+                encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+              });
+            } catch (convErr) {
+              base64Data = '';
+            }
           }
 
           const createdFileUri = await LegacyFS.StorageAccessFramework.createFileAsync(

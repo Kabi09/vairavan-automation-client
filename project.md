@@ -929,8 +929,16 @@
   - `backend/.env`
   - `backend/.env.example`
   - `backend/src/controllers/authController.js`
+#### AllDutiesScreen hasActiveFilters Fix & Full-App Static AST Verification
+- What was changed:
+  - Fixed `Render Error: Property 'hasActiveFilters' doesn't exist` in `AllDutiesScreen.jsx` by explicitly declaring `hasActiveFilters = Boolean(startDate || endDate || selectedEmployeeId || selectedCompanyId)`.
+  - Audited `duty-management-app/src/utils/exportUtils.js` base64 fallback with `LegacyFS` temp cache conversion to prevent reference issues with global `btoa`/`Buffer`.
+  - Ran comprehensive AST scanner using `@babel/parser` and `@babel/traverse` across all screens, components, utilities, contexts, and navigation files in `duty-management-app/src`: confirmed 0 undeclared variables and 0 syntax errors across all pages.
+- Files changed:
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
 - Logic changed:
-  - JWT Access and Refresh tokens remain valid for 1 full year (365 days), preventing users from being logged out unexpectedly after 1 or 7 days.
+  - Restored active filter state indicator for AllDutiesScreen without runtime errors.
 
 ## Current Progress
 - Completed:
