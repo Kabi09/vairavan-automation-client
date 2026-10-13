@@ -79,6 +79,18 @@
 ## Change History
 
 ### 2026-10-13
+#### Android Standalone APK Cleartext Traffic Configuration (`app.json`)
+- What was changed:
+  - Added `"usesCleartextTraffic": true` under `"android"` in `duty-management-app/app.json`.
+- Files changed:
+  - `duty-management-app/app.json`
+  - `project.md`
+- Logic changed:
+  - Configured Android Network Security to permit cleartext HTTP traffic in standalone release APKs.
+- Reason: User reported: "build app not showing the picture; npx expo start --tunnel --clear - show picture why?". Standalone APKs on Android 9+ block `http://` network requests by default, preventing pictures stored under `http://www.dudez.in/...` from rendering.
+- Impact: All avatars, customer proof photos, and touch signatures load and display flawlessly in built standalone Android APKs.
+
+### 2026-10-13
 #### Admin Calendar On-Leave Avatar Fix, Top On-Leave Highlight Box, and Top Holiday Highlight Box
 - What was changed:
   - **Admin Calendar Modal On-Leave Avatar Fix (`AdminDashboardScreen.jsx`)**:
@@ -1256,6 +1268,7 @@
 
 ## Current Progress
 - Completed:
+  - Android Standalone APK Build: Configured `usesCleartextTraffic: true` under `android` in `app.json`, resolving HTTP picture loading for Cloudflare R2 images (`http://www.dudez.in`) in release builds.
   - Admin Calendar On-Leave Avatar: Fixed avatar image rendering in Calendar modal on-leave attendee list.
   - Top Dashboard Highlight Boxes: Added distinct On-Leave Today and Company Holiday Today hero cards running concurrently with Birthday celebration cards across Admin and Employee dashboards.
   - Backend Dashboard Controller: Enhanced with `todaysHolidays` and company-wide `todaysLeaves` queries.
@@ -1278,6 +1291,10 @@
 - Notes: Mobile frontend connects to live API at `https://vairavan-automation-client-iony.vercel.app/api`.
 
 ## Technical Decisions
+- Decision: Enable `usesCleartextTraffic: true` in `app.json` for Android.
+  Reason: Cloudflare R2 image URLs configured with HTTP (`http://www.dudez.in`) were blocked by Android 9+ default cleartext security policy in standalone release APKs.
+  Date: 2026-10-13
+
 - Decision: Use pure JavaScript (`.js` and `.jsx`) only without TypeScript.
   Reason: Strictly follows user requirements.
   Date: 2026-10-11
