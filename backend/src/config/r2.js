@@ -37,6 +37,13 @@ export const getR2PublicUrl = () => {
 };
 
 /**
+ * Get maximum allowed file upload size in megabytes
+ */
+export const getMaxFileSizeMB = () => {
+  return parseInt(process.env.MAX_FILE_SIZE_MB || '10', 10);
+};
+
+/**
  * Get or initialize S3Client configured for Cloudflare R2
  */
 export const getR2Client = () => {

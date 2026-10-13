@@ -613,6 +613,8 @@
     `R2_SECRET_ACCESS_KEY=your_r2_secret_access_key`
     `R2_BUCKET_NAME=your_r2_bucket_name`
     `R2_PUBLIC_URL=https://pub-yourbucketid.r2.dev`
+    `MAX_FILE_SIZE_MB=10`
+  - Added dynamic file size limits in `backend/src/middleware/upload.js` respecting `MAX_FILE_SIZE_MB`.
   - Added full test suite in `backend/tests/upload.test.js` verifying key generation, buffer uploads, deletion, and multipart API endpoints. All 7 tests pass.
 - Files changed:
   - `backend/package.json`

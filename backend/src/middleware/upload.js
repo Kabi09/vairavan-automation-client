@@ -20,21 +20,25 @@ const imageFileFilter = (req, file, cb) => {
   }
 };
 
-// Multer instance for customer signature (max 2MB, single file)
+// Dynamic max upload size in bytes (defaults to 10MB)
+const MAX_FILE_SIZE_MB = parseInt(process.env.MAX_FILE_SIZE_MB || '10', 10);
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+// Multer instance for customer signature (single file)
 export const uploadSignatureMiddleware = multer({
   storage,
   limits: {
-    fileSize: 2 * 1024 * 1024, // 2MB
+    fileSize: Math.min(2 * 1024 * 1024, MAX_FILE_SIZE_BYTES),
     files: 1,
   },
   fileFilter: imageFileFilter,
 }).single('signature');
 
-// Multer instance for customer proof photos (max 5MB per file, up to 5 photos)
+// Multer instance for customer proof photos (max MAX_FILE_SIZE_MB per file, up to 5 photos)
 export const uploadProofPhotosMiddleware = multer({
   storage,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB per file
+    fileSize: MAX_FILE_SIZE_BYTES,
     files: 5,
   },
   fileFilter: imageFileFilter,
