@@ -920,6 +920,18 @@
   - All task logic completely removed; system focuses exclusively on duties.
   - Self-service employee contact editing limited to phone, email, and avatar photo.
 
+#### JWT Token Lifespan Update to 1 Year (365 Days)
+- What was changed:
+  - Updated `JWT_EXPIRES_IN` and `JWT_REFRESH_EXPIRES_IN` to `365d` (1 year) in `backend/.env` and `backend/.env.example`.
+  - Updated fallback defaults in `backend/src/controllers/authController.js` to `365d` for both access tokens and refresh tokens.
+  - Changed `refreshExpiresAt` calculation in `login` and `refreshToken` from the static 7-day hardcoded offset to dynamically evaluate `jwt.decode(token).exp * 1000` (defaulting to 365 days).
+- Files changed:
+  - `backend/.env`
+  - `backend/.env.example`
+  - `backend/src/controllers/authController.js`
+- Logic changed:
+  - JWT Access and Refresh tokens remain valid for 1 full year (365 days), preventing users from being logged out unexpectedly after 1 or 7 days.
+
 ## Current Progress
 - Completed:
   - Robust client-side PDF and Excel export engine (`src/utils/exportUtils.js`) with dual options: Download directly to phone storage or Share to WhatsApp/social media.

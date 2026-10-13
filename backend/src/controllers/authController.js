@@ -10,8 +10,8 @@ import asyncHandler from '../utils/asyncHandler.js';
 const generateTokens = (user) => {
   const secret = process.env.JWT_SECRET || 'fallback_development_jwt_secret_32_characters';
   const refreshSecret = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_jwt_secret_32_characters';
-  const expiresIn = process.env.JWT_EXPIRES_IN || '1d';
-  const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+  const expiresIn = process.env.JWT_EXPIRES_IN || '365d';
+  const refreshExpiresIn = process.env.JWT_REFRESH_EXPIRES_IN || '365d';
 
   const payload = {
     id: user._id,
@@ -53,8 +53,12 @@ export const login = asyncHandler(async (req, res) => {
 
   const { accessToken, refreshToken } = generateTokens(user);
 
-  // Store refresh token with expiration date (7 days)
-  const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  // Store refresh token with expiration date based on token lifespan (default 365 days / 1 year)
+  const decodedRefresh = jwt.decode(refreshToken);
+  const refreshExpiresAt = decodedRefresh?.exp
+    ? new Date(decodedRefresh.exp * 1000)
+    : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
   user.refreshTokens.push({
     token: refreshToken,
     expiresAt: refreshExpiresAt,
@@ -194,10 +198,15 @@ export const refreshToken = asyncHandler(async (req, res) => {
   const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
 
   // Rotate refresh token: remove old one, add new one
+  const decodedNewRefresh = jwt.decode(newRefreshToken);
+  const newRefreshExpiresAt = decodedNewRefresh?.exp
+    ? new Date(decodedNewRefresh.exp * 1000)
+    : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
   user.refreshTokens = user.refreshTokens.filter((rt) => rt.token !== incomingToken);
   user.refreshTokens.push({
     token: newRefreshToken,
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    expiresAt: newRefreshExpiresAt,
   });
   await user.save();
 
