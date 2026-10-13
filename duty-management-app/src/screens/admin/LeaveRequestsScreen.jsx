@@ -114,13 +114,13 @@ export const LeaveRequestsScreen = () => {
   const handleExportPDF = () => {
     const selectedEmp = employees.find((e) => e._id === selectedEmployeeId);
     const filterParts = [];
-    if (selectedEmp) filterParts.push(`Staff: ${selectedEmp.employeeName}`);
+    if (selectedEmp) filterParts.push(`Employee: ${selectedEmp.employeeName}`);
     if (activeTab) filterParts.push(`Status: ${activeTab.toUpperCase()}`);
     if (startDate || endDate) filterParts.push(`Date: ${startDate || 'Start'} to ${endDate || 'Present'}`);
     const filterInfo = filterParts.length > 0 ? filterParts.join(' • ') : 'All Leave Requests';
 
     exportLeavesToPDF({
-      title: 'Company Staff Leave Records',
+      title: 'Company Employee Leave Records',
       subtitle: 'Official Leave Applications & Sanction Reports',
       leaves,
       filterInfo,
@@ -129,7 +129,7 @@ export const LeaveRequestsScreen = () => {
 
   const handleExportExcel = () => {
     exportLeavesToExcel({
-      filename: 'Staff_Leave_Records',
+      filename: 'Employee_Leave_Records',
       leaves,
     });
   };
@@ -164,7 +164,7 @@ export const LeaveRequestsScreen = () => {
       <View style={styles.cardHeader}>
         <View style={styles.employeeInfo}>
           <Text style={styles.employeeName}>
-            {item.employee?.employeeName || 'Staff Member'}
+            {item.employee?.employeeName || 'Employee'}
           </Text>
           <Text style={styles.employeeId}>
             ID: {item.employee?.employeeId} • {item.employee?.designation}
@@ -221,7 +221,7 @@ export const LeaveRequestsScreen = () => {
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
         title="Leave Management"
-        subtitle="Review and process staff leave requests"
+        subtitle="Review and process employee leave requests"
       />
 
       <View style={styles.container}>
@@ -269,7 +269,7 @@ export const LeaveRequestsScreen = () => {
           </View>
 
           {/* Employee Dropdown Trigger */}
-          <Text style={[styles.filterFieldLabel, { marginTop: SPACING.xs }]}>Staff Member</Text>
+          <Text style={[styles.filterFieldLabel, { marginTop: SPACING.xs }]}>Employee</Text>
           <TouchableOpacity
             style={styles.dropdownTrigger}
             onPress={() => setEmployeeDropdownVisible(true)}
@@ -278,8 +278,8 @@ export const LeaveRequestsScreen = () => {
             <Ionicons name="person-outline" size={16} color={COLORS.primary} />
             <Text style={styles.dropdownTriggerText}>
               {selectedEmployeeId
-                ? employees.find((e) => e._id === selectedEmployeeId)?.employeeName || 'Staff Selected'
-                : 'All Staff (Default)'}
+                ? employees.find((e) => e._id === selectedEmployeeId)?.employeeName || 'Employee Selected'
+                : 'All Employees (Default)'}
             </Text>
             <Ionicons name="chevron-down" size={15} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>

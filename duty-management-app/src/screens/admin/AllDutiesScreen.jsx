@@ -314,7 +314,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
       setExportingType('PDF');
       await new Promise((resolve) => setTimeout(resolve, 80));
       await exportDutiesToPDF({
-        title: 'Duty Field Records',
+        title: 'Work Field Records',
         subtitle: 'Complete Field Visit & Operational Work Reports',
         duties,
         filterInfo,
@@ -329,7 +329,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
       setExportingType('Excel');
       await new Promise((resolve) => setTimeout(resolve, 80));
       await exportDutiesToExcel({
-        filename: 'Field_Duty_Records',
+        filename: 'Field_Work_Records',
         duties,
       });
     } finally {
@@ -338,7 +338,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
   };
 
   const renderDutyItem = ({ item }) => {
-    const dutyId = item.dutyId || ('DUTY-' + (item._id || '').slice(-6).toUpperCase());
+    const dutyId = item.dutyId || ('WORK-' + (item._id || '').slice(-4).toUpperCase());
 
     return (
       <Card style={styles.dutyCard} onPress={() => setSelectedDuty(item)}>
@@ -372,7 +372,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
           <View style={styles.employeeInfo}>
             <Ionicons name="person-outline" size={13} color={COLORS.primary} />
             <Text style={styles.employeeText}>
-              {item.employee?.employeeName || 'Staff'} ({item.employee?.employeeId})
+              {item.employee?.employeeName || 'Employee'} ({item.employee?.employeeId})
             </Text>
           </View>
 
@@ -415,7 +415,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
-        title="Duty Management"
+        title="All Works"
         subtitle="View field visit logs & service records"
         rightAction={
           <TouchableOpacity
@@ -509,7 +509,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                 <View style={styles.activeFilterPill}>
                   <Ionicons name="person" size={12} color={COLORS.primary} />
                   <Text style={styles.activeFilterPillText}>
-                    {employees.find((e) => e._id === selectedEmployeeId)?.employeeName || 'Staff'}
+                    {employees.find((e) => e._id === selectedEmployeeId)?.employeeName || 'Employee'}
                   </Text>
                 </View>
               ) : null}
@@ -534,7 +534,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
         <ErrorMessage message={error} onRetry={fetchDuties} />
 
         {loading && !refreshing ? (
-          <LoadingIndicator message="Loading duty records..." />
+          <LoadingIndicator message="Loading work records..." />
         ) : (
           <FlatList
             data={filteredDuties}
@@ -927,7 +927,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
               {/* Employee Filter */}
               <Text style={[styles.filterSectionTitle, { marginTop: SPACING.md }]}>
-                Staff Member
+                Employee
               </Text>
               <TouchableOpacity
                 style={styles.dropdownTriggerBtn}
@@ -937,8 +937,8 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                 <Ionicons name="person-outline" size={18} color={COLORS.primary} />
                 <Text style={styles.dropdownTriggerText}>
                   {draftEmployeeId
-                    ? employees.find((e) => e._id === draftEmployeeId)?.employeeName || 'Staff Selected'
-                    : 'All Staff (Default)'}
+                    ? employees.find((e) => e._id === draftEmployeeId)?.employeeName || 'Employee Selected'
+                    : 'All Employees (Default)'}
                 </Text>
                 <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
               </TouchableOpacity>
@@ -1011,15 +1011,15 @@ export const AllDutiesScreen = ({ route, navigation }) => {
       <DropdownPickerModal
         visible={employeeDropdownVisible}
         onClose={() => setEmployeeDropdownVisible(false)}
-        title="Filter by Staff Member"
+        title="Filter by Employee"
         selectedValue={draftEmployeeId}
         onSelect={(val) => setDraftEmployeeId(val)}
-        allOptionLabel="All Staff"
+        allOptionLabel="All Employees"
         items={employees.map((e) => ({
-          label: `${e.employeeName} (${e.employeeId || 'Staff'})`,
+          label: `${e.employeeName} (${e.employeeId || 'Employee'})`,
           value: e._id,
           id: e._id,
-          subtitle: `${e.designation || 'Staff'} • ${e.phoneNumber || 'No phone'}`,
+          subtitle: `${e.designation || 'Employee'} • ${e.phoneNumber || 'No phone'}`,
         }))}
       />
 

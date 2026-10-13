@@ -1,4 +1,5 @@
 import Holiday from '../models/Holiday.js';
+import Notification from '../models/Notification.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -45,19 +46,42 @@ export const createHoliday = asyncHandler(async (req, res) => {
     createdBy: req.user._id,
   });
 
-  // Optionally send push notification to all employees
-  if (notify) {
-    try {
-      const payload = {
-        title: `Upcoming Holiday: ${holiday.holidayName}`,
-        body: `Company holiday scheduled from ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`,
-      };
-      await notificationService.notifyAllEmployees(payload, {
-        holidayId: holiday._id.toString(),
-      });
-    } catch (err) {
-      console.error('[FCM] Error notifying employees of new holiday:', err.message);
-    }
+  const holidayDateStr = `${start.toISOString().split('T')[0]}${start.getTime() !== end.getTime() ? ` to ${end.toISOString().split('T')[0]}` : ''}`;
+  const holidayMessage = `Company holiday scheduled for ${holidayDateStr}.${holiday.description ? ` Details: ${holiday.description}` : ''}`;
+
+  // 1. Create in-app notification for all employees
+  try {
+    await Notification.create({
+      recipientRole: 'employee',
+      sender: req.user._id,
+      type: 'holiday',
+      title: `Upcoming Holiday: ${holiday.holidayName}`,
+      message: holidayMessage,
+      data: {
+        holidayId: holiday._id,
+        holidayName: holiday.holidayName,
+        startDate: start,
+        endDate: end,
+        description: holiday.description,
+        type: 'holiday',
+      },
+    });
+  } catch (notifErr) {
+    console.error('[Notification] Error creating in-app holiday notification:', notifErr.message);
+  }
+
+  // 2. Dispatch push notification to all employees via FCM
+  try {
+    const payload = {
+      title: `Upcoming Holiday: ${holiday.holidayName}`,
+      body: holidayMessage,
+    };
+    await notificationService.notifyAllEmployees(payload, {
+      holidayId: holiday._id.toString(),
+      type: 'holiday',
+    });
+  } catch (err) {
+    console.error('[FCM] Error notifying employees of new holiday:', err.message);
   }
 
   return ApiResponse.created(res, 'Holiday created successfully', { holiday });

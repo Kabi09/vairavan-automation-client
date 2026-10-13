@@ -130,7 +130,7 @@ export const NotificationsScreen = ({ navigation }) => {
 
       Alert.alert(
         'Success',
-        `Leave request for ${selectedNotif.data?.employeeName || 'staff'} has been ${decisionType}.`
+        `Leave request for ${selectedNotif.data?.employeeName || 'employee'} has been ${decisionType}.`
       );
       setSelectedNotif(null);
       fetchNotifications();
@@ -142,14 +142,68 @@ export const NotificationsScreen = ({ navigation }) => {
     }
   };
 
+  const handleNotificationPress = async (item) => {
+    // 1. If unread, mark as read immediately & decrement count
+    if (!item.isRead) {
+      try {
+        await notificationApi.markAsRead(item._id);
+        setNotifications((prev) =>
+          prev.map((n) => (n._id === item._id ? { ...n, isRead: true } : n))
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+        refreshGlobalNotifications();
+      } catch (e) {
+        console.warn('Could not mark notification as read on click:', e);
+      }
+    }
+
+    // 2. Navigate based on notification type
+    const notifType = item.type || '';
+    if (notifType === 'holiday' || notifType === 'holiday_created') {
+      if (isAdmin) {
+        navigation.navigate('HolidayManagement');
+      } else {
+        navigation.navigate('HolidayList');
+      }
+      return;
+    }
+
+    if (notifType === 'leave_request' || notifType === 'leave_reviewed') {
+      navigation.navigate('LeavesTab');
+      return;
+    }
+
+    if (
+      notifType.includes('duty') ||
+      notifType.includes('work') ||
+      item.data?.dutyId ||
+      item.data?.workId
+    ) {
+      const targetId = item.data?.dutyId || item.data?.workId;
+      if (targetId) {
+        navigation.navigate('DutyDetails', { dutyId: targetId });
+      } else if (isAdmin) {
+        navigation.navigate('DutiesTab');
+      } else {
+        navigation.navigate('MyDutiesTab');
+      }
+      return;
+    }
+  };
+
   const renderNotificationCard = ({ item }) => {
+    const isHoliday = item.type === 'holiday' || item.type === 'holiday_created';
     const isLeave = item.type === 'leave_request' || item.type === 'leave_reviewed';
     const leaveData = item.data || {};
     const leaveStatus = leaveData.status || 'pending';
     const isPending = leaveStatus === 'pending';
 
     return (
-      <Card style={[styles.card, !item.isRead && styles.unreadCard]}>
+      <Card
+        style={[styles.card, !item.isRead && styles.unreadCard]}
+        onPress={() => handleNotificationPress(item)}
+        activeOpacity={0.8}
+      >
         {/* Top Header */}
         <View style={styles.cardHeader}>
           <View style={styles.headerLeft}>
@@ -162,7 +216,9 @@ export const NotificationsScreen = ({ navigation }) => {
               <View
                 style={[
                   styles.statusDot,
-                  item.type === 'leave_request'
+                  isHoliday
+                    ? styles.dotHoliday
+                    : item.type === 'leave_request'
                     ? styles.dotWarning
                     : leaveStatus === 'approved'
                     ? styles.dotSuccess
@@ -175,18 +231,59 @@ export const NotificationsScreen = ({ navigation }) => {
               <Text style={styles.notifTime}>{formatDate(item.createdAt)}</Text>
             </View>
           </View>
-          <StatusBadge status={leaveStatus} />
+          {isLeave && <StatusBadge status={leaveStatus} />}
+          {isHoliday && (
+            <View style={styles.holidayBadgePill}>
+              <Text style={styles.holidayBadgePillText}>Holiday 🎉</Text>
+            </View>
+          )}
         </View>
 
-        {/* Detailed Information */}
+        {/* Holiday Details */}
+        {isHoliday && (
+          <View style={styles.holidayDetailsBox}>
+            <View style={styles.detailRow}>
+              <Ionicons name="sparkles" size={15} color="#15803D" />
+              <Text style={styles.detailLabel}>Holiday:</Text>
+              <Text style={[styles.detailValue, { fontWeight: '700', color: '#15803D' }]}>
+                {item.data?.holidayName || item.title}
+              </Text>
+            </View>
+            {item.data?.startDate ? (
+              <View style={styles.detailRow}>
+                <Ionicons name="calendar-outline" size={15} color={COLORS.textSecondary} />
+                <Text style={styles.detailLabel}>Duration:</Text>
+                <Text style={styles.detailValue}>
+                  {formatDate(item.data.startDate)}
+                  {item.data.endDate && item.data.endDate !== item.data.startDate
+                    ? ` - ${formatDate(item.data.endDate)}`
+                    : ''}
+                </Text>
+              </View>
+            ) : null}
+            <View style={[styles.detailRow, { alignItems: 'flex-start' }]}>
+              <Ionicons name="information-circle-outline" size={15} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
+              <Text style={styles.detailLabel}>Details:</Text>
+              <Text style={[styles.detailValue, styles.reasonText]}>
+                {item.data?.description || item.message}
+              </Text>
+            </View>
+            <View style={styles.tapToViewRow}>
+              <Text style={styles.tapToViewText}>Tap to view holiday calendar</Text>
+              <Ionicons name="arrow-forward" size={12} color="#15803D" />
+            </View>
+          </View>
+        )}
+
+        {/* Detailed Information for Leave */}
         {isLeave && (
           <View style={styles.detailsBox}>
             {/* User / Employee */}
             <View style={styles.detailRow}>
               <Ionicons name="person-outline" size={15} color={COLORS.textSecondary} />
-              <Text style={styles.detailLabel}>Staff:</Text>
+              <Text style={styles.detailLabel}>Employee:</Text>
               <Text style={styles.detailValue}>
-                {leaveData.employeeName || item.sender?.employeeName || 'Staff Member'}
+                {leaveData.employeeName || item.sender?.employeeName || 'Employee'}
                 {leaveData.employeeId ? ` (${leaveData.employeeId})` : ''}
               </Text>
             </View>
@@ -219,6 +316,11 @@ export const NotificationsScreen = ({ navigation }) => {
                 </Text>
               </View>
             ) : null}
+
+            <View style={styles.tapToViewRow}>
+              <Text style={styles.tapToViewText}>Tap to view leave details</Text>
+              <Ionicons name="arrow-forward" size={12} color="#2563EB" />
+            </View>
           </View>
         )}
 
@@ -227,7 +329,10 @@ export const NotificationsScreen = ({ navigation }) => {
           <View style={styles.actionButtonsRow}>
             <TouchableOpacity
               style={[styles.actionBtn, styles.approveBtn]}
-              onPress={() => handleOpenDecision(item, 'approved')}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                handleOpenDecision(item, 'approved');
+              }}
               activeOpacity={0.8}
             >
               <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
@@ -236,7 +341,10 @@ export const NotificationsScreen = ({ navigation }) => {
 
             <TouchableOpacity
               style={[styles.actionBtn, styles.rejectBtn]}
-              onPress={() => handleOpenDecision(item, 'rejected')}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                handleOpenDecision(item, 'rejected');
+              }}
               activeOpacity={0.8}
             >
               <Ionicons name="close-circle" size={18} color="#FFFFFF" />
@@ -311,8 +419,8 @@ export const NotificationsScreen = ({ navigation }) => {
 
             <Text style={styles.modalSubtitle}>
               {decisionType === 'approved'
-                ? `Grant leave for ${selectedNotif?.data?.employeeName || 'staff'}?`
-                : `Decline leave for ${selectedNotif?.data?.employeeName || 'staff'}?`}
+                ? `Grant leave for ${selectedNotif?.data?.employeeName || 'employee'}?`
+                : `Decline leave for ${selectedNotif?.data?.employeeName || 'employee'}?`}
             </Text>
 
             <TextInputField
@@ -412,6 +520,22 @@ const styles = StyleSheet.create({
   dotDanger: {
     backgroundColor: COLORS.danger,
   },
+  dotHoliday: {
+    backgroundColor: '#16A34A',
+  },
+  holidayBadgePill: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  holidayBadgePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+  },
   titleBlock: {
     flex: 1,
   },
@@ -431,6 +555,30 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
     marginVertical: SPACING.sm,
     gap: 6,
+  },
+  holidayDetailsBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    marginVertical: SPACING.sm,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  tapToViewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 4,
+    paddingTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
+  },
+  tapToViewText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMuted,
   },
   detailRow: {
     flexDirection: 'row',

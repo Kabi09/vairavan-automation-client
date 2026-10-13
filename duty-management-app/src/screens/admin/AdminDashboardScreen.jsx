@@ -9,6 +9,7 @@ import {
   Modal,
   Image,
   Linking,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +25,9 @@ import ErrorMessage from '../../components/ErrorMessage';
 import { formatDate, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SLIDE_WIDTH = SCREEN_WIDTH - SPACING.md * 2;
 
 export const AdminDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -83,6 +87,199 @@ export const AdminDashboardScreen = ({ navigation }) => {
     });
   }, [data]);
 
+  const [activeHighlightIndex, setActiveHighlightIndex] = useState(0);
+
+  const highlightSlides = useMemo(() => {
+    const slides = [];
+
+    if (todayBirthdays.length > 0) {
+      slides.push({
+        id: 'birthday',
+        node: (
+          <Card style={[styles.birthdayHighlightCard, { marginBottom: 0 }]}>
+            <View style={styles.birthdayRow}>
+              {todayBirthdays.length === 1 ? (
+                <View style={styles.birthdayAvatarWrapper}>
+                  {todayBirthdays[0].avatar ? (
+                    <Image
+                      source={{
+                        uri:
+                          typeof todayBirthdays[0].avatar === 'string'
+                            ? todayBirthdays[0].avatar
+                            : todayBirthdays[0].avatar.url,
+                      }}
+                      style={styles.birthdayAvatarImg}
+                    />
+                  ) : (
+                    <View style={styles.birthdayAvatarLettersWrap}>
+                      <Text style={styles.birthdayAvatarLetters}>
+                        {(todayBirthdays[0].employeeName || 'U').substring(0, 2).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.birthdayBadgeMini}>
+                    <Text style={{ fontSize: 9 }}>🎂</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.multiAvatarRow}>
+                  {todayBirthdays.slice(0, 3).map((b, idx) => {
+                    const avUrl = typeof b.avatar === 'string' ? b.avatar : b.avatar?.url;
+                    return (
+                      <View
+                        key={b._id || idx}
+                        style={[styles.stackedAvatar, { marginLeft: idx > 0 ? -12 : 0 }]}
+                      >
+                        {avUrl ? (
+                          <Image source={{ uri: avUrl }} style={styles.stackedAvatarImg} />
+                        ) : (
+                          <View style={styles.stackedAvatarLettersWrap}>
+                            <Text style={styles.stackedAvatarLetters}>
+                              {(b.employeeName || 'U').substring(0, 1).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                  <View style={styles.birthdayBadgeMini}>
+                    <Text style={{ fontSize: 9 }}>🎂</Text>
+                  </View>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: SPACING.md }}>
+                <Text style={styles.birthdayTitle}>Today's Birthday Celebration! 🎂</Text>
+                <Text style={styles.birthdayText}>
+                  {todayBirthdays
+                    .map((b) => `${b.employeeName} (${b.employeeId || b.designation || 'Employee'})`)
+                    .join(', ')}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ),
+      });
+    }
+
+    if (todaysLeaves.length > 0) {
+      slides.push({
+        id: 'leave',
+        node: (
+          <Card
+            style={[styles.leaveHighlightCard, { marginBottom: 0 }]}
+            onPress={() => {
+              setCalendarTab('leaves');
+              setCalendarModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.birthdayRow}>
+              {todaysLeaves.length === 1 ? (
+                (() => {
+                  const emp = todaysLeaves[0].employee || {};
+                  const avUrl = typeof emp.avatar === 'string' ? emp.avatar : emp.avatar?.url;
+                  return (
+                    <View style={styles.leaveAvatarWrapper}>
+                      {avUrl ? (
+                        <Image source={{ uri: avUrl }} style={styles.leaveHighlightAvatarImg} />
+                      ) : (
+                        <View style={styles.leaveAvatarLettersWrap}>
+                          <Text style={styles.leaveAvatarLetters}>
+                            {(emp.employeeName || 'U').substring(0, 2).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.leaveBadgeMini}>
+                        <Text style={{ fontSize: 9 }}>🌴</Text>
+                      </View>
+                    </View>
+                  );
+                })()
+              ) : (
+                <View style={styles.multiAvatarRow}>
+                  {todaysLeaves.slice(0, 3).map((l, idx) => {
+                    const emp = l.employee || {};
+                    const avUrl = typeof emp.avatar === 'string' ? emp.avatar : emp.avatar?.url;
+                    return (
+                      <View
+                        key={l._id || idx}
+                        style={[styles.stackedAvatar, { marginLeft: idx > 0 ? -12 : 0 }]}
+                      >
+                        {avUrl ? (
+                          <Image source={{ uri: avUrl }} style={styles.leaveStackedAvatarImg} />
+                        ) : (
+                          <View style={styles.leaveStackedAvatarLettersWrap}>
+                            <Text style={styles.leaveStackedAvatarLetters}>
+                              {(emp.employeeName || 'U').substring(0, 1).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                  <View style={styles.leaveBadgeMini}>
+                    <Text style={{ fontSize: 9 }}>🌴</Text>
+                  </View>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: SPACING.md }}>
+                <View style={styles.highlightHeaderRow}>
+                  <Text style={styles.leaveHighlightTitle}>Employees On Leave Today 🌴</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#2563EB" />
+                </View>
+                <Text style={styles.leaveHighlightText} numberOfLines={2}>
+                  {todaysLeaves
+                    .map((l) => {
+                      const emp = l.employee || {};
+                      return `${emp.employeeName || 'Employee'} (${emp.employeeId || emp.designation || 'Employee'})`;
+                    })
+                    .join(', ')}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ),
+      });
+    }
+
+    if (todaysHolidays.length > 0) {
+      slides.push({
+        id: 'holiday',
+        node: (
+          <Card
+            style={[styles.holidayHighlightCard, { marginBottom: 0 }]}
+            onPress={() => {
+              setCalendarTab('holidays');
+              setCalendarModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.birthdayRow}>
+              <View style={styles.holidayIconWrap}>
+                <Ionicons name="sparkles" size={20} color="#15803D" />
+                <View style={styles.holidayBadgeMini}>
+                  <Text style={{ fontSize: 9 }}>🎉</Text>
+                </View>
+              </View>
+              <View style={{ flex: 1, marginLeft: SPACING.md }}>
+                <View style={styles.highlightHeaderRow}>
+                  <Text style={styles.holidayHighlightTitle}>Today is a Company Holiday! 🎉</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#15803D" />
+                </View>
+                <Text style={styles.holidayHighlightText} numberOfLines={2}>
+                  {todaysHolidays.map((h) => h.holidayName).join(' • ')}
+                  {todaysHolidays[0]?.description ? ` (${todaysHolidays[0].description})` : ''}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ),
+      });
+    }
+
+    return slides;
+  }, [todayBirthdays, todaysLeaves, todaysHolidays]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -131,179 +328,48 @@ export const AdminDashboardScreen = ({ navigation }) => {
 
         {loading && !refreshing ? (
           <LoadingIndicator message="Loading dashboard analytics..." />
-        ) : (
-          <>
-            {/* Birthday Celebration Highlight */}
-            {todayBirthdays.length > 0 && (
-              <Card style={styles.birthdayHighlightCard}>
-                <View style={styles.birthdayRow}>
-                  {todayBirthdays.length === 1 ? (
-                    <View style={styles.birthdayAvatarWrapper}>
-                      {todayBirthdays[0].avatar ? (
-                        <Image
-                          source={{
-                            uri:
-                              typeof todayBirthdays[0].avatar === 'string'
-                                ? todayBirthdays[0].avatar
-                                : todayBirthdays[0].avatar.url,
-                          }}
-                          style={styles.birthdayAvatarImg}
-                        />
-                      ) : (
-                        <View style={styles.birthdayAvatarLettersWrap}>
-                          <Text style={styles.birthdayAvatarLetters}>
-                            {(todayBirthdays[0].employeeName || 'U').substring(0, 2).toUpperCase()}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={styles.birthdayBadgeMini}>
-                        <Text style={{ fontSize: 9 }}>🎂</Text>
-                      </View>
-                    </View>
-                  ) : (
-                    <View style={styles.multiAvatarRow}>
-                      {todayBirthdays.slice(0, 3).map((b, idx) => {
-                        const avUrl = typeof b.avatar === 'string' ? b.avatar : b.avatar?.url;
-                        return (
-                          <View
-                            key={b._id || idx}
-                            style={[styles.stackedAvatar, { marginLeft: idx > 0 ? -12 : 0 }]}
-                          >
-                            {avUrl ? (
-                              <Image source={{ uri: avUrl }} style={styles.stackedAvatarImg} />
-                            ) : (
-                              <View style={styles.stackedAvatarLettersWrap}>
-                                <Text style={styles.stackedAvatarLetters}>
-                                  {(b.employeeName || 'U').substring(0, 1).toUpperCase()}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-                      <View style={styles.birthdayBadgeMini}>
-                        <Text style={{ fontSize: 9 }}>🎂</Text>
-                      </View>
-                    </View>
-                  )}
-                  <View style={{ flex: 1, marginLeft: SPACING.md }}>
-                    <Text style={styles.birthdayTitle}>Today's Birthday Celebration! 🎂</Text>
-                    <Text style={styles.birthdayText}>
-                      {todayBirthdays
-                        .map((b) => `${b.employeeName} (${b.employeeId || b.designation})`)
-                        .join(', ')}
-                    </Text>
-                  </View>
-                </View>
-              </Card>
+               {/* Sliding Highlight Banners (Birthday, On-Leave, Holiday) */}
+            {highlightSlides.length === 1 && (
+              <View style={{ marginBottom: SPACING.md }}>
+                {highlightSlides[0].node}
+              </View>
             )}
 
-            {/* Staff On Leave Today Highlight Box */}
-            {todaysLeaves.length > 0 && (
-              <Card
-                style={styles.leaveHighlightCard}
-                onPress={() => {
-                  setCalendarTab('leaves');
-                  setCalendarModalVisible(true);
-                }}
-                activeOpacity={0.8}
-              >
-                <View style={styles.birthdayRow}>
-                  {todaysLeaves.length === 1 ? (
-                    (() => {
-                      const emp = todaysLeaves[0].employee || {};
-                      const avUrl = typeof emp.avatar === 'string' ? emp.avatar : emp.avatar?.url;
-                      return (
-                        <View style={styles.leaveAvatarWrapper}>
-                          {avUrl ? (
-                            <Image source={{ uri: avUrl }} style={styles.leaveHighlightAvatarImg} />
-                          ) : (
-                            <View style={styles.leaveAvatarLettersWrap}>
-                              <Text style={styles.leaveAvatarLetters}>
-                                {(emp.employeeName || 'U').substring(0, 2).toUpperCase()}
-                              </Text>
-                            </View>
-                          )}
-                          <View style={styles.leaveBadgeMini}>
-                            <Text style={{ fontSize: 9 }}>🌴</Text>
-                          </View>
-                        </View>
-                      );
-                    })()
-                  ) : (
-                    <View style={styles.multiAvatarRow}>
-                      {todaysLeaves.slice(0, 3).map((l, idx) => {
-                        const emp = l.employee || {};
-                        const avUrl = typeof emp.avatar === 'string' ? emp.avatar : emp.avatar?.url;
-                        return (
-                          <View
-                            key={l._id || idx}
-                            style={[styles.stackedAvatar, { marginLeft: idx > 0 ? -12 : 0 }]}
-                          >
-                            {avUrl ? (
-                              <Image source={{ uri: avUrl }} style={styles.leaveStackedAvatarImg} />
-                            ) : (
-                              <View style={styles.leaveStackedAvatarLettersWrap}>
-                                <Text style={styles.leaveStackedAvatarLetters}>
-                                  {(emp.employeeName || 'U').substring(0, 1).toUpperCase()}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-                      <View style={styles.leaveBadgeMini}>
-                        <Text style={{ fontSize: 9 }}>🌴</Text>
-                      </View>
+            {highlightSlides.length > 1 && (
+              <View style={styles.carouselContainer}>
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onScroll={(e) => {
+                    const offsetX = e.nativeEvent.contentOffset.x;
+                    const idx = Math.round(offsetX / SLIDE_WIDTH);
+                    if (idx !== activeHighlightIndex) {
+                      setActiveHighlightIndex(idx);
+                    }
+                  }}
+                  scrollEventThrottle={16}
+                >
+                  {highlightSlides.map((slide) => (
+                    <View key={slide.id} style={{ width: SLIDE_WIDTH }}>
+                      {slide.node}
                     </View>
-                  )}
-                  <View style={{ flex: 1, marginLeft: SPACING.md }}>
-                    <View style={styles.highlightHeaderRow}>
-                      <Text style={styles.leaveHighlightTitle}>Staff On Leave Today 🌴</Text>
-                      <Ionicons name="chevron-forward" size={14} color="#2563EB" />
-                    </View>
-                    <Text style={styles.leaveHighlightText} numberOfLines={2}>
-                      {todaysLeaves
-                        .map((l) => {
-                          const emp = l.employee || {};
-                          return `${emp.employeeName || 'Employee'} (${emp.employeeId || emp.designation || 'Staff'})`;
-                        })
-                        .join(', ')}
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-            )}
+                  ))}
+                </ScrollView>
 
-            {/* Company Holiday Today Highlight Box */}
-            {todaysHolidays.length > 0 && (
-              <Card
-                style={styles.holidayHighlightCard}
-                onPress={() => {
-                  setCalendarTab('holidays');
-                  setCalendarModalVisible(true);
-                }}
-                activeOpacity={0.8}
-              >
-                <View style={styles.birthdayRow}>
-                  <View style={styles.holidayIconWrap}>
-                    <Ionicons name="sparkles" size={20} color="#15803D" />
-                    <View style={styles.holidayBadgeMini}>
-                      <Text style={{ fontSize: 9 }}>🎉</Text>
-                    </View>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: SPACING.md }}>
-                    <View style={styles.highlightHeaderRow}>
-                      <Text style={styles.holidayHighlightTitle}>Today is a Company Holiday! 🎉</Text>
-                      <Ionicons name="chevron-forward" size={14} color="#15803D" />
-                    </View>
-                    <Text style={styles.holidayHighlightText} numberOfLines={2}>
-                      {todaysHolidays.map((h) => h.holidayName).join(' • ')}
-                      {todaysHolidays[0]?.description ? ` (${todaysHolidays[0].description})` : ''}
-                    </Text>
-                  </View>
+                {/* Carousel Pagination Dots */}
+                <View style={styles.carouselDotsRow}>
+                  {highlightSlides.map((s, dotIdx) => (
+                    <View
+                      key={s.id}
+                      style={[
+                        styles.carouselDot,
+                        activeHighlightIndex === dotIdx && styles.carouselDotActive,
+                      ]}
+                    />
+                  ))}
                 </View>
-              </Card>
+              </View>
             )}
 
             {/* Metric Grid */}
@@ -345,7 +411,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
                 <Text style={styles.metricValue}>
                   {metrics.todaySubmittedDuties ?? 0}
                 </Text>
-                <Text style={styles.metricLabel}>Today's Duties</Text>
+                <Text style={styles.metricLabel}>Today's Works</Text>
               </Card>
 
               <Card
@@ -395,9 +461,9 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </View>
             </Card>
 
-            {/* Recent Duty Submissions */}
+            {/* Recent Work Submissions */}
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Recent Duty Activity</Text>
+              <Text style={styles.sectionTitle}>Recent Work Activity</Text>
               <TouchableOpacity onPress={() => navigation.navigate('DutiesTab')}>
                 <Text style={styles.viewAllText}>View All</Text>
               </TouchableOpacity>
@@ -405,7 +471,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
 
             {recentDuties.length === 0 ? (
               <Card>
-                <Text style={styles.emptyText}>No recent duties submitted</Text>
+                <Text style={styles.emptyText}>No recent works submitted</Text>
               </Card>
             ) : (
               recentDuties.map((duty) => (
@@ -876,6 +942,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  carouselContainer: {
+    marginBottom: SPACING.md,
+  },
+  carouselDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  carouselDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#CBD5E1',
+  },
+  carouselDotActive: {
+    width: 18,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
   },
   birthdayHighlightCard: {
     backgroundColor: '#FFFBEB',

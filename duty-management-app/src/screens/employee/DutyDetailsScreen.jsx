@@ -60,7 +60,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           }
         }
       } catch (err) {
-        setError(extractErrorMessage(err, 'Failed to load duty report details'));
+        setError(extractErrorMessage(err, 'Failed to load work report details'));
       } finally {
         setLoading(false);
       }
@@ -72,7 +72,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <ScreenHeader title="Duty Details" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Work Details" onBack={() => navigation.goBack()} />
         <LoadingIndicator message="Loading report..." fullScreen />
       </SafeAreaView>
     );
@@ -81,7 +81,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   if (error || !duty) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <ScreenHeader title="Duty Details" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Work Details" onBack={() => navigation.goBack()} />
         <View style={styles.errorContainer}>
           <ErrorMessage message={error || 'Report not found'} />
         </View>
@@ -93,7 +93,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
     isAdmin ||
     (user && duty?.employee && (duty.employee._id === user._id || duty.employee === user._id));
   const canDelete = isAdmin;
-  const displayDutyId = duty.dutyId || ('DUTY-' + duty._id.substring(duty._id.length - 6).toUpperCase());
+  const displayDutyId = duty.dutyId || ('WORK-' + duty._id.substring(duty._id.length - 6).toUpperCase());
 
   const signatureTimestamp = duty.customerSignature?.signedAt
     ? new Date(duty.customerSignature.signedAt).toLocaleDateString('en-IN', {
@@ -132,7 +132,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
-        title="Duty Visit Details"
+        title="Work Visit Details"
         subtitle={`Report #${displayDutyId}`}
         onBack={() => navigation.goBack()}
       />
@@ -315,7 +315,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
                 activeOpacity={0.8}
               >
                 <Ionicons name="create-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.actionBtnText}>Edit Duty Report</Text>
+                <Text style={styles.actionBtnText}>Edit Work Report</Text>
               </TouchableOpacity>
             )}
 
@@ -324,8 +324,8 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
                 style={[styles.actionBtn, styles.deleteBtn]}
                 onPress={() => {
                   Alert.alert(
-                    'Delete Duty Report',
-                    'Are you sure you want to permanently delete this duty record?',
+                    'Delete Work Report',
+                    'Are you sure you want to permanently delete this work record?',
                     [
                       { text: 'Cancel', style: 'cancel' },
                       {
@@ -334,11 +334,11 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
                         onPress: async () => {
                           try {
                             await dutyApi.deleteDuty(duty._id);
-                            Alert.alert('Deleted', 'Duty report deleted successfully.', [
+                            Alert.alert('Deleted', 'Work report deleted successfully.', [
                               { text: 'OK', onPress: () => navigation.goBack() },
                             ]);
                           } catch (delErr) {
-                            Alert.alert('Delete Failed', extractErrorMessage(delErr, 'Failed to delete duty'));
+                            Alert.alert('Delete Failed', extractErrorMessage(delErr, 'Failed to delete work report'));
                           }
                         },
                       },

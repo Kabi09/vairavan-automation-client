@@ -21,7 +21,15 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['leave_request', 'leave_reviewed', 'duty_submitted', 'holiday_created'],
+      enum: [
+        'leave_request',
+        'leave_reviewed',
+        'duty_submitted',
+        'work_submitted',
+        'holiday_created',
+        'holiday',
+        'announcement',
+      ],
       default: 'leave_request',
       index: true,
     },
@@ -35,23 +43,30 @@ const notificationSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    data: {
-      leaveId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Leave',
+    data: new mongoose.Schema(
+      {
+        leaveId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Leave',
+        },
+        employeeId: String,
+        employeeName: String,
+        reason: String,
+        startDate: Date,
+        endDate: Date,
+        status: String,
+        adminRemarks: String,
+        holidayId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Holiday',
+        },
+        holidayName: String,
+        holidayDate: String,
+        workId: String,
+        dutyId: String,
       },
-      employeeId: String,
-      employeeName: String,
-      reason: String,
-      startDate: Date,
-      endDate: Date,
-      status: {
-        type: String,
-        enum: ['pending', 'approved', 'rejected'],
-        default: 'pending',
-      },
-      adminRemarks: String,
-    },
+      { _id: false, strict: false }
+    ),
     isRead: {
       type: Boolean,
       default: false,

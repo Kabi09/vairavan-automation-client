@@ -209,7 +209,7 @@ export const MyDutiesScreen = ({ navigation }) => {
   }, [duties, selectedCompanyId, selectedStatus, startDate, endDate, search]);
 
   const renderDutyItem = ({ item }) => {
-    const dutyId = item.dutyId || ('DUTY-' + (item._id || '').slice(-6).toUpperCase());
+    const dutyId = item.dutyId || ('WORK-' + (item._id || '').slice(-4).toUpperCase());
 
     return (
       <Card
@@ -268,7 +268,7 @@ export const MyDutiesScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
-        title="My Duty Reports"
+        title="My Works"
         subtitle="Your field service visit logs"
         rightAction={
           <View style={styles.headerActions}>
@@ -391,7 +391,7 @@ export const MyDutiesScreen = ({ navigation }) => {
         <ErrorMessage message={error} onRetry={fetchDuties} />
 
         {loading && !refreshing ? (
-          <LoadingIndicator message="Loading duty records..." />
+          <LoadingIndicator message="Loading work records..." />
         ) : (
           <FlatList
             data={filteredDuties}
@@ -410,14 +410,14 @@ export const MyDutiesScreen = ({ navigation }) => {
                 icon="document-text-outline"
                 title={
                   search
-                    ? 'No Matching Duties'
+                    ? 'No Matching Works'
                     : hasActiveFilters
-                    ? 'No Duties Match Filters'
-                    : 'No Duty Reports Found'
+                    ? 'No Works Match Filters'
+                    : 'No Work Reports Found'
                 }
                 description={
                   search
-                    ? `No duties match "${search}". Try searching another name, phone, or company.`
+                    ? `No works match "${search}". Try searching another name, phone, or company.`
                     : hasActiveFilters
                     ? 'Try adjusting your date range, company, or status filter.'
                     : 'Log your service visits by tapping "New" above.'
@@ -427,7 +427,7 @@ export const MyDutiesScreen = ({ navigation }) => {
                     ? 'Clear Search'
                     : hasActiveFilters
                     ? 'Clear Filters'
-                    : 'Submit Duty Report'
+                    : 'Submit Work Report'
                 }
                 onAction={
                   search

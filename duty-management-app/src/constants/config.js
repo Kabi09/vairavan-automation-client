@@ -5,7 +5,7 @@ export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || 'https://vairavan-automation-client-iony.vercel.app/api';
 
 export const APP_CONFIG = {
-  APP_NAME: 'Vairavan Duty Manager',
+  APP_NAME: 'Vairavan Work Manager',
   COMPANY_NAME: 'Vairavan Automation',
   REQUEST_TIMEOUT_MS: 15000,
   WORK_TYPES: [

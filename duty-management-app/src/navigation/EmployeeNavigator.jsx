@@ -75,13 +75,13 @@ const EmployeeTabs = () => {
       <Tab.Screen
         name="MyDutiesTab"
         component={MyDutiesScreen}
-        options={{ tabBarLabel: 'My Duties' }}
+        options={{ tabBarLabel: 'My Works' }}
       />
       <Tab.Screen
         name="SubmitDutyTab"
         component={DutyFormScreen}
         options={{
-          tabBarLabel: 'New Duty',
+          tabBarLabel: 'New Work',
           tabBarActiveTintColor: COLORS.primary,
         }}
       />

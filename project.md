@@ -1266,19 +1266,65 @@
 - Reason: User requested: "birthday -that employee small avator also show ; fix".
 - Impact: Engaging, visually personal birthday celebrations with employee photos.
 
+### 2026-10-13
+#### Automatic Phone Downloads, Sliding Highlights Carousel, Interactive Notifications, Work/Employee Nomenclature, and Sequential Work IDs
+- What was changed:
+  - **1. Automatic Chrome-like Phone Downloads (`exportUtils.js`)**:
+    - Replaced the repetitive folder prompt on Android with a persistent permission model using `expo-secure-store` (`saved_download_directory_uri`).
+    - On first export, prompts user once via `StorageAccessFramework.requestDirectoryPermissionsAsync()` to select their destination folder (e.g. Downloads).
+    - Stores the granted directory URI in encrypted SecureStore; all subsequent downloads automatically save files directly into that folder without opening the folder picker dialog.
+    - If folder permissions are ever revoked or invalid, gracefully falls back to prompt and re-saves the new URI.
+  - **2. Sliding Horizontal Carousel for Dashboard Highlights (`AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`)**:
+    - Converted vertically stacked Birthday, On-Leave, and Holiday highlight boxes into a horizontal swipeable carousel (`ScrollView` with `horizontal`, `pagingEnabled`, and `showsHorizontalScrollIndicator={false}`).
+    - Added animated pagination dot indicators below the carousel reflecting the active card index.
+  - **3. Notification Flow Verification & Deep-Link Navigation (`holidayController.js`, `leaveController.js`, `Notification.js`, `NotificationsScreen.jsx`)**:
+    - Verified leave application notifies Admins only (`recipientRole: 'admin'`, `notifyAdmins`).
+    - Verified leave review (approval/rejection) notifies the specific applying Employee (`recipient: leave.employee._id`, `sendNotificationToUser`).
+    - Enhanced holiday creation to generate in-app `Notification` with `recipientRole: 'employee'` and trigger FCM broadcast via `notifyAllEmployees`.
+    - Updated `Notification` schema data to preserve `ref: 'Leave'` on `leaveId` while enabling flexible metadata (`strict: false`).
+    - Made notification cards interactive in `NotificationsScreen.jsx`: tapping marks notification as read (decreasing local and global badge counters) and navigates directly to the target screen (`HolidayManagement`/`HolidayList`, `LeavesTab`, or `DutyDetails`/`DutiesTab`).
+  - **4. Project-Wide Nomenclature: Duty -> Work & Staff -> Employee**:
+    - Updated navigation tabs: "Duties" -> "Works", "Staff" -> "Employees", "My Duties" -> "My Works", "New Duty" -> "New Work".
+    - Updated screen titles, action buttons, table columns, export titles, empty states, and config across `AllDutiesScreen.jsx`, `MyDutiesScreen.jsx`, `DutyDetailsScreen.jsx`, `DutyFormScreen.jsx`, `EmployeeListScreen.jsx`, `LeaveRequestsScreen.jsx`, `NotificationsScreen.jsx`, and `config.js` (`Vairavan Work Manager`).
+  - **5. 4-Digit Sequential Work ID Series (`WORK-1000`, `WORK-1001`...)**:
+    - Created atomic `Counter` model (`getNextSequence('workId', 1000)`).
+    - Updated `Duty.js` pre-save hook to generate sequential IDs starting at `WORK-1000` (`WORK-1001`, `WORK-1002`...).
+    - Executed database backfill script: migrated all existing duties in database `vairavan_auto23` to sequential IDs `WORK-1000` through `WORK-1012` and set the counter to 1012.
+- Files changed:
+  - `backend/src/models/Counter.js` (New)
+  - `backend/src/models/Duty.js`
+  - `backend/src/models/Notification.js`
+  - `backend/src/controllers/holidayController.js`
+  - `backend/src/scripts/backfillWorkIds.js` (New)
+  - `duty-management-app/src/constants/config.js`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/navigation/EmployeeNavigator.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyDutiesScreen.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `project.md`
+- Logic changed:
+  - Exports auto-download without repeated folder selection prompts.
+  - Dashboard highlight banners swipe horizontally.
+  - Notifications decrease unread counter on tap and navigate directly to details.
+  - Work IDs are atomic 4-digit sequential strings (`WORK-1000`, etc.).
+- Reason: User requested automatic Chrome-like downloads, sliding highlight cards, verified notification rules with deep linking, Work/Employee nomenclature, and sequential 4-digit work IDs.
+- Impact: Streamlined exporting, interactive notification workflows, consistent nomenclature, and clean sequential record tracking.
+
 ## Current Progress
 - Completed:
-  - Android Standalone APK Build: Configured `usesCleartextTraffic: true` under `android` in `app.json`, resolving HTTP picture loading for Cloudflare R2 images (`http://www.dudez.in`) in release builds.
-  - Admin Calendar On-Leave Avatar: Fixed avatar image rendering in Calendar modal on-leave attendee list.
-  - Top Dashboard Highlight Boxes: Added distinct On-Leave Today and Company Holiday Today hero cards running concurrently with Birthday celebration cards across Admin and Employee dashboards.
-  - Backend Dashboard Controller: Enhanced with `todaysHolidays` and company-wide `todaysLeaves` queries.
-  - Employee Duty Form: Client company selector upgraded to searchable modal dropdown picker with site subtitle and auto-fill customer phone.
-  - Employee My Duties: Multi-criteria filter options added with Date presets, Custom date range, Client company picker, Status chips, active filter summary pills, and centered dialog modal.
-  - Employee My Leaves: Segmented status tabs (`All`, `Pending`, `Approved`, `Rejected`, `Cancelled`) with dynamic badge counters and responsive empty states.
-  - Duty customer signature upload to Cloudflare R2 supporting both JSON SVG strings and multipart files.
-  - Universal `SignatureImage` component rendering vector SVGs and raster images across Employee Duty Details, Admin All Duties modal, Company Details, and Employee Details screens.
-  - Interactive DatePickerModal with instant Month selector grid (12 months) and scrollable Year selector grid (1950 - 2050).
-  - Employee small avatar rendering across Admin and Employee birthday celebration banners and Monthly Highlights modal.
+  - Automatic Phone Download: Persisted SAF directory URI via `SecureStore` in `exportUtils.js`, allowing downloads to save directly without prompt after initial authorization.
+  - Dashboard Highlight Carousel: Horizontal swipeable carousel with indicator dots for Birthdays, On-Leave, and Holidays across Admin and Employee dashboards.
+  - Notification Routing & Badge Decrement: Leave creation notifies admins only; leave review notifies employee; holiday creation notifies all employees; tapping notification marks it as read, decreases badge count, and navigates to the relevant detail screen.
+  - Nomenclature Alignment: Duty/Duties changed to Work/Works; Staff changed to Employee across navigation, headers, export titles, buttons, and empty states.
+  - Sequential 4-Digit Work IDs: Atomic counter generates `WORK-1000`, `WORK-1001`... with full database migration backfill completed.
   - 34/34 backend unit tests passing; 0 syntax errors across all mobile screens.
 - In Progress:
   - None.
@@ -1291,6 +1337,14 @@
 - Notes: Mobile frontend connects to live API at `https://vairavan-automation-client-iony.vercel.app/api`.
 
 ## Technical Decisions
+- Decision: Persist Android StorageAccessFramework directory URI in `expo-secure-store`.
+  Reason: Android SAF requires user permission to write files to public folders like Downloads. Persisting the granted URI enables Chrome-like automatic downloads without prompting folder selection on every export.
+  Date: 2026-10-13
+
+- Decision: Atomic MongoDB sequence counter for sequential Work IDs.
+  Reason: Ensures collision-free, strictly monotonic 4-digit work identifiers (`WORK-1000`, `WORK-1001`...) across concurrent submissions.
+  Date: 2026-10-13
+
 - Decision: Enable `usesCleartextTraffic: true` in `app.json` for Android.
   Reason: Cloudflare R2 image URLs configured with HTTP (`http://www.dudez.in`) were blocked by Android 9+ default cleartext security policy in standalone release APKs.
   Date: 2026-10-13

@@ -396,20 +396,20 @@ export const DutyFormScreen = ({ navigation, route }) => {
       if (isEditing) {
         await dutyApi.updateDuty(dutyToEdit._id, payload);
         Alert.alert(
-          'Duty Report Updated',
+          'Work Report Updated',
           'Your service visit report has been updated successfully.',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       } else {
         await dutyApi.createDuty(payload);
         Alert.alert(
-          'Duty Report Submitted',
+          'Work Report Submitted',
           'Your service visit report has been submitted successfully for manager review.',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       }
     } catch (err) {
-      setError(extractErrorMessage(err, isEditing ? 'Failed to update duty report' : 'Failed to submit duty report'));
+      setError(extractErrorMessage(err, isEditing ? 'Failed to update work report' : 'Failed to submit work report'));
     } finally {
       setLoading(false);
     }
@@ -418,7 +418,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
-        title={isEditing ? 'Edit Duty Report' : 'Submit Duty Report'}
+        title={isEditing ? 'Edit Work Report' : 'Submit Work Report'}
         subtitle={isEditing ? `Report #${(dutyToEdit.dutyId || dutyToEdit._id.slice(-6)).toUpperCase()}` : 'Log service visit and customer verification'}
         onBack={() => navigation.goBack()}
       />
@@ -440,7 +440,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
             <View style={styles.datePickerRow}>
               <View style={{ flex: 1 }}>
                 <TextInputField
-                  label="Duty Date (YYYY-MM-DD)"
+                  label="Work Date (YYYY-MM-DD)"
                   value={dutyDate}
                   onChangeText={setDutyDate}
                   placeholder="YYYY-MM-DD"
@@ -768,7 +768,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
           </Card>
 
           <PrimaryButton
-            title={isEditing ? 'Save Changes' : 'Submit Duty Report'}
+            title={isEditing ? 'Save Changes' : 'Submit Work Report'}
             onPress={handleSubmit}
             loading={loading}
             style={styles.submitBtn}
@@ -797,7 +797,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
         value={dutyDate}
         onSelect={setDutyDate}
         onClose={() => setDatePickerVisible(false)}
-        title="Select Duty Date"
+        title="Select Work Date"
       />
 
       <TimePickerModal

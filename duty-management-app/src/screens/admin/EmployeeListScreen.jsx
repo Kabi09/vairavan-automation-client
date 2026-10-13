@@ -113,16 +113,16 @@ export const EmployeeListScreen = ({ navigation }) => {
 
   const handleExportPDF = () => {
     exportEmployeesToPDF({
-      title: 'Staff Directory',
+      title: 'Employee Directory',
       subtitle: 'Employee Profiles & Credentials',
       employees,
-      filterInfo: search ? `Filter: "${search}"` : 'All Registered Staff',
+      filterInfo: search ? `Filter: "${search}"` : 'All Registered Employees',
     });
   };
 
   const handleExportExcel = () => {
     exportEmployeesToExcel({
-      filename: 'Staff_Directory',
+      filename: 'Employee_Directory',
       employees,
     });
   };
@@ -148,7 +148,7 @@ export const EmployeeListScreen = ({ navigation }) => {
             ) : null}
           </View>
           <Text style={styles.employeeSub}>
-            ID: {item.employeeId} • {item.designation || 'Staff'}
+            ID: {item.employeeId} • {item.designation || 'Employee'}
           </Text>
           <Text style={styles.employeeEmail}>{item.email}</Text>
         </View>
@@ -265,7 +265,7 @@ export const EmployeeListScreen = ({ navigation }) => {
                 description={
                   search
                     ? `No employees matching "${search}".`
-                    : 'Register your staff and service technicians.'
+                    : 'Register your employees and service technicians.'
                 }
                 actionTitle="Add New Employee"
                 onAction={() => navigation.navigate('EmployeeForm')}

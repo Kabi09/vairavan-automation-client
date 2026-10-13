@@ -1,9 +1,12 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as SecureStore from 'expo-secure-store';
 import { Alert, Platform } from 'react-native';
 
 const LOGO_URL =
   'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
+
+const SAVED_DOWNLOAD_DIR_KEY = 'saved_download_directory_uri';
 
 /**
  * Format date nicely for display
@@ -59,8 +62,62 @@ const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle,
         } catch {}
       }
 
-      // Android: Save to user's selected directory (e.g. Downloads) via StorageAccessFramework
+      // Android: Save automatically to user's saved directory (e.g. Downloads) or request once initially
       if (Platform.OS === 'android' && LegacyFS && LegacyFS.StorageAccessFramework) {
+        // Prepare base64 data first
+        let base64Data = '';
+        if (fileUri) {
+          base64Data = await LegacyFS.readAsStringAsync(fileUri, {
+            encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+          });
+        } else if (content) {
+          try {
+            const tempCachePath = `${LegacyFS.cacheDirectory || ''}temp_export_${Date.now()}`;
+            await LegacyFS.writeAsStringAsync(tempCachePath, content, {
+              encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.UTF8 : 'utf8',
+            });
+            base64Data = await LegacyFS.readAsStringAsync(tempCachePath, {
+              encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+            });
+          } catch (convErr) {
+            base64Data = '';
+          }
+        }
+
+        // 1. Check if user previously granted & saved directory permission (Chrome-like automatic download)
+        let savedDirectoryUri = null;
+        try {
+          savedDirectoryUri = await SecureStore.getItemAsync(SAVED_DOWNLOAD_DIR_KEY);
+        } catch (e) {
+          savedDirectoryUri = null;
+        }
+
+        if (savedDirectoryUri) {
+          try {
+            const createdFileUri = await LegacyFS.StorageAccessFramework.createFileAsync(
+              savedDirectoryUri,
+              filename,
+              mimeType
+            );
+
+            await LegacyFS.writeAsStringAsync(createdFileUri, base64Data, {
+              encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+            });
+
+            Alert.alert(
+              'Download Complete',
+              `File automatically downloaded to your device:\n\n${filename}`
+            );
+            return;
+          } catch (autoSaveErr) {
+            console.warn('Auto-save to saved directory failed, prompting directory permission:', autoSaveErr);
+            // In case the directory permission was revoked or folder moved, clear saved key and prompt
+            await SecureStore.deleteItemAsync(SAVED_DOWNLOAD_DIR_KEY).catch(() => {});
+            savedDirectoryUri = null;
+          }
+        }
+
+        // 2. Initial stage permission request if no saved directory or if auto-save failed
         let permissions = null;
         try {
           permissions = await LegacyFS.StorageAccessFramework.requestDirectoryPermissionsAsync();
@@ -68,24 +125,12 @@ const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle,
           permissions = { granted: false };
         }
 
-        if (permissions && permissions.granted) {
-          let base64Data = '';
-          if (fileUri) {
-            base64Data = await LegacyFS.readAsStringAsync(fileUri, {
-              encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
-            });
-          } else if (content) {
-            try {
-              const tempCachePath = `${LegacyFS.cacheDirectory || ''}temp_export_${Date.now()}`;
-              await LegacyFS.writeAsStringAsync(tempCachePath, content, {
-                encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.UTF8 : 'utf8',
-              });
-              base64Data = await LegacyFS.readAsStringAsync(tempCachePath, {
-                encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
-              });
-            } catch (convErr) {
-              base64Data = '';
-            }
+        if (permissions && permissions.granted && permissions.directoryUri) {
+          // Persist the granted directory URI so future downloads are completely automatic!
+          try {
+            await SecureStore.setItemAsync(SAVED_DOWNLOAD_DIR_KEY, permissions.directoryUri);
+          } catch (storeErr) {
+            console.warn('Could not persist download directory URI:', storeErr);
           }
 
           const createdFileUri = await LegacyFS.StorageAccessFramework.createFileAsync(
@@ -100,7 +145,7 @@ const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle,
 
           Alert.alert(
             'Download Complete',
-            `File saved successfully to your selected folder:\n\n${filename}`
+            `File saved successfully:\n\n${filename}\n\nFuture downloads will save automatically without asking for a folder!`
           );
           return;
         } else {
@@ -126,7 +171,7 @@ const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle,
       if (isSharingAvailable && fileUri) {
         Alert.alert(
           'Download Notice',
-          'Direct folder save was cancelled. You can use the Share sheet to save to your files.',
+          'Direct save encountered an issue. You can use the Share sheet to save to your files.',
           [
             { text: 'Open Share', onPress: () => doShare() },
             { text: 'Cancel', style: 'cancel' },
@@ -225,16 +270,16 @@ const writeCsvFileAndShare = async (cleanFilename, csvContent, dialogTitle) => {
 };
 
 /**
- * Export duty records to PDF
+ * Export work records to PDF
  */
 export const exportDutiesToPDF = async ({
-  title = 'Duty Service Report',
+  title = 'Work Service Report',
   subtitle = 'Vairavan Automation Field Operations',
   duties = [],
   filterInfo = '',
 }) => {
   if (!duties || duties.length === 0) {
-    Alert.alert('No Records', 'There are no duty records to export for the selected filter.');
+    Alert.alert('No Records', 'There are no work records to export for the selected filter.');
     return;
   }
 
@@ -252,7 +297,7 @@ export const exportDutiesToPDF = async ({
 
     const rowsHtml = duties
       .map((d, index) => {
-        const dutyId = escapeHtml(d.dutyId || ('DUTY-' + (d._id || '').slice(-6).toUpperCase()));
+        const dutyId = escapeHtml(d.dutyId || ('WORK-' + (d._id || '').slice(-6).toUpperCase()));
         const empName = escapeHtml(d.employee?.employeeName || 'N/A');
         const empId = escapeHtml(d.employee?.employeeId || 'N/A');
         const compName = escapeHtml(d.company?.companyName || 'N/A');
@@ -338,7 +383,7 @@ export const exportDutiesToPDF = async ({
             <table class="card-table">
               <tr>
                 <td style="width: 50%;">
-                  <strong>Duty ID:</strong> ${dutyId}<br/>
+                  <strong>Work ID:</strong> ${dutyId}<br/>
                   <strong>Employee:</strong> ${empName} (${empId})<br/>
                   <strong>Company:</strong> ${compName} ${compLoc ? `• ${compLoc}` : ''}<br/>
                   <strong>Customer Contact:</strong> ${customer} (${customerPhone})<br/>
@@ -517,7 +562,7 @@ export const exportDutiesToPDF = async ({
             <img class="brand-logo" src="${LOGO_URL}" alt="Logo" onerror="this.style.display='none'" />
             <div>
               <div style="font-size: 16px; font-weight: 800; color: #0f172a;">VAIRAVAN AUTOMATION</div>
-              <div style="font-size: 11px; color: #64748b;">Industrial Field Service & Duty Management</div>
+              <div style="font-size: 11px; color: #64748b;">Industrial Field Service & Work Management</div>
             </div>
           </div>
           <div class="title-block">
@@ -528,13 +573,13 @@ export const exportDutiesToPDF = async ({
 
         <div class="filter-bar">
           <div><strong>Filter:</strong> ${escapeHtml(filterInfo || 'All Records')}</div>
-          <div><strong>Total Duties:</strong> ${duties.length} | <strong>Generated:</strong> ${generatedDate}</div>
+          <div><strong>Total Works:</strong> ${duties.length} | <strong>Generated:</strong> ${generatedDate}</div>
         </div>
 
         ${rowsHtml}
 
         <div class="footer-note">
-          Official Duty Report Record • Vairavan Automation Client System
+          Official Work Report Record • Vairavan Automation Client System
         </div>
       </body>
       </html>
@@ -560,22 +605,22 @@ export const exportDutiesToPDF = async ({
 };
 
 /**
- * Export duty records to Excel / CSV
+ * Export work records to Excel / CSV
  */
 export const exportDutiesToExcel = async ({
-  filename = 'Duty_Records',
+  filename = 'Work_Records',
   duties = [],
 }) => {
   if (!duties || duties.length === 0) {
-    Alert.alert('No Records', 'There are no duty records to export for the selected filter.');
+    Alert.alert('No Records', 'There are no work records to export for the selected filter.');
     return;
   }
 
   try {
     const headers = [
       'Sl No',
-      'Duty ID',
-      'Duty Date',
+      'Work ID',
+      'Work Date',
       'Employee ID',
       'Employee Name',
       'Employee Designation',
@@ -597,7 +642,7 @@ export const exportDutiesToExcel = async ({
     ];
 
     const rows = duties.map((d, index) => {
-      const dutyId = d.dutyId || ('DUTY-' + (d._id || '').slice(-6).toUpperCase());
+      const dutyId = d.dutyId || ('WORK-' + (d._id || '').slice(-6).toUpperCase());
       const empId = d.employee?.employeeId || '';
       const empName = d.employee?.employeeName || '';
       const empDesig = d.employee?.designation || '';
@@ -674,7 +719,7 @@ export const exportDutiesToExcel = async ({
  * Export leave records to PDF
  */
 export const exportLeavesToPDF = async ({
-  title = 'Staff Leave Records',
+  title = 'Employee Leave Records',
   subtitle = 'Vairavan Automation Leave Management',
   leaves = [],
   filterInfo = '',
@@ -698,9 +743,9 @@ export const exportLeavesToPDF = async ({
 
     const rowsHtml = leaves
       .map((l, index) => {
-        const empName = escapeHtml(l.employee?.employeeName || 'Staff Member');
+        const empName = escapeHtml(l.employee?.employeeName || 'Employee');
         const empId = escapeHtml(l.employee?.employeeId || 'N/A');
-        const empDesig = escapeHtml(l.employee?.designation || 'Staff');
+        const empDesig = escapeHtml(l.employee?.designation || 'Employee');
         const startDate = formatDate(l.startDate);
         const endDate = formatDate(l.endDate);
         const reason = escapeHtml(l.reason || 'N/A');
@@ -820,7 +865,7 @@ export const exportLeavesToPDF = async ({
             <img class="brand-logo" src="${LOGO_URL}" alt="Logo" />
             <div>
               <div style="font-size: 16px; font-weight: 800; color: #0f172a;">VAIRAVAN AUTOMATION</div>
-              <div style="font-size: 11px; color: #64748b;">Staff Operations & Leave Management</div>
+              <div style="font-size: 11px; color: #64748b;">Employee Operations & Leave Management</div>
             </div>
           </div>
           <div class="title-block">
@@ -851,7 +896,7 @@ export const exportLeavesToPDF = async ({
         </table>
 
         <div class="footer-note">
-          Official Staff Leave Documentation • Vairavan Automation System
+          Official Employee Leave Documentation • Vairavan Automation System
         </div>
       </body>
       </html>
@@ -949,7 +994,7 @@ export const exportLeavesToExcel = async ({
  */
 export const exportEmployeesToPDF = async ({
   title = 'Employee Directory',
-  subtitle = 'Vairavan Automation Staff Records',
+  subtitle = 'Vairavan Automation Employee Records',
   employees = [],
   filterInfo = '',
 }) => {
@@ -974,7 +1019,7 @@ export const exportEmployeesToPDF = async ({
       .map((emp, index) => {
         const empName = escapeHtml(emp.employeeName || 'N/A');
         const empId = escapeHtml(emp.employeeId || 'N/A');
-        const designation = escapeHtml(emp.designation || 'Staff');
+        const designation = escapeHtml(emp.designation || 'Employee');
         const phone = escapeHtml(emp.phoneNumber || 'N/A');
         const email = escapeHtml(emp.email || 'N/A');
         const role = escapeHtml(emp.role || 'employee');
@@ -1086,7 +1131,7 @@ export const exportEmployeesToPDF = async ({
             <img class="brand-logo" src="${LOGO_URL}" alt="Logo" />
             <div>
               <div style="font-size: 16px; font-weight: 800; color: #0f172a;">VAIRAVAN AUTOMATION</div>
-              <div style="font-size: 11px; color: #64748b;">Human Resources & Staff Directory</div>
+              <div style="font-size: 11px; color: #64748b;">Human Resources & Employee Directory</div>
             </div>
           </div>
           <div class="title-block">
@@ -1097,7 +1142,7 @@ export const exportEmployeesToPDF = async ({
 
         <div class="filter-bar">
           <div><strong>Filter:</strong> ${escapeHtml(filterInfo || 'Active Roster')}</div>
-          <div><strong>Total Staff:</strong> ${employees.length} | <strong>Generated:</strong> ${generatedDate}</div>
+          <div><strong>Total Employees:</strong> ${employees.length} | <strong>Generated:</strong> ${generatedDate}</div>
         </div>
 
         <table class="records-table">
@@ -1118,7 +1163,7 @@ export const exportEmployeesToPDF = async ({
         </table>
 
         <div class="footer-note">
-          Official Staff Directory • Vairavan Automation System
+          Official Employee Directory • Vairavan Automation System
         </div>
       </body>
       </html>

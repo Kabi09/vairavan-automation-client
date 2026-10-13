@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import Counter from './Counter.js';
 
 const auditTrailSchema = new mongoose.Schema(
   {
@@ -167,7 +168,7 @@ const dutySchema = new mongoose.Schema(
     toJSON: {
       transform: (doc, ret) => {
         if (!ret.dutyId && ret._id) {
-          ret.dutyId = `DUTY-${ret._id.toString().slice(-6).toUpperCase()}`;
+          ret.dutyId = `WORK-${ret._id.toString().slice(-4).toUpperCase()}`;
         }
         delete ret.__v;
         return ret;
@@ -176,11 +177,16 @@ const dutySchema = new mongoose.Schema(
   }
 );
 
-// Pre-save hook to generate readable dutyId if not already set
-dutySchema.pre('save', function (next) {
+// Pre-save hook to generate sequential 4-digit readable dutyId if not already set (e.g. WORK-1000, WORK-1001)
+dutySchema.pre('save', async function (next) {
   if (!this.dutyId) {
-    const idHex = (this._id || new mongoose.Types.ObjectId()).toString();
-    this.dutyId = `DUTY-${idHex.slice(-6).toUpperCase()}`;
+    try {
+      const seq = await Counter.getNextSequence('workId', 1000);
+      this.dutyId = `WORK-${seq}`;
+    } catch (err) {
+      const idHex = (this._id || new mongoose.Types.ObjectId()).toString();
+      this.dutyId = `WORK-${idHex.slice(-4).toUpperCase()}`;
+    }
   }
   if (typeof next === 'function') next();
 });

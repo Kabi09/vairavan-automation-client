@@ -9,6 +9,7 @@ import {
   Modal,
   Image,
   Linking,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +25,9 @@ import ErrorMessage from '../../components/ErrorMessage';
 import { formatDate, formatTime, getGreeting, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SLIDE_WIDTH = SCREEN_WIDTH - SPACING.md * 2;
 
 export const EmployeeDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -85,58 +89,16 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     });
   }, [data]);
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[COLORS.primary]}
-          />
-        }
-      >
-        {/* Header Greeting */}
-        <View style={styles.header}>
-          <View style={styles.headerTitleWrap}>
-            <Text style={styles.greeting}>{getGreeting()}</Text>
-            <Text style={styles.userName}>{user?.employeeName || 'Technician'}</Text>
-            <Text style={styles.designationText}>
-              ID: {user?.employeeId} • {user?.designation || 'Service Engineer'}
-            </Text>
-          </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.notificationBadgeBtn}
-              onPress={() => navigation.navigate('Notifications')}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
-              {unreadCount > 0 && (
-                <View style={styles.unreadDotBadge}>
-                  <Text style={styles.unreadBadgeText}>
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+  const [activeHighlightIndex, setActiveHighlightIndex] = useState(0);
 
-            <TouchableOpacity
-              style={styles.avatarButton}
-              onPress={() => navigation.navigate('Profile')}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="person-circle-outline" size={38} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
-        </View>
+  const highlightSlides = useMemo(() => {
+    const slides = [];
 
-        <ErrorMessage message={error} onRetry={fetchDashboard} />
-
-        {/* Birthday Celebration Highlights */}
-        {isMyBirthday ? (
-          <Card style={styles.personalBirthdayCard}>
+    if (isMyBirthday) {
+      slides.push({
+        id: 'birthday-me',
+        node: (
+          <Card style={[styles.personalBirthdayCard, { marginBottom: 0 }]}>
             <View style={styles.birthdayRow}>
               <View style={styles.birthdayAvatarWrapper}>
                 {user?.avatar ? (
@@ -165,8 +127,13 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               </View>
             </View>
           </Card>
-        ) : todayBirthdays.length > 0 ? (
-          <Card style={styles.teamBirthdayCard}>
+        ),
+      });
+    } else if (todayBirthdays.length > 0) {
+      slides.push({
+        id: 'birthday-team',
+        node: (
+          <Card style={[styles.teamBirthdayCard, { marginBottom: 0 }]}>
             <View style={styles.birthdayRow}>
               {todayBirthdays.length === 1 ? (
                 <View style={styles.birthdayAvatarWrapper}>
@@ -220,17 +187,21 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               <View style={{ flex: 1, marginLeft: SPACING.md }}>
                 <Text style={styles.teamBirthdayTitle}>Today's Team Birthday! 🎂</Text>
                 <Text style={styles.teamBirthdaySub}>
-                  {todayBirthdays.map((b) => `${b.employeeName} (${b.designation || 'Staff'})`).join(', ')}
+                  {todayBirthdays.map((b) => `${b.employeeName} (${b.designation || 'Employee'})`).join(', ')}
                 </Text>
               </View>
             </View>
           </Card>
-        ) : null}
+        ),
+      });
+    }
 
-        {/* Staff On Leave Today Highlight Box */}
-        {todaysLeaves.length > 0 ? (
+    if (todaysLeaves.length > 0) {
+      slides.push({
+        id: 'leave',
+        node: (
           <Card
-            style={styles.leaveHighlightCard}
+            style={[styles.leaveHighlightCard, { marginBottom: 0 }]}
             onPress={() => navigation.navigate('LeavesTab')}
             activeOpacity={0.8}
           >
@@ -285,26 +256,30 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               )}
               <View style={{ flex: 1, marginLeft: SPACING.md }}>
                 <View style={styles.highlightHeaderRow}>
-                  <Text style={styles.leaveHighlightTitle}>Colleagues On Leave Today 🌴</Text>
+                  <Text style={styles.leaveHighlightTitle}>Employees On Leave Today 🌴</Text>
                   <Ionicons name="chevron-forward" size={14} color="#2563EB" />
                 </View>
                 <Text style={styles.leaveHighlightText} numberOfLines={2}>
                   {todaysLeaves
                     .map((l) => {
                       const emp = l.employee || {};
-                      return `${emp.employeeName || 'Colleague'} (${emp.designation || 'Staff'})`;
+                      return `${emp.employeeName || 'Employee'} (${emp.designation || 'Employee'})`;
                     })
                     .join(', ')}
                 </Text>
               </View>
             </View>
           </Card>
-        ) : null}
+        ),
+      });
+    }
 
-        {/* Company Holiday Today Highlight Box */}
-        {todaysHolidays.length > 0 ? (
+    if (todaysHolidays.length > 0) {
+      slides.push({
+        id: 'holiday',
+        node: (
           <Card
-            style={styles.holidayHighlightCard}
+            style={[styles.holidayHighlightCard, { marginBottom: 0 }]}
             onPress={() => setHighlightsModalVisible(true)}
             activeOpacity={0.8}
           >
@@ -327,7 +302,105 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               </View>
             </View>
           </Card>
-        ) : null}
+        ),
+      });
+    }
+
+    return slides;
+  }, [isMyBirthday, todayBirthdays, todaysLeaves, todaysHolidays, user]);
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
+        {/* Header Greeting */}
+        <View style={styles.header}>
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+            <Text style={styles.userName}>{user?.employeeName || 'Technician'}</Text>
+            <Text style={styles.designationText}>
+              ID: {user?.employeeId} • {user?.designation || 'Service Engineer'}
+            </Text>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.notificationBadgeBtn}
+              onPress={() => navigation.navigate('Notifications')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
+              {unreadCount > 0 && (
+                <View style={styles.unreadDotBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.avatarButton}
+              onPress={() => navigation.navigate('Profile')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="person-circle-outline" size={38} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <ErrorMessage message={error} onRetry={fetchDashboard} />
+
+        {/* Sliding Highlight Banners (Birthday, On-Leave, Holiday) */}
+        {highlightSlides.length === 1 && (
+          <View style={{ marginBottom: SPACING.md }}>
+            {highlightSlides[0].node}
+          </View>
+        )}
+
+        {highlightSlides.length > 1 && (
+          <View style={styles.carouselContainer}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={(e) => {
+                const offsetX = e.nativeEvent.contentOffset.x;
+                const idx = Math.round(offsetX / SLIDE_WIDTH);
+                if (idx !== activeHighlightIndex) {
+                  setActiveHighlightIndex(idx);
+                }
+              }}
+              scrollEventThrottle={16}
+            >
+              {highlightSlides.map((slide) => (
+                <View key={slide.id} style={{ width: SLIDE_WIDTH }}>
+                  {slide.node}
+                </View>
+              ))}
+            </ScrollView>
+
+            {/* Carousel Pagination Dots */}
+            <View style={styles.carouselDotsRow}>
+              {highlightSlides.map((s, dotIdx) => (
+                <View
+                  key={s.id}
+                  style={[
+                    styles.carouselDot,
+                    activeHighlightIndex === dotIdx && styles.carouselDotActive,
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+        )}
 
         {loading && !refreshing ? (
           <LoadingIndicator message="Loading your dashboard..." />
@@ -343,7 +416,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                 <View style={[styles.quickActionIcon, { backgroundColor: '#DBEAFE' }]}>
                   <Ionicons name="add-circle" size={24} color={COLORS.primary} />
                 </View>
-                <Text style={styles.quickActionTitle}>Submit Duty</Text>
+                <Text style={styles.quickActionTitle}>Submit Work</Text>
                 <Text style={styles.quickActionSub}>Log visit</Text>
               </TouchableOpacity>
 
@@ -402,9 +475,9 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               </View>
             </Card>
 
-            {/* Today's Duty Reports */}
+            {/* Today's Work Visits */}
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeaderTitle}>Today's Duty Visits</Text>
+              <Text style={styles.sectionHeaderTitle}>Today's Work Visits</Text>
               <TouchableOpacity
                 style={styles.viewAllBtn}
                 onPress={() => navigation.navigate('MyDutiesTab')}
@@ -418,9 +491,9 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
             {todayDuties.length === 0 ? (
               <Card style={styles.emptyCard}>
                 <Ionicons name="clipboard-outline" size={32} color={COLORS.textMuted} />
-                <Text style={styles.emptyCardTitle}>No duties logged today</Text>
+                <Text style={styles.emptyCardTitle}>No works logged today</Text>
                 <Text style={styles.emptyCardSub}>
-                  Completed a visit? Tap 'Submit Duty' above to log your work.
+                  Completed a visit? Tap 'Submit Work' above to log your work.
                 </Text>
               </Card>
             ) : (
@@ -434,7 +507,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                     <View style={{ flex: 1, marginRight: 8 }}>
                       <Text style={styles.customerText}>{duty.customerName}</Text>
                       <Text style={styles.dutyIdBadgeText}>
-                        {duty.dutyId || `DUTY-${duty._id.slice(-6).toUpperCase()}`}
+                        {duty.dutyId || `WORK-${duty._id.slice(-4).toUpperCase()}`}
                       </Text>
                     </View>
                     <StatusBadge status={duty.status} />
@@ -889,6 +962,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 1,
+  },
+  carouselContainer: {
+    marginBottom: SPACING.md,
+  },
+  carouselDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  carouselDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#CBD5E1',
+  },
+  carouselDotActive: {
+    width: 18,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
   },
   personalBirthdayCard: {
     backgroundColor: '#FEF9C3',

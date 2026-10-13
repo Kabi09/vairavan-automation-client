@@ -81,7 +81,7 @@ const AdminTabs = () => {
       <Tab.Screen
         name="DutiesTab"
         component={AllDutiesScreen}
-        options={{ tabBarLabel: 'Duties' }}
+        options={{ tabBarLabel: 'Works' }}
       />
       <Tab.Screen
         name="CompaniesTab"
@@ -91,7 +91,7 @@ const AdminTabs = () => {
       <Tab.Screen
         name="EmployeesTab"
         component={EmployeeListScreen}
-        options={{ tabBarLabel: 'Staff' }}
+        options={{ tabBarLabel: 'Employees' }}
       />
       <Tab.Screen
         name="LeavesTab"
