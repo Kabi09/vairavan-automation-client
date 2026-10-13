@@ -17,6 +17,7 @@ import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
+import SignatureImage from '../../components/SignatureImage';
 import { formatDate, formatTime } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
@@ -185,10 +186,9 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Customer Signature Verification</Text>
             <View style={styles.signatureBox}>
-              <Image
-                source={{ uri: duty.customerSignature.url }}
-                style={styles.signatureImage}
-                resizeMode="contain"
+              <SignatureImage
+                uri={duty.customerSignature.url}
+                height={120}
               />
             </View>
           </Card>
@@ -199,10 +199,9 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Employee Signature Verification</Text>
             <View style={styles.signatureBox}>
-              <Image
-                source={{ uri: duty.signature.url }}
-                style={styles.signatureImage}
-                resizeMode="contain"
+              <SignatureImage
+                uri={duty.signature.url}
+                height={120}
               />
             </View>
           </Card>

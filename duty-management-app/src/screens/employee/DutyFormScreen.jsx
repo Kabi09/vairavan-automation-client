@@ -24,6 +24,7 @@ import TextInputField from '../../components/TextInputField';
 import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
 import SignaturePadModal from '../../components/SignaturePadModal';
+import SignatureImage from '../../components/SignatureImage';
 import DatePickerModal from '../../components/DatePickerModal';
 import TimePickerModal from '../../components/TimePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
@@ -208,14 +209,23 @@ export const DutyFormScreen = ({ navigation, route }) => {
       let uploadedPhotos = [];
 
       // 1. Upload signature if captured
-      if (signatureData?.dataUri) {
+      if (signatureData) {
         try {
-          const sigRes = await uploadApi.uploadSignature(signatureData.dataUri);
-          if (sigRes.data?.signature) {
+          const sigRes = await uploadApi.uploadSignature(signatureData);
+          if (sigRes.data?.signature?.url) {
             uploadedSignature = sigRes.data.signature;
+          } else if (sigRes.signature?.url) {
+            uploadedSignature = sigRes.signature;
           }
         } catch (uploadSigErr) {
           console.warn('Signature upload error:', uploadSigErr);
+          if (signatureData.dataUri) {
+            uploadedSignature = {
+              url: signatureData.dataUri,
+              publicId: 'inline-signature',
+              key: 'inline-signature',
+            };
+          }
         }
       }
 
@@ -513,15 +523,20 @@ export const DutyFormScreen = ({ navigation, route }) => {
             {/* Signature */}
             <Text style={styles.fieldLabel}>Customer Signature</Text>
             {signatureData ? (
-              <View style={styles.signaturePreviewContainer}>
-                <Ionicons name="checkmark-circle" size={22} color={COLORS.success} />
-                <Text style={styles.signatureSuccessText}>Customer signature captured</Text>
-                <TouchableOpacity
-                  onPress={() => setSignatureModalVisible(true)}
-                  style={styles.resignLink}
-                >
-                  <Text style={styles.resignLinkText}>Re-sign</Text>
-                </TouchableOpacity>
+              <View style={styles.signaturePreviewWrap}>
+                <View style={styles.signaturePreviewContainer}>
+                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                  <Text style={styles.signatureSuccessText}>Customer signature captured</Text>
+                  <TouchableOpacity
+                    onPress={() => setSignatureModalVisible(true)}
+                    style={styles.resignLink}
+                  >
+                    <Text style={styles.resignLinkText}>Re-sign</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.signatureThumbBox}>
+                  <SignatureImage uri={signatureData.dataUri} height={90} />
+                </View>
               </View>
             ) : (
               <SecondaryButton
@@ -756,14 +771,26 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: SPACING.xs,
   },
+  signaturePreviewWrap: {
+    marginBottom: SPACING.md,
+  },
   signaturePreviewContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.successLight,
-    padding: SPACING.md,
+    padding: SPACING.sm,
     borderRadius: RADIUS.md,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.xs,
     gap: SPACING.sm,
+  },
+  signatureThumbBox: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#FFFFFF',
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   signatureSuccessText: {
     fontSize: 13,

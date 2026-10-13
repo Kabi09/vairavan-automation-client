@@ -981,17 +981,56 @@
 - Reason: User requested: (1) Admin pending reviews card changed to Calendar showing today's leaves and holiday management/add; (2) Employee "My Duties (History & logs)" changed to "Highlights" showing this month's holidays first; (3) Date of birth profile support and birthday highlights for employees and admin.
 - Impact: Streamlined daily attendance visibility for admins, clear monthly holiday and birthday awareness for employees, and personal date-of-birth customization.
 
+### 2026-10-13
+#### Fix Customer Signature Storage & Display; Enhance DatePickerModal with Interactive Month & Year Selectors
+- What was changed:
+  - **Customer Signature Storage & Upload Fix**:
+    - **Backend Upload Middleware & Controller (`backend/src/middleware/upload.js`, `backend/src/controllers/uploadController.js`)**:
+      - Added `'image/svg+xml'` to `ALLOWED_MIME_TYPES`.
+      - Enhanced `uploadSignature` endpoint to accept BOTH `req.file` (multipart) AND JSON payloads (`svgString`, `dataUri`, `base64`).
+      - Validated and converted incoming SVG and Base64 signatures to Buffers and stored in Cloudflare R2 bucket with `image/svg+xml` Content-Type.
+      - Added unit test in `backend/tests/upload.test.js` validating JSON SVG signature uploads.
+    - **Frontend Upload API (`duty-management-app/src/api/uploadApi.js`)**:
+      - Enhanced `uploadApi.uploadSignature` to support JSON payloads containing `svgString` and `dataUri` alongside standard disk file URIs.
+    - **Frontend Signature Submission & Preview (`DutyFormScreen.jsx`)**:
+      - Updated `handleSubmit` to pass `signatureData` directly to `uploadApi.uploadSignature(signatureData)`.
+      - Added fallback to inline SVG dataUri so the customer signature is NEVER lost even during offline or transient network conditions.
+      - Added on-screen signature thumbnail preview with `SignatureImage` right after signing, giving technicians instant confirmation.
+    - **Cross-App Signature Display (`SignatureImage.jsx`)**:
+      - Created dedicated reusable component `duty-management-app/src/components/SignatureImage.jsx` that reliably renders remote `.svg` URLs via `react-native-svg` (`<SvgUri>`), inline SVG data URIs and raw SVG strings via `<SvgXml>`, and raster images via `<Image>`.
+      - Integrated `SignatureImage` across `DutyDetailsScreen.jsx`, `AllDutiesScreen.jsx` (Admin modal), `CompanyDetailsScreen.jsx`, and `EmployeeDetailsScreen.jsx`.
+  - **DatePickerModal Interactive Month & Year Selectors**:
+    - Enhanced `duty-management-app/src/components/DatePickerModal.jsx` with 3 dynamic view modes: `'days'`, `'months'`, and `'years'`.
+    - Transformed Month and Year headers into interactive selector pills with active chevron badges (`[ October ▾ ]`, `[ 2026 ▾ ]`).
+    - Clicking the Month pill displays a clean 12-month grid (January to December); selecting any month updates the calendar and automatically returns to days view.
+    - Clicking the Year pill displays a smooth scrollable grid of years (1950 to 2050); selecting any year updates the calendar and automatically returns to days view.
+    - Header chevron navigation dynamically adapts to current mode (months in days view, years in months view, decades in years view).
+    - Added "Back to Calendar" shortcut button when in month/year mode.
+- Files changed:
+  - `backend/src/middleware/upload.js`
+  - `backend/src/controllers/uploadController.js`
+  - `backend/tests/upload.test.js`
+  - `duty-management-app/src/api/uploadApi.js`
+  - `duty-management-app/src/components/SignatureImage.jsx` (New)
+  - `duty-management-app/src/components/DatePickerModal.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Signatures uploaded via JSON or multipart, stored in Cloudflare R2 as SVG, and rendered as vector graphics.
+  - DatePickerModal allows jumping directly to any month and year without repetitive next/previous clicks.
+- Reason: User reported: (1) Duty signature not stored and not shown to admin; (2) Calendar modal only supported previous/next clicks, needed month and year click grids.
+- Impact: High-fidelity customer signatures stored and visible across all admin and employee views; fast, intuitive date picking for birthdates and historical dates.
+
 ## Current Progress
 - Completed:
-  - Robust client-side PDF and Excel export engine (`src/utils/exportUtils.js`) with dual options: Download directly to phone storage or Share to WhatsApp/social media.
-  - All Duties screen Filter Popup Modal with presets (All, Today, Yesterday, Single Date, Custom Range) and summary pills.
-  - Company Details screen: Default to showing all duties without pre-filter, plus date presets.
-  - Employee profile edit: Self-service editing of phone, email, date of birth, and avatar upload to Cloudflare R2 bucket. Change password untouched.
-  - Admin Dashboard Calendar & Off card with modal detailing who is on leave today and holiday management shortcuts.
-  - Employee Dashboard Highlights card opening modal featuring strictly this month's holidays first and birthdays this month.
-  - Dynamic birthday celebration banners on Admin and Employee dashboards.
-  - Date of birth integration across User model, validators, ProfileScreen, and EmployeeFormScreen.
-  - 30/30 backend unit tests passing; 0 undeclared variables across all mobile screens.
+  - Duty customer signature upload to Cloudflare R2 supporting both JSON SVG strings and multipart files.
+  - Universal `SignatureImage` component rendering vector SVGs and raster images across Employee Duty Details, Admin All Duties modal, Company Details, and Employee Details screens.
+  - Interactive DatePickerModal with instant Month selector grid (12 months) and scrollable Year selector grid (1950 - 2050).
+  - 31/31 backend unit tests passing; 0 undeclared variables across all mobile screens.
 - In Progress:
   - None.
 - Pending:

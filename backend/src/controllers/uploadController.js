@@ -9,14 +9,60 @@ import asyncHandler from '../utils/asyncHandler.js';
  * @access  Private (Employee / Admin)
  */
 export const uploadSignature = asyncHandler(async (req, res) => {
-  if (!req.file) {
-    throw ApiError.badRequest('Please provide a signature image file in the "signature" field');
+  let buffer;
+  let mimeType = 'image/png';
+  let originalName = `sig_${req.user?.employeeId || 'emp'}_${Date.now()}.png`;
+
+  if (req.file) {
+    buffer = req.file.buffer;
+    mimeType = req.file.mimetype || 'image/png';
+    originalName = req.file.originalname || originalName;
+  } else if (req.body?.svgString || req.body?.dataUri || req.body?.signature || req.body?.svg) {
+    const rawData = req.body.svgString || req.body.dataUri || req.body.signature || req.body.svg;
+    if (
+      typeof rawData === 'string' &&
+      (rawData.startsWith('<svg') ||
+        rawData.startsWith('data:image/svg') ||
+        rawData.includes('<svg'))
+    ) {
+      let svgXml = rawData;
+      if (rawData.startsWith('data:image/svg+xml;utf8,')) {
+        svgXml = decodeURIComponent(rawData.replace('data:image/svg+xml;utf8,', ''));
+      } else if (rawData.startsWith('data:image/svg+xml;base64,')) {
+        svgXml = Buffer.from(
+          rawData.replace('data:image/svg+xml;base64,', ''),
+          'base64'
+        ).toString('utf8');
+      } else if (rawData.startsWith('data:image/svg+xml,')) {
+        svgXml = decodeURIComponent(rawData.replace('data:image/svg+xml,', ''));
+      }
+      buffer = Buffer.from(svgXml, 'utf8');
+      mimeType = 'image/svg+xml';
+      originalName = `sig_${req.user?.employeeId || 'emp'}_${Date.now()}.svg`;
+    } else if (typeof rawData === 'string' && rawData.startsWith('data:image/')) {
+      const matches = rawData.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+      if (matches) {
+        mimeType = `image/${matches[1]}`;
+        buffer = Buffer.from(matches[2], 'base64');
+        originalName = `sig_${req.user?.employeeId || 'emp'}_${Date.now()}.${
+          matches[1] === 'jpeg' ? 'jpg' : matches[1]
+        }`;
+      } else {
+        buffer = Buffer.from(rawData, 'utf8');
+      }
+    } else {
+      buffer = Buffer.from(String(rawData), 'utf8');
+    }
+  } else {
+    throw ApiError.badRequest(
+      'Please provide a signature image file in the "signature" field or signature data (svgString, dataUri)'
+    );
   }
 
-  const result = await r2Service.uploadBufferToR2(req.file.buffer, {
+  const result = await r2Service.uploadBufferToR2(buffer, {
     folder: 'vairavan-automation/signatures',
-    originalName: req.file.originalname || `sig_${req.user?.employeeId || 'emp'}.png`,
-    mimeType: req.file.mimetype || 'image/png',
+    originalName,
+    mimeType,
   });
 
   return ApiResponse.created(res, 'Signature uploaded successfully to Cloudflare R2', {

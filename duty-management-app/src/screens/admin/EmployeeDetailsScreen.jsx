@@ -26,6 +26,7 @@ import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
 import DatePickerModal from '../../components/DatePickerModal';
+import SignatureImage from '../../components/SignatureImage';
 import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import {
@@ -457,7 +458,7 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
           {signatureUrl ? (
             <View style={styles.mediaThumbBlock}>
               <Text style={styles.mediaLabel}>Signature</Text>
-              <Image source={{ uri: signatureUrl }} style={styles.signatureThumb} resizeMode="contain" />
+              <SignatureImage uri={signatureUrl} height={70} width={70} />
             </View>
           ) : null}
 

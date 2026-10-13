@@ -73,6 +73,20 @@ describe('Cloudflare R2 Upload & Storage Tests', () => {
     assert.strictEqual(res.body.data.signature.publicId, res.body.data.signature.key);
   });
 
+  it('POST /api/uploads/signature with JSON SVG string should upload SVG to Cloudflare R2', async () => {
+    const res = await request(app)
+      .post('/api/uploads/signature')
+      .set('Authorization', `Bearer ${employeeToken}`)
+      .send({
+        svgString: '<svg width="300" height="150"><path d="M10,10 L100,100"/></svg>',
+      });
+
+    assert.strictEqual(res.status, 201);
+    assert.strictEqual(res.body.success, true);
+    assert.ok(res.body.data.signature.url);
+    assert.ok(res.body.data.signature.key.endsWith('.svg'));
+  });
+
   it('POST /api/uploads/proof-photos should upload multiple photos and return Cloudflare R2 array', async () => {
     const res = await request(app)
       .post('/api/uploads/proof-photos')

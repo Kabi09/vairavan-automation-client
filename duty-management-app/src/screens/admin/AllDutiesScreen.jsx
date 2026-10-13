@@ -26,6 +26,7 @@ import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
 import DatePickerModal from '../../components/DatePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
+import SignatureImage from '../../components/SignatureImage';
 import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
 import { formatDate, formatTime, formatISODateOnly, getYesterdayDateString } from '../../utils/dateUtils';
@@ -493,10 +494,9 @@ export const AllDutiesScreen = ({ route }) => {
               {selectedDuty?.customerSignature?.url ? (
                 <View style={styles.detailBlock}>
                   <Text style={styles.blockLabel}>Customer Signature Verification</Text>
-                  <Image
-                    source={{ uri: selectedDuty.customerSignature.url }}
-                    style={styles.signatureImage}
-                    resizeMode="contain"
+                  <SignatureImage
+                    uri={selectedDuty.customerSignature.url}
+                    height={120}
                   />
                 </View>
               ) : null}
@@ -505,10 +505,9 @@ export const AllDutiesScreen = ({ route }) => {
               {selectedDuty?.signature?.url && selectedDuty?.signature?.url !== selectedDuty?.customerSignature?.url ? (
                 <View style={styles.detailBlock}>
                   <Text style={styles.blockLabel}>Employee Signature Verification</Text>
-                  <Image
-                    source={{ uri: selectedDuty.signature.url }}
-                    style={styles.signatureImage}
-                    resizeMode="contain"
+                  <SignatureImage
+                    uri={selectedDuty.signature.url}
+                    height={120}
                   />
                 </View>
               ) : null}

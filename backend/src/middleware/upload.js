@@ -5,7 +5,7 @@ import ApiError from '../utils/ApiError.js';
 const storage = multer.memoryStorage();
 
 // Allowed image MIME types
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/svg+xml'];
 
 const imageFileFilter = (req, file, cb) => {
   if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
@@ -13,7 +13,7 @@ const imageFileFilter = (req, file, cb) => {
   } else {
     cb(
       ApiError.badRequest(
-        `Invalid file type '${file.mimetype}'. Only JPEG, PNG, and WebP images are allowed.`
+        `Invalid file type '${file.mimetype}'. Only JPEG, PNG, WebP, and SVG images are allowed.`
       ),
       false
     );

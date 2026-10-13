@@ -4,6 +4,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +16,13 @@ const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
+const MONTHS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
+
+// Generate years from 1950 to 2050 (101 years)
+const YEARS = Array.from({ length: 101 }, (_, i) => 1950 + i);
 
 export const DatePickerModal = ({
   visible = true,
@@ -41,6 +49,8 @@ export const DatePickerModal = ({
   const [selectedDateStr, setSelectedDateStr] = useState(
     activeDateValue || getTodayDateString()
   );
+  // viewMode: 'days' | 'months' | 'years'
+  const [viewMode, setViewMode] = useState('days');
 
   useEffect(() => {
     const active = value || selectedDate || '';
@@ -49,24 +59,37 @@ export const DatePickerModal = ({
       setCurrentYear(d.getFullYear());
       setCurrentMonth(d.getMonth());
       setSelectedDateStr(active || getTodayDateString());
+      setViewMode('days');
     }
   }, [visible, inline, value, selectedDate]);
 
-  const handlePrevMonth = () => {
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
+  const handlePrev = () => {
+    if (viewMode === 'days') {
+      if (currentMonth === 0) {
+        setCurrentMonth(11);
+        setCurrentYear((y) => y - 1);
+      } else {
+        setCurrentMonth((m) => m - 1);
+      }
+    } else if (viewMode === 'months') {
       setCurrentYear((y) => y - 1);
-    } else {
-      setCurrentMonth((m) => m - 1);
+    } else if (viewMode === 'years') {
+      setCurrentYear((y) => y - 12);
     }
   };
 
-  const handleNextMonth = () => {
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
+  const handleNext = () => {
+    if (viewMode === 'days') {
+      if (currentMonth === 11) {
+        setCurrentMonth(0);
+        setCurrentYear((y) => y + 1);
+      } else {
+        setCurrentMonth((m) => m + 1);
+      }
+    } else if (viewMode === 'months') {
       setCurrentYear((y) => y + 1);
-    } else {
-      setCurrentMonth((m) => m + 1);
+    } else if (viewMode === 'years') {
+      setCurrentYear((y) => y + 12);
     }
   };
 
@@ -103,6 +126,10 @@ export const DatePickerModal = ({
 
   const handleSelectToday = () => {
     const today = getTodayDateString();
+    const d = new Date();
+    setCurrentYear(d.getFullYear());
+    setCurrentMonth(d.getMonth());
+    setViewMode('days');
     dispatchSelection(today);
   };
 
@@ -140,72 +167,212 @@ export const DatePickerModal = ({
         )}
       </View>
 
-      {/* Month / Year Navigator */}
+      {/* Month / Year Navigator Row with Interactive Selector Pills */}
       <View style={styles.navRow}>
-        <TouchableOpacity onPress={handlePrevMonth} style={styles.navBtn}>
+        <TouchableOpacity onPress={handlePrev} style={styles.navBtn} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
         </TouchableOpacity>
 
-        <Text style={styles.monthYearText}>
-          {MONTHS[currentMonth]} {currentYear}
-        </Text>
+        <View style={styles.selectorPillsRow}>
+          {/* Month Selector Pill */}
+          <TouchableOpacity
+            style={[
+              styles.selectorPill,
+              viewMode === 'months' && styles.selectorPillActive,
+            ]}
+            onPress={() => setViewMode(viewMode === 'months' ? 'days' : 'months')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.selectorPillText,
+                viewMode === 'months' && styles.selectorPillTextActive,
+              ]}
+            >
+              {MONTHS[currentMonth]}
+            </Text>
+            <Ionicons
+              name={viewMode === 'months' ? 'chevron-up' : 'chevron-down'}
+              size={13}
+              color={viewMode === 'months' ? '#FFFFFF' : COLORS.primary}
+            />
+          </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleNextMonth} style={styles.navBtn}>
+          {/* Year Selector Pill */}
+          <TouchableOpacity
+            style={[
+              styles.selectorPill,
+              viewMode === 'years' && styles.selectorPillActive,
+            ]}
+            onPress={() => setViewMode(viewMode === 'years' ? 'days' : 'years')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.selectorPillText,
+                viewMode === 'years' && styles.selectorPillTextActive,
+              ]}
+            >
+              {currentYear}
+            </Text>
+            <Ionicons
+              name={viewMode === 'years' ? 'chevron-up' : 'chevron-down'}
+              size={13}
+              color={viewMode === 'years' ? '#FFFFFF' : COLORS.primary}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity onPress={handleNext} style={styles.navBtn} activeOpacity={0.7}>
           <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
 
-      {/* Days of Week Row */}
-      <View style={styles.weekRow}>
-        {DAYS.map((day, idx) => (
-          <Text key={idx} style={styles.weekDayText}>
-            {day}
+      {/* VIEW MODE 1: MONTHS SELECTOR GRID */}
+      {viewMode === 'months' ? (
+        <View style={styles.modeContainer}>
+          <Text style={styles.modeSubtitle}>
+            Select Month for {currentYear}
           </Text>
-        ))}
-      </View>
-
-      {/* Days Grid */}
-      <View style={styles.daysGrid}>
-        {matrix.map((week, wIdx) => (
-          <View key={wIdx} style={styles.weekLine}>
-            {week.map((day, dIdx) => {
-              if (day === null) {
-                return <View key={dIdx} style={styles.daySlot} />;
-              }
-
-              const m = String(currentMonth + 1).padStart(2, '0');
-              const d = String(day).padStart(2, '0');
-              const thisDateStr = `${currentYear}-${m}-${d}`;
-
-              const isSelected = selectedDateStr === thisDateStr;
-              const isToday = todayStr === thisDateStr;
-
+          <View style={styles.monthsGrid}>
+            {MONTHS.map((mName, mIdx) => {
+              const isSelected = currentMonth === mIdx;
               return (
                 <TouchableOpacity
-                  key={dIdx}
+                  key={mIdx}
                   style={[
-                    styles.daySlot,
-                    isToday && styles.todaySlot,
-                    isSelected && styles.selectedSlot,
+                    styles.monthGridItem,
+                    isSelected && styles.monthGridItemActive,
                   ]}
-                  onPress={() => handleDayPress(day)}
+                  onPress={() => {
+                    setCurrentMonth(mIdx);
+                    setViewMode('days');
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text
                     style={[
-                      styles.dayText,
-                      isToday && styles.todayText,
-                      isSelected && styles.selectedText,
+                      styles.monthGridItemShort,
+                      isSelected && styles.monthGridItemShortActive,
                     ]}
                   >
-                    {day}
+                    {MONTHS_SHORT[mIdx]}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.monthGridItemFull,
+                      isSelected && styles.monthGridItemFullActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {mName}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-        ))}
-      </View>
+        </View>
+      ) : null}
+
+      {/* VIEW MODE 2: YEARS SELECTOR GRID (SCROLLABLE) */}
+      {viewMode === 'years' ? (
+        <View style={styles.modeContainer}>
+          <Text style={styles.modeSubtitle}>
+            Scroll and select year (1950 - 2050)
+          </Text>
+          <ScrollView
+            style={styles.yearsScrollView}
+            contentContainerStyle={styles.yearsGridContent}
+            showsVerticalScrollIndicator={true}
+          >
+            {YEARS.map((yr) => {
+              const isSelected = currentYear === yr;
+              const isCurrentActualYear = new Date().getFullYear() === yr;
+              return (
+                <TouchableOpacity
+                  key={yr}
+                  style={[
+                    styles.yearGridItem,
+                    isCurrentActualYear && styles.currentYearBorder,
+                    isSelected && styles.yearGridItemActive,
+                  ]}
+                  onPress={() => {
+                    setCurrentYear(yr);
+                    setViewMode('days');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.yearGridItemText,
+                      isSelected && styles.yearGridItemTextActive,
+                    ]}
+                  >
+                    {yr}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
+      {/* VIEW MODE 3: STANDARD DAYS GRID */}
+      {viewMode === 'days' ? (
+        <View style={styles.modeContainer}>
+          {/* Days of Week Row */}
+          <View style={styles.weekRow}>
+            {DAYS.map((day, idx) => (
+              <Text key={idx} style={styles.weekDayText}>
+                {day}
+              </Text>
+            ))}
+          </View>
+
+          {/* Days Grid */}
+          <View style={styles.daysGrid}>
+            {matrix.map((week, wIdx) => (
+              <View key={wIdx} style={styles.weekLine}>
+                {week.map((day, dIdx) => {
+                  if (day === null) {
+                    return <View key={dIdx} style={styles.daySlot} />;
+                  }
+
+                  const m = String(currentMonth + 1).padStart(2, '0');
+                  const d = String(day).padStart(2, '0');
+                  const thisDateStr = `${currentYear}-${m}-${d}`;
+
+                  const isSelected = selectedDateStr === thisDateStr;
+                  const isToday = todayStr === thisDateStr;
+
+                  return (
+                    <TouchableOpacity
+                      key={dIdx}
+                      style={[
+                        styles.daySlot,
+                        isToday && styles.todaySlot,
+                        isSelected && styles.selectedSlot,
+                      ]}
+                      onPress={() => handleDayPress(day)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.dayText,
+                          isToday && styles.todayText,
+                          isSelected && styles.selectedText,
+                        ]}
+                      >
+                        {day}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       {/* Footer Actions */}
       <View style={styles.footerRow}>
@@ -217,6 +384,17 @@ export const DatePickerModal = ({
           <Ionicons name="today-outline" size={16} color={COLORS.primary} />
           <Text style={styles.todayButtonText}>Today</Text>
         </TouchableOpacity>
+
+        {viewMode !== 'days' ? (
+          <TouchableOpacity
+            style={styles.switchModeBtn}
+            onPress={() => setViewMode('days')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="calendar-outline" size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
+            <Text style={styles.switchModeBtnText}>Back to Calendar</Text>
+          </TouchableOpacity>
+        ) : null}
 
         {onClose && (
           <TouchableOpacity
@@ -278,7 +456,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   title: {
     fontSize: 16,
@@ -297,11 +475,120 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
     backgroundColor: COLORS.surfaceAlt,
   },
-  monthYearText: {
-    fontSize: 15,
+  selectorPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.primarySubtle,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  selectorPillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  selectorPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  selectorPillTextActive: {
+    color: '#FFFFFF',
+  },
+  modeContainer: {
+    minHeight: 250,
+  },
+  modeSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 8,
+    marginTop: 2,
+  },
+  // Months View Styles
+  monthsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'space-between',
+  },
+  monthGridItem: {
+    width: '31%',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  monthGridItemActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  monthGridItemShort: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  monthGridItemShortActive: {
+    color: '#FFFFFF',
+  },
+  monthGridItemFull: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  monthGridItemFullActive: {
+    color: '#E0E7FF',
+  },
+  // Years View Styles
+  yearsScrollView: {
+    maxHeight: 240,
+  },
+  yearsGridContent: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  yearGridItem: {
+    width: '23%',
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  currentYearBorder: {
+    borderColor: COLORS.primary,
+  },
+  yearGridItemActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  yearGridItemText: {
+    fontSize: 13,
     fontWeight: '700',
     color: COLORS.text,
   },
+  yearGridItemTextActive: {
+    color: '#FFFFFF',
+  },
+  // Days View Styles
   weekRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -371,6 +658,19 @@ const styles = StyleSheet.create({
   },
   todayButtonText: {
     fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  switchModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  switchModeBtnText: {
+    fontSize: 11,
     fontWeight: '700',
     color: COLORS.primary,
   },

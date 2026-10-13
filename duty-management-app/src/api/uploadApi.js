@@ -5,7 +5,35 @@ export const uploadApi = {
    * Upload customer signature image
    * @param {string} uri - Local file uri or base64 file
    */
-  uploadSignature: async (uri) => {
+  uploadSignature: async (signatureInput) => {
+    // If input is an object with svgString or dataUri
+    if (
+      signatureInput &&
+      typeof signatureInput === 'object' &&
+      (signatureInput.svgString || signatureInput.dataUri)
+    ) {
+      const res = await apiClient.post('/uploads/signature', {
+        svgString: signatureInput.svgString,
+        dataUri: signatureInput.dataUri,
+      });
+      return res.data;
+    }
+
+    // If input is a string starting with data:image/svg, <svg, or data:image/
+    if (
+      typeof signatureInput === 'string' &&
+      (signatureInput.startsWith('data:image/svg') ||
+        signatureInput.startsWith('<svg') ||
+        signatureInput.startsWith('data:image/'))
+    ) {
+      const res = await apiClient.post('/uploads/signature', {
+        dataUri: signatureInput,
+      });
+      return res.data;
+    }
+
+    // Otherwise it's a local file uri
+    const uri = String(signatureInput);
     const formData = new FormData();
     const filename = uri.split('/').pop() || 'signature.png';
     const match = /\.(\w+)$/.exec(filename);
