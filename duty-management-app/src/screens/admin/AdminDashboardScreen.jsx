@@ -328,7 +328,9 @@ export const AdminDashboardScreen = ({ navigation }) => {
 
         {loading && !refreshing ? (
           <LoadingIndicator message="Loading dashboard analytics..." />
-               {/* Sliding Highlight Banners (Birthday, On-Leave, Holiday) */}
+        ) : (
+          <>
+            {/* Sliding Highlight Banners (Birthday, On-Leave, Holiday) */}
             {highlightSlides.length === 1 && (
               <View style={{ marginBottom: SPACING.md }}>
                 {highlightSlides[0].node}
