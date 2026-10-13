@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,15 +23,40 @@ import { formatDate } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
+const STATUS_TABS = [
+  { key: 'all', label: 'All', icon: 'list-outline' },
+  { key: 'pending', label: 'Pending', icon: 'time-outline' },
+  { key: 'approved', label: 'Approved', icon: 'checkmark-circle-outline' },
+  { key: 'rejected', label: 'Rejected', icon: 'close-circle-outline' },
+  { key: 'cancelled', label: 'Cancelled', icon: 'ban-outline' },
+];
+
 export const MyLeavesScreen = ({ navigation }) => {
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   // Cancel leave state
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+
+  const counts = useMemo(
+    () => ({
+      all: leaves.length,
+      pending: leaves.filter((l) => l.status === 'pending').length,
+      approved: leaves.filter((l) => l.status === 'approved').length,
+      rejected: leaves.filter((l) => l.status === 'rejected').length,
+      cancelled: leaves.filter((l) => l.status === 'cancelled').length,
+    }),
+    [leaves]
+  );
+
+  const filteredLeaves = useMemo(() => {
+    if (statusFilter === 'all') return leaves;
+    return leaves.filter((l) => l.status === statusFilter);
+  }, [leaves, statusFilter]);
 
   const fetchMyLeaves = useCallback(async () => {
     try {
@@ -128,13 +154,61 @@ export const MyLeavesScreen = ({ navigation }) => {
       />
 
       <View style={styles.container}>
+        {/* Status Filter Tabs */}
+        <View style={styles.tabsContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsScrollContent}
+          >
+            {STATUS_TABS.map((tab) => {
+              const isSelected = statusFilter === tab.key;
+              const count = counts[tab.key] || 0;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[styles.statusTabChip, isSelected && styles.statusTabChipActive]}
+                  onPress={() => setStatusFilter(tab.key)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={tab.icon}
+                    size={15}
+                    color={isSelected ? COLORS.textLight : COLORS.textSecondary}
+                  />
+                  <Text
+                    style={[styles.statusTabText, isSelected && styles.statusTabTextActive]}
+                  >
+                    {tab.label}
+                  </Text>
+                  <View
+                    style={[
+                      styles.statusCountBadge,
+                      isSelected && styles.statusCountBadgeActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusCountText,
+                        isSelected && styles.statusCountTextActive,
+                      ]}
+                    >
+                      {count}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
         <ErrorMessage message={error} onRetry={fetchMyLeaves} />
 
         {loading && !refreshing ? (
           <LoadingIndicator message="Loading your leave records..." />
         ) : (
           <FlatList
-            data={leaves}
+            data={filteredLeaves}
             keyExtractor={(item) => item._id}
             renderItem={renderLeaveItem}
             contentContainerStyle={styles.listContent}
@@ -148,10 +222,24 @@ export const MyLeavesScreen = ({ navigation }) => {
             ListEmptyComponent={
               <EmptyState
                 icon="calendar-outline"
-                title="No Leave Requests Found"
-                description="You haven't submitted any leave requests yet."
-                actionTitle="Apply for Leave"
-                onAction={() => navigation.navigate('LeaveRequest')}
+                title={
+                  statusFilter === 'all'
+                    ? 'No Leave Requests Found'
+                    : `No ${STATUS_TABS.find((t) => t.key === statusFilter)?.label || ''} Leaves`
+                }
+                description={
+                  statusFilter === 'all'
+                    ? "You haven't submitted any leave requests yet."
+                    : `You do not have any leave requests with status "${statusFilter}".`
+                }
+                actionTitle={statusFilter === 'all' ? 'Apply for Leave' : 'Show All Leaves'}
+                onAction={() => {
+                  if (statusFilter === 'all') {
+                    navigation.navigate('LeaveRequest');
+                  } else {
+                    setStatusFilter('all');
+                  }
+                }}
               />
             }
           />
@@ -194,6 +282,57 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     fontWeight: '600',
     fontSize: 13,
+  },
+  tabsContainer: {
+    marginBottom: SPACING.md,
+  },
+  tabsScrollContent: {
+    paddingVertical: 2,
+    gap: 8,
+    flexDirection: 'row',
+  },
+  statusTabChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 7,
+    borderRadius: RADIUS.full,
+    gap: 6,
+  },
+  statusTabChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  statusTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  statusTabTextActive: {
+    color: COLORS.textLight,
+  },
+  statusCountBadge: {
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusCountBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  statusCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  statusCountTextActive: {
+    color: COLORS.textLight,
   },
   listContent: {
     paddingBottom: SPACING.xxl,

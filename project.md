@@ -79,6 +79,42 @@
 ## Change History
 
 ### 2026-10-13
+#### Employee Features: Duty Form Client Company Dropdown, My Duties Filter Options, and My Leaves Status Tabs
+- What was changed:
+  - **Employee Duty Form Client Company Searchable Dropdown (`DutyFormScreen.jsx`)**:
+    - Replaced the horizontal scrolling company chips with a searchable `DropdownPickerModal` button showing the selected company name, client location/site subtitle, and dropdown chevron.
+    - Added instant client search by name and site address.
+    - Auto-populates client company phone number upon selection if not already entered by the employee.
+    - Added error highlighting and validation feedback on the dropdown trigger button.
+  - **Employee My Duties Filter Options & Active Pills (`MyDutiesScreen.jsx`)**:
+    - Added a header "Filter" toggle button with an active filter badge counter beside the "New" button.
+    - Integrated a centered Filter Popup Modal (`Modal`, `centeredModalOverlay`, `filterPopupCard`) supporting:
+      - **Date Presets**: All, Today, Yesterday, Single Date (`DatePickerModal`).
+      - **Custom Date Range**: From Date and To Date (`DatePickerModal`).
+      - **Client Company**: Searchable dropdown picker (`DropdownPickerModal`) with company name and location.
+      - **Duty Status**: Filter selector chips (All, Submitted, Approved, Needs Fix, Rejected).
+      - **Footer Actions**: "Reset All" and "Apply Filters".
+    - Added an Active Filters summary pill bar (`activeFiltersBar`) below the universal search bar displaying date pills, company pills, status pills, and a quick "Clear" button.
+    - Integrated with backend `dutyApi.getMyDuties` query parameters and added real-time client-side filter computation for instant UI reactivity.
+    - Updated `EmptyState` to dynamically provide "Clear Filters" when filters yield no matches.
+  - **Employee My Leaves Status Tabs (`MyLeavesScreen.jsx`)**:
+    - Added a horizontal scrollable status filter bar with tabs: `All`, `Pending`, `Approved`, `Rejected`, and `Cancelled`.
+    - Each tab includes its respective status icon, label, and dynamic count badge indicating the quantity of records for that status.
+    - Applied filtered leave records to `FlatList`, keeping fast navigation and status switching.
+    - Configured dynamic `EmptyState` to adapt descriptions and actions according to the active status tab (e.g. "No Pending Leaves", "Show All Leaves").
+- Files changed:
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyLeavesScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Company selection on the employee duty form now uses a modal search picker instead of small horizontal chips.
+  - Employee duty list now offers multi-criteria filtering (date presets, range, client company, status) in addition to universal text search.
+  - Leave list for employees is segmented by status tabs with real-time badges.
+- Reason: User requested: "employee=> submit duty form- client company make the drop down fix; employee= my duty details add filter option also; employee->my leave section add all,pending,approve,reject,cancel; fix".
+- Impact: Streamlined company selection on mobile screens, comprehensive date and status filtering for employees on their duty history, and clear tab-based categorization of leave requests.
+
+### 2026-10-13
 #### Signature Preview & Clipping Fix, PDF Export Spinner & Delay Fix, Staff Today/Clear Filter, Centered Filter Modal & Lifted Bottom Nav Bar
 - What was changed:
   - **Signature Click & Clipping Resolution (`SignatureImage.jsx`, `SignaturePadModal.jsx`, `DutyDetailsScreen.jsx`, `AllDutiesScreen.jsx`, `ImageViewerModal.jsx`)**:
@@ -1188,11 +1224,14 @@
 
 ## Current Progress
 - Completed:
+  - Employee Duty Form: Client company selector upgraded to searchable modal dropdown picker with site subtitle and auto-fill customer phone.
+  - Employee My Duties: Multi-criteria filter options added with Date presets, Custom date range, Client company picker, Status chips, active filter summary pills, and centered dialog modal.
+  - Employee My Leaves: Segmented status tabs (`All`, `Pending`, `Approved`, `Rejected`, `Cancelled`) with dynamic badge counters and responsive empty states.
   - Duty customer signature upload to Cloudflare R2 supporting both JSON SVG strings and multipart files.
   - Universal `SignatureImage` component rendering vector SVGs and raster images across Employee Duty Details, Admin All Duties modal, Company Details, and Employee Details screens.
   - Interactive DatePickerModal with instant Month selector grid (12 months) and scrollable Year selector grid (1950 - 2050).
   - Employee small avatar rendering across Admin and Employee birthday celebration banners and Monthly Highlights modal.
-  - 31/31 backend unit tests passing; 0 undeclared variables across all mobile screens.
+  - 34/34 backend unit tests passing; 0 syntax errors across all mobile screens.
 - In Progress:
   - None.
 - Pending:

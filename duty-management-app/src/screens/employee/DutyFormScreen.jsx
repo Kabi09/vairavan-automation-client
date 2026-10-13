@@ -65,6 +65,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [inTimePickerVisible, setInTimePickerVisible] = useState(false);
   const [outTimePickerVisible, setOutTimePickerVisible] = useState(false);
+  const [companyDropdownVisible, setCompanyDropdownVisible] = useState(false);
 
   // Full-size Image/Signature Preview Modal State
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
@@ -456,7 +457,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Company Selection */}
+            {/* Company Selection via Searchable Dropdown */}
             <View style={styles.companyHeaderRow}>
               <Text style={styles.fieldLabel}>Client Company *</Text>
               <TouchableOpacity
@@ -468,27 +469,41 @@ export const DutyFormScreen = ({ navigation, route }) => {
                 <Text style={styles.addCompanyBtnText}>Add Company</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.chipScroll}
-              contentContainerStyle={styles.chipRow}
+
+            <TouchableOpacity
+              style={[
+                styles.companyDropdownBtn,
+                fieldErrors.company && styles.companyDropdownBtnError,
+              ]}
+              onPress={() => setCompanyDropdownVisible(true)}
+              activeOpacity={0.8}
             >
-              {companies.map((c) => {
-                const isSelected = selectedCompanyId === c._id;
-                return (
-                  <TouchableOpacity
-                    key={c._id}
-                    style={[styles.chip, isSelected && styles.chipSelected]}
-                    onPress={() => setSelectedCompanyId(c._id)}
+              <View style={styles.companyDropdownLeft}>
+                <Ionicons
+                  name="business"
+                  size={18}
+                  color={selectedCompanyId ? COLORS.primary : COLORS.textMuted}
+                />
+                <View style={styles.companyDropdownTextWrap}>
+                  <Text
+                    style={[
+                      styles.companyDropdownText,
+                      !selectedCompanyId && styles.companyDropdownPlaceholder,
+                    ]}
+                    numberOfLines={1}
                   >
-                    <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                      {c.companyName}
+                    {companies.find((c) => c._id === selectedCompanyId)?.companyName ||
+                      'Select Client Company...'}
+                  </Text>
+                  {companies.find((c) => c._id === selectedCompanyId)?.location ? (
+                    <Text style={styles.companyDropdownSub} numberOfLines={1}>
+                      Site: {companies.find((c) => c._id === selectedCompanyId).location}
                     </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+                  ) : null}
+                </View>
+              </View>
+              <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
             {fieldErrors.company ? (
               <Text style={styles.errorText}>{fieldErrors.company}</Text>
             ) : null}
@@ -801,6 +816,30 @@ export const DutyFormScreen = ({ navigation, route }) => {
         title="Select Check-Out Time"
       />
 
+      <DropdownPickerModal
+        visible={companyDropdownVisible}
+        onClose={() => setCompanyDropdownVisible(false)}
+        title="Select Client Company"
+        searchPlaceholder="Search company by name or location..."
+        selectedValue={selectedCompanyId}
+        showAllOption={false}
+        onSelect={(val, item) => {
+          setSelectedCompanyId(val);
+          if (fieldErrors.company) {
+            setFieldErrors((prev) => ({ ...prev, company: null }));
+          }
+          if (item?.companyPhoneNumber && !customerPhone) {
+            setCustomerPhone(item.companyPhoneNumber);
+          }
+        }}
+        items={companies.map((c) => ({
+          label: c.companyName,
+          value: c._id,
+          id: c._id,
+          companyPhoneNumber: c.companyPhoneNumber,
+          subtitle: `${c.location || 'Client Site'}${c.companyPhoneNumber ? ' • ' + c.companyPhoneNumber : ''}`,
+        }))}
+      />
     </SafeAreaView>
   );
 };
@@ -846,6 +885,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 6,
+  },
+  companyDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
+    marginBottom: SPACING.md,
+  },
+  companyDropdownBtnError: {
+    borderColor: COLORS.danger,
+    backgroundColor: '#FEF2F2',
+  },
+  companyDropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  companyDropdownTextWrap: {
+    flex: 1,
+  },
+  companyDropdownText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  companyDropdownPlaceholder: {
+    fontWeight: '500',
+    color: COLORS.textMuted,
+  },
+  companyDropdownSub: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   chipScroll: {
     marginBottom: SPACING.md,
