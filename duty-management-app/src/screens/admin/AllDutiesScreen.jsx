@@ -19,6 +19,7 @@ import employeeApi from '../../api/employeeApi';
 import companyApi from '../../api/companyApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
+import StatusBadge from '../../components/StatusBadge';
 import TextInputField from '../../components/TextInputField';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';

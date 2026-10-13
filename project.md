@@ -598,6 +598,18 @@
 - Impact: Users can build an installable `.apk` file directly using EAS CLI.
 
 ### 2026-10-13
+#### Fix StatusBadge Import in AllDutiesScreen
+- What was changed:
+  - Added missing `import StatusBadge from '../../components/StatusBadge';` in `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`.
+- Files changed:
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Properly imported `StatusBadge` component, resolving the `Property 'StatusBadge' doesn't exist` render error when viewing linked task details in the admin duty modal.
+- Reason: User encountered a render crash `Property 'StatusBadge' doesn't exist` in `AllDutiesScreen.jsx` at line 584:23 when opening duty details that contain an assigned task.
+- Impact: Admin can view duty details with linked assigned tasks smoothly without render crashes.
+
+### 2026-10-13
 #### Leave Application Admin-Only Notification & Developer Login (Hidden from User Management)
 - What was changed:
   - Fixed leave submission notification: when an employee submits a leave request, only administrators are notified via in-app notification and FCM push (`leaveController.createLeave`). Submitting employees do not receive notification for their own submission.
