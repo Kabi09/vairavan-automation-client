@@ -88,6 +88,46 @@ export const getMe = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @desc    Update employee's own profile (phone number, email, and avatar only)
+ * @route   PATCH /api/auth/profile
+ * @access  Private
+ */
+export const updateProfile = asyncHandler(async (req, res) => {
+  const { phoneNumber, email, avatar } = req.body;
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    throw ApiError.notFound('User not found');
+  }
+
+  // If email is changing, verify uniqueness
+  if (email && email.toLowerCase().trim() !== user.email.toLowerCase()) {
+    const existing = await User.findOne({
+      email: email.toLowerCase().trim(),
+      _id: { $ne: user._id },
+    });
+    if (existing) {
+      throw ApiError.badRequest('Email address is already in use by another account');
+    }
+    user.email = email.toLowerCase().trim();
+  }
+
+  if (phoneNumber !== undefined) {
+    user.phoneNumber = phoneNumber.trim();
+  }
+
+  if (avatar !== undefined) {
+    user.avatar = avatar.trim();
+  }
+
+  await user.save();
+
+  return ApiResponse.success(res, 200, 'Profile updated successfully', {
+    user: user.toJSON(),
+  });
+});
+
+/**
  * @desc    Change authenticated user's password
  * @route   PATCH /api/auth/change-password
  * @access  Private
@@ -187,6 +227,7 @@ export const logout = asyncHandler(async (req, res) => {
 export default {
   login,
   getMe,
+  updateProfile,
   changePassword,
   refreshToken,
   logout,

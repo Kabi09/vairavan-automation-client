@@ -1,6 +1,5 @@
 import Duty from '../models/Duty.js';
 import Company from '../models/Company.js';
-import Task from '../models/Task.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -46,7 +45,6 @@ export const createDuty = asyncHandler(async (req, res) => {
     latitude,
     longitude,
     accuracy,
-    taskId,
   } = req.body;
 
   // Validate location requirement policy
@@ -100,22 +98,11 @@ export const createDuty = asyncHandler(async (req, res) => {
     };
   }
 
-  if (taskId) {
-    dutyData.task = taskId;
-  }
-
   const duty = await Duty.create(dutyData);
-
-  if (taskId) {
-    await Task.findByIdAndUpdate(taskId, { status: 'completed' }).catch((err) =>
-      console.warn('[Duty] Could not mark linked task completed:', err.message)
-    );
-  }
 
   const populatedDuty = await Duty.findById(duty._id)
     .populate('company', 'companyName location companyPhoneNumber')
-    .populate('employee', 'employeeName employeeId email designation')
-    .populate('task', 'taskName date companyName phoneNumber work status');
+    .populate('employee', 'employeeName employeeId email designation');
 
   return ApiResponse.created(res, 'Duty report submitted successfully', {
     duty: populatedDuty,
@@ -160,8 +147,7 @@ export const getMyDuties = asyncHandler(async (req, res) => {
       .skip(skip)
       .limit(limit)
       .populate('company', 'companyName location companyPhoneNumber')
-      .populate('adminReview.reviewedBy', 'employeeName employeeId')
-      .populate('task', 'taskName scheduledDate date companyName phoneNumber work description status'),
+      .populate('adminReview.reviewedBy', 'employeeName employeeId'),
     Duty.countDocuments(filter),
   ]);
 
@@ -190,8 +176,7 @@ export const getDutyById = asyncHandler(async (req, res) => {
     .populate('company', 'companyName location companyPhoneNumber')
     .populate('employee', 'employeeName employeeId email designation')
     .populate('adminReview.reviewedBy', 'employeeName employeeId')
-    .populate('auditTrail.changedBy', 'employeeName employeeId')
-    .populate('task', 'taskName scheduledDate date companyName phoneNumber work description status');
+    .populate('auditTrail.changedBy', 'employeeName employeeId');
 
   if (!duty) {
     throw ApiError.notFound('Duty report not found');
@@ -351,8 +336,7 @@ export const getAllDuties = asyncHandler(async (req, res) => {
       .limit(limit)
       .populate('employee', 'employeeName employeeId email designation')
       .populate('company', 'companyName location companyPhoneNumber')
-      .populate('adminReview.reviewedBy', 'employeeName employeeId')
-      .populate('task', 'taskName scheduledDate date companyName phoneNumber work description status'),
+      .populate('adminReview.reviewedBy', 'employeeName employeeId'),
     Duty.countDocuments(filter),
   ]);
 

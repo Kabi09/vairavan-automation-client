@@ -60,6 +60,31 @@ export const uploadProofPhotos = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @desc    Upload avatar photo to Cloudflare R2
+ * @route   POST /api/uploads/avatar
+ * @access  Private (Employee / Admin)
+ */
+export const uploadAvatar = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw ApiError.badRequest('Please provide an image file in the "avatar" field');
+  }
+
+  const result = await r2Service.uploadBufferToR2(req.file.buffer, {
+    folder: 'vairavan-automation/avatars',
+    originalName: req.file.originalname || `avatar_${req.user?.employeeId || 'emp'}.jpg`,
+    mimeType: req.file.mimetype || 'image/jpeg',
+  });
+
+  return ApiResponse.created(res, 'Avatar uploaded successfully to Cloudflare R2', {
+    avatar: {
+      url: result.url,
+      key: result.key,
+      publicId: result.key,
+    },
+  });
+});
+
+/**
  * @desc    Delete an uploaded image asset from Cloudflare R2 by key (or publicId)
  * @route   DELETE /api/uploads/:key(*)
  * @access  Private
@@ -98,6 +123,7 @@ export const streamUploadedFile = asyncHandler(async (req, res) => {
 export default {
   uploadSignature,
   uploadProofPhotos,
+  uploadAvatar,
   deleteUploadedAsset,
   streamUploadedFile,
 };

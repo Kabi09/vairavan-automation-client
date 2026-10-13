@@ -37,6 +37,10 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    avatar: {
+      type: String,
+      default: '',
+    },
     address: {
       type: String,
       trim: true,

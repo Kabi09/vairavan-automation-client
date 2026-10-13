@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import dutyApi from '../../api/dutyApi';
-import taskApi from '../../api/taskApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
@@ -34,18 +33,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
         setError('');
         const res = await dutyApi.getDutyById(dutyId);
         if (res.data?.duty) {
-          const dutyData = res.data.duty;
-          setDuty(dutyData);
-
-          // If task is an ID string rather than populated object, fetch task details
-          if (dutyData.task && typeof dutyData.task === 'string') {
-            try {
-              const taskRes = await taskApi.getTaskById(dutyData.task);
-              if (taskRes.data?.task) {
-                setDuty((prev) => ({ ...prev, task: taskRes.data.task }));
-              }
-            } catch {}
-          }
+          setDuty(res.data.duty);
         }
       } catch (err) {
         setError(extractErrorMessage(err, 'Failed to load duty report details'));
@@ -220,67 +208,6 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           </Card>
         ) : null}
 
-        {/* Linked Assigned Task Card */}
-        {duty.task && typeof duty.task === 'object' ? (
-          <Card style={[styles.sectionCard, styles.linkedTaskCard]}>
-            <View style={styles.taskCardHeader}>
-              <View style={styles.taskHeaderTitleWrap}>
-                <Ionicons name="clipboard" size={18} color={COLORS.primary} />
-                <Text style={styles.linkedTaskTitle}>Assigned Task Details</Text>
-              </View>
-              <StatusBadge status={duty.task.status || 'completed'} />
-            </View>
-
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Task Title:</Text>
-              <Text style={styles.detailValue}>{duty.task.taskName}</Text>
-            </View>
-
-            {duty.task.scheduledDate || duty.task.date ? (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Task Date:</Text>
-                <Text style={styles.detailValue}>
-                  {formatDate(duty.task.scheduledDate || duty.task.date)}
-                </Text>
-              </View>
-            ) : null}
-
-            {duty.task.companyName ? (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Client Site:</Text>
-                <Text style={styles.detailValue}>{duty.task.companyName}</Text>
-              </View>
-            ) : null}
-
-            {duty.task.work ? (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Work Category:</Text>
-                <Text style={styles.detailValue}>{duty.task.work}</Text>
-              </View>
-            ) : null}
-
-            {duty.task.phoneNumber ? (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Contact Phone:</Text>
-                <TouchableOpacity
-                  onPress={() => Linking.openURL(`tel:${duty.task.phoneNumber}`).catch(() => {})}
-                  style={styles.taskPhoneRow}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="call" size={13} color={COLORS.primary} />
-                  <Text style={styles.taskPhoneText}>{duty.task.phoneNumber}</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
-
-            {duty.task.description ? (
-              <View style={styles.taskInstructionBox}>
-                <Text style={styles.taskInstructionLabel}>Manager Instructions / Notes:</Text>
-                <Text style={styles.taskInstructionText}>{duty.task.description}</Text>
-              </View>
-            ) : null}
-          </Card>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -428,62 +355,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
-  },
-  linkedTaskCard: {
-    borderColor: '#BFDBFE',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    marginTop: SPACING.xs,
-  },
-  taskCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingBottom: SPACING.xs,
-  },
-  taskHeaderTitleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  linkedTaskTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.primaryDark,
-  },
-  taskPhoneRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: COLORS.primarySubtle,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADIUS.sm,
-  },
-  taskPhoneText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  taskInstructionBox: {
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.xs,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  taskInstructionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginBottom: 3,
-  },
-  taskInstructionText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: COLORS.text,
   },
 });
 

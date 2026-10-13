@@ -52,6 +52,30 @@ export const uploadApi = {
     return res.data;
   },
 
+  /**
+   * Upload user avatar profile picture
+   * @param {string} uri - Local image file uri
+   */
+  uploadAvatar: async (uri) => {
+    const formData = new FormData();
+    const filename = uri.split('/').pop() || 'avatar.jpg';
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+    formData.append('avatar', {
+      uri,
+      name: filename,
+      type,
+    });
+
+    const res = await apiClient.post('/uploads/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return res.data;
+  },
+
   deleteAsset: async (publicId) => {
     const res = await apiClient.delete(`/uploads/${encodeURIComponent(publicId)}`);
     return res.data;

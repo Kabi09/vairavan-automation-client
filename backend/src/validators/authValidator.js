@@ -29,3 +29,20 @@ export const validateRefreshToken = [
     .notEmpty()
     .withMessage('Refresh token is required'),
 ];
+
+export const validateUpdateProfile = [
+  body('email')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail(),
+  body('phoneNumber')
+    .optional({ checkFalsy: true })
+    .trim()
+    .matches(/^(?:\+91)?[0-9]{10}$/)
+    .withMessage('Phone number must be exactly 10 digits'),
+  body('avatar')
+    .optional()
+    .isString(),
+];

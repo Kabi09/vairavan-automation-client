@@ -854,6 +854,80 @@
   - Admin Task Assignment: Full backend model, validators, controller, FCM push/in-app notification, frontend admin assign form with employee picker, scheduled date picker, task name, company name, 10-digit phone, work, and description.
   - Employee Task Visibility & Status Workflow: Dedicated employee task list screen, phone dialing shortcut, status update transitions ("Start Task", "Mark Done"), and dashboard overview card with quick links.
   - Duty Form Assigned Task Dropdown & Auto-fill: Dropdown picker in `DutyFormScreen` defaulting to "Not Mentioned"; selecting an assigned task auto-fills company, customer phone, customer name, machine name, and work description; submitting the duty automatically marks the task as completed in the backend.
+### 2026-10-13
+#### Dual Export (Download vs. Share), Duty Filter Popup & Presets, Complete Task Code Removal, and Profile Edit (Phone, Email, Avatar)
+- What was changed:
+  - **Export PDF / Excel (Download vs Share)**:
+    - Updated `duty-management-app/src/utils/exportUtils.js` with `promptDownloadOrShare()`.
+    - Presenting users with two explicit choices upon export:
+      - **Download**: Saves directly to device storage using Android `StorageAccessFramework` with directory selection or local documents directory, prompting confirmation with saved path.
+      - **Share**: Opens native share sheet via `expo-sharing` enabling instant sharing to WhatsApp, social media, email, and messaging apps.
+    - Applied dual options across All Duties, Company Duties, Employee Directory, and Leave Request exports.
+  - **Duty Filter Popup & Quick Date Presets**:
+    - `AllDutiesScreen.jsx`: Converted inline filter card to an interactive Filter Popup Modal (`<Modal visible={filterModalVisible}>`).
+    - Added quick date filter presets: **All**, **Today**, **Yesterday**, **Single Date**, and **Custom Range**.
+    - Integrated employee and company selectors with staged draft filters, "Apply Filter", and "Reset All". Added active filter summary pills bar on main screen.
+    - `CompanyDetailsScreen.jsx`: Fixed default filter behavior when opening a specific company; removed automatic "today" filter so all duties are shown by default (`startDate = ''`, `endDate = ''`). Added quick presets (All, Today, Yesterday, Single Date, Custom Range).
+    - `dateUtils.js`: Added `getYesterdayDateString()` helper.
+  - **Complete Removal of Task-Oriented Code**:
+    - Purged all task-oriented code across backend and frontend to keep the system exclusively duty-oriented:
+      - Backend files deleted: `backend/src/models/Task.js`, `taskController.js`, `taskRoutes.js`, `taskValidator.js`.
+      - Backend routes cleaned: Removed task routes from `backend/src/routes/index.js`.
+      - Backend models cleaned: Removed `task` reference and population from `backend/src/models/Duty.js` and `dutyController.js`.
+      - Frontend files deleted: `duty-management-app/src/screens/admin/TaskAssignScreen.jsx`, `AdminTaskListScreen.jsx`, `EmployeeTaskListScreen.jsx`, `duty-management-app/src/api/taskApi.js`.
+      - Frontend navigation cleaned: Removed task screens from `AdminNavigator.jsx` and `EmployeeNavigator.jsx`.
+      - Frontend screens cleaned: Removed task buttons and pending task cards from `AdminDashboardScreen.jsx` and `EmployeeDashboardScreen.jsx`.
+      - Duty Form cleaned: Removed task dropdown, autofill, and task parameters from `DutyFormScreen.jsx`.
+      - Duty Details cleaned: Removed linked task cards from `DutyDetailsScreen.jsx`.
+      - Verified zero remaining task references in both codebases.
+  - **Employee Profile Editing (Phone, Email, and Avatar Only)**:
+    - Added `avatar` field to `backend/src/models/User.js`.
+    - Added `PATCH /api/auth/profile` endpoint in `authController.js` with `validateUpdateProfile` allowing employees to edit ONLY `phoneNumber`, `email`, and `avatar`. Name, employee ID, role, and designation remain read-only.
+    - Added `POST /api/uploads/avatar` endpoint in `uploadController.js` and `upload.js` middleware storing avatars in Cloudflare R2 bucket (`vairavan-automation/avatars`).
+    - Added `authApi.updateProfile` and `uploadApi.uploadAvatar`.
+    - `ProfileScreen.jsx`:
+      - Interactive avatar photo with camera overlay badge enabling image picking from device and uploading to Cloudflare R2.
+      - "Edit" button next to "Account Details" opening contact edit modal to update 10-digit phone number and email address.
+      - Existing "Change Password" functionality preserved completely untouched.
+- Files changed:
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/utils/dateUtils.js`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/common/ProfileScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/navigation/EmployeeNavigator.jsx`
+  - `duty-management-app/src/api/authApi.js`
+  - `duty-management-app/src/api/uploadApi.js`
+  - `backend/src/models/User.js`
+  - `backend/src/models/Duty.js`
+  - `backend/src/controllers/authController.js`
+  - `backend/src/controllers/dutyController.js`
+  - `backend/src/controllers/uploadController.js`
+  - `backend/src/routes/authRoutes.js`
+  - `backend/src/routes/uploadRoutes.js`
+  - `backend/src/routes/index.js`
+  - `backend/src/validators/authValidator.js`
+  - `backend/src/middleware/upload.js`
+  - (Deleted): `backend/src/models/Task.js`, `taskController.js`, `taskRoutes.js`, `taskValidator.js`, `TaskAssignScreen.jsx`, `AdminTaskListScreen.jsx`, `EmployeeTaskListScreen.jsx`, `taskApi.js`.
+- Logic changed:
+  - Export flow now offers dual choice: phone download vs social/chat share.
+  - Company duty list defaults to showing all duties without mandatory date filtering.
+  - All task logic completely removed; system focuses exclusively on duties.
+  - Self-service employee contact editing limited to phone, email, and avatar photo.
+
+## Current Progress
+- Completed:
+  - Robust client-side PDF and Excel export engine (`src/utils/exportUtils.js`) with dual options: Download directly to phone storage or Share to WhatsApp/social media.
+  - All Duties screen Filter Popup Modal with presets (All, Today, Yesterday, Single Date, Custom Range) and summary pills.
+  - Company Details screen fix: Default to showing all duties without pre-filter, plus date presets (All, Today, Yesterday, Single Date, Custom Range).
+  - Total removal of task-oriented code across backend and frontend. System is strictly duty-oriented.
+  - Employee profile edit: Self-service editing of phone, email, and avatar upload to Cloudflare R2 bucket. Change password untouched.
+  - 30/30 backend unit tests passing.
 - In Progress:
   - None.
 - Pending:

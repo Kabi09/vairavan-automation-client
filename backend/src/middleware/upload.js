@@ -44,7 +44,18 @@ export const uploadProofPhotosMiddleware = multer({
   fileFilter: imageFileFilter,
 }).array('photos', 5);
 
+// Multer instance for avatar photo (single file)
+export const uploadAvatarMiddleware = multer({
+  storage,
+  limits: {
+    fileSize: MAX_FILE_SIZE_BYTES,
+    files: 1,
+  },
+  fileFilter: imageFileFilter,
+}).single('avatar');
+
 export default {
   uploadSignatureMiddleware,
   uploadProofPhotosMiddleware,
+  uploadAvatarMiddleware,
 };

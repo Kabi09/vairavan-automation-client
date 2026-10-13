@@ -40,6 +40,12 @@ export const getTodayDateString = () => {
   return formatISODateOnly(new Date());
 };
 
+export const getYesterdayDateString = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return formatISODateOnly(d);
+};
+
 export const getGreeting = () => {
   const hour = new Date().getHours();
   if (hour < 12) return 'Good Morning';
@@ -60,6 +66,7 @@ export default {
   formatISODateOnly,
   formatTime,
   getTodayDateString,
+  getYesterdayDateString,
   getGreeting,
   isDateRangeValid,
 };

@@ -22,7 +22,7 @@ import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
 import DatePickerModal from '../../components/DatePickerModal';
-import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
+import { formatDate, formatISODateOnly, getYesterdayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
@@ -30,19 +30,21 @@ import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 export const CompanyDetailsScreen = ({ route, navigation }) => {
   const { company } = route.params || {};
   const today = formatISODateOnly();
+  const yesterday = getYesterdayDateString();
 
   const [duties, setDuties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  // Date filters (Default: Today)
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  // Date filters (Default: '' to show all duties for this specific company)
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Pickers visibility
   const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
   const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
+  const [singleDatePickerVisible, setSingleDatePickerVisible] = useState(false);
 
   // Selected duty modal for full view
   const [selectedDuty, setSelectedDuty] = useState(null);
@@ -165,10 +167,105 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
                 setEndDate('');
               }}
             >
-              <Text style={styles.clearDateLink}>Clear Filter</Text>
+              <Text style={styles.clearDateLink}>Reset (Show All)</Text>
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Date Filter Quick Presets */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.presetChipsScroll}
+          contentContainerStyle={styles.presetChipsRow}
+        >
+          <TouchableOpacity
+            style={[styles.presetChip, (!startDate && !endDate) && styles.presetChipActive]}
+            onPress={() => {
+              setStartDate('');
+              setEndDate('');
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.presetChipText, (!startDate && !endDate) && styles.presetChipTextActive]}>
+              All
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.presetChip, (startDate === today && endDate === today) && styles.presetChipActive]}
+            onPress={() => {
+              setStartDate(today);
+              setEndDate(today);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.presetChipText, (startDate === today && endDate === today) && styles.presetChipTextActive]}>
+              Today
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.presetChip, (startDate === yesterday && endDate === yesterday) && styles.presetChipActive]}
+            onPress={() => {
+              setStartDate(yesterday);
+              setEndDate(yesterday);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.presetChipText, (startDate === yesterday && endDate === yesterday) && styles.presetChipTextActive]}>
+              Yesterday
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.presetChip,
+              (startDate && startDate === endDate && startDate !== today && startDate !== yesterday) && styles.presetChipActive,
+            ]}
+            onPress={() => setSingleDatePickerVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="calendar"
+              size={13}
+              color={(startDate && startDate === endDate && startDate !== today && startDate !== yesterday) ? '#FFFFFF' : COLORS.primary}
+            />
+            <Text
+              style={[
+                styles.presetChipText,
+                (startDate && startDate === endDate && startDate !== today && startDate !== yesterday) && styles.presetChipTextActive,
+              ]}
+            >
+              {startDate && startDate === endDate && startDate !== today && startDate !== yesterday
+                ? formatDate(startDate)
+                : 'Single Date'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.presetChip,
+              ((startDate || endDate) && startDate !== endDate) && styles.presetChipActive,
+            ]}
+            onPress={() => setStartDatePickerVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="calendar-outline"
+              size={13}
+              color={((startDate || endDate) && startDate !== endDate) ? '#FFFFFF' : COLORS.textSecondary}
+            />
+            <Text
+              style={[
+                styles.presetChipText,
+                ((startDate || endDate) && startDate !== endDate) && styles.presetChipTextActive,
+              ]}
+            >
+              Custom Range
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
 
         <View style={styles.dateFilterRow}>
           <View style={{ flex: 1, marginRight: SPACING.xs }}>
@@ -179,7 +276,7 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
               activeOpacity={0.8}
             >
               <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
-              <Text style={styles.datePickerTriggerText}>{startDate || 'Start Date'}</Text>
+              <Text style={styles.datePickerTriggerText}>{startDate || 'Start Date (All)'}</Text>
             </TouchableOpacity>
           </View>
           <View style={{ flex: 1, marginLeft: SPACING.xs }}>
@@ -190,7 +287,7 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
               activeOpacity={0.8}
             >
               <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
-              <Text style={styles.datePickerTriggerText}>{endDate || 'To Date'}</Text>
+              <Text style={styles.datePickerTriggerText}>{endDate || 'To Date (All)'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -376,6 +473,17 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
         onSelectDate={(date) => setEndDate(date)}
         title="Select To Date"
       />
+
+      <DatePickerModal
+        visible={singleDatePickerVisible}
+        onClose={() => setSingleDatePickerVisible(false)}
+        selectedDate={startDate || today}
+        onSelectDate={(date) => {
+          setStartDate(date);
+          setEndDate(date);
+        }}
+        title="Select Single Date"
+      />
     </SafeAreaView>
   );
 };
@@ -495,6 +603,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  presetChipsScroll: {
+    marginBottom: SPACING.sm,
+  },
+  presetChipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  presetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  presetChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  presetChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  presetChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   filterFieldLabel: {
     fontSize: 11,

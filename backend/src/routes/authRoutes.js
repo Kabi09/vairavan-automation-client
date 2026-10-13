@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   login,
   getMe,
+  updateProfile,
   changePassword,
   refreshToken,
   logout,
@@ -13,6 +14,7 @@ import {
   validateLogin,
   validateChangePassword,
   validateRefreshToken,
+  validateUpdateProfile,
 } from '../validators/authValidator.js';
 
 const router = Router();
@@ -23,6 +25,7 @@ router.post('/refresh', validateRefreshToken, validate, refreshToken);
 
 // Protected routes
 router.get('/me', authenticate, getMe);
+router.patch('/profile', authenticate, validateUpdateProfile, validate, updateProfile);
 router.patch('/change-password', authenticate, validateChangePassword, validate, changePassword);
 router.post('/logout', authenticate, logout);
 

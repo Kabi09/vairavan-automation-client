@@ -17,7 +17,6 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import companyApi from '../../api/companyApi';
 import dutyApi from '../../api/dutyApi';
-import taskApi from '../../api/taskApi';
 import uploadApi from '../../api/uploadApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
@@ -36,11 +35,6 @@ import { APP_CONFIG } from '../../constants/config';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
 export const DutyFormScreen = ({ navigation, route }) => {
-  // Assigned task linkage state
-  const [tasks, setTasks] = useState([]);
-  const [selectedTaskId, setSelectedTaskId] = useState('');
-  const [taskDropdownVisible, setTaskDropdownVisible] = useState(false);
-
   // Form fields
   const [dutyDate, setDutyDate] = useState(getTodayDateString());
   const [companies, setCompanies] = useState([]);
@@ -75,89 +69,25 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const handleSelectTask = (taskId, itemObj) => {
-    setSelectedTaskId(taskId || '');
-
-    if (!taskId) {
-      // "Not Mentioned" selected
-      return;
-    }
-
-    const task = itemObj?.task || tasks.find((t) => t._id === taskId);
-    if (task) {
-      // 1. Auto-fill Company if matching name exists
-      if (task.companyName && companies.length > 0) {
-        const matched = companies.find(
-          (c) => c.companyName?.trim().toLowerCase() === task.companyName.trim().toLowerCase()
-        );
-        if (matched) {
-          setSelectedCompanyId(matched._id);
-          if (fieldErrors.company) setFieldErrors((p) => ({ ...p, company: null }));
-        }
-      }
-
-      // 2. Auto-fill Contact Phone
-      if (task.phoneNumber) {
-        const cleanPhone = task.phoneNumber.replace(/\D/g, '').slice(-10);
-        setCustomerPhone(cleanPhone);
-        if (fieldErrors.customerPhone) {
-          setFieldErrors((p) => ({ ...p, customerPhone: null }));
-        }
-      }
-
-      // 3. Auto-fill Work Type if task work matches one of the preset categories
-      if (task.work) {
-        const matchedWorkType = APP_CONFIG.WORK_TYPES.find(
-          (wt) => wt.toLowerCase() === task.work.trim().toLowerCase()
-        );
-        if (matchedWorkType) {
-          setWorkType(matchedWorkType);
-        }
-      }
-
-      // Machine name, customer contact name, and work description are NOT auto-filled
-      // so technician enters them manually for the specific on-site service visit.
-    }
-  };
-
   useFocusEffect(
     useCallback(() => {
       const loadInitialData = async () => {
         try {
-          const [compRes, taskRes] = await Promise.all([
-            companyApi.getCompanies({ status: 'active', limit: 100 }).catch(() => ({ data: { companies: [] } })),
-            taskApi.getMyTasks({ limit: 100 }).catch(() => ({ data: { tasks: [] } })),
-          ]);
-
-          let activeComps = [];
+          const compRes = await companyApi.getCompanies({ status: 'active', limit: 100 }).catch(() => ({ data: { companies: [] } }));
           if (compRes.data?.companies) {
-            activeComps = compRes.data.companies;
+            const activeComps = compRes.data.companies;
             setCompanies(activeComps);
             if (!selectedCompanyId && activeComps.length > 0) {
               setSelectedCompanyId(activeComps[0]._id);
             }
           }
-
-          if (taskRes.data?.tasks) {
-            const taskList = taskRes.data.tasks;
-            setTasks(taskList);
-
-            // If arrived from a task action with route params
-            const paramTaskId = route?.params?.taskId;
-            if (paramTaskId && !selectedTaskId) {
-              const found = taskList.find((t) => t._id === paramTaskId);
-              if (found) {
-                handleSelectTask(paramTaskId, { task: found });
-              }
-            }
-          }
         } catch (err) {
-          console.warn('Failed to load companies or tasks in duty form:', err);
+          console.warn('Failed to load companies in duty form:', err);
         }
       };
 
       loadInitialData();
-    }, [selectedCompanyId, route?.params?.taskId])
+    }, [selectedCompanyId])
   );
 
   // Location capture
@@ -322,10 +252,6 @@ export const DutyFormScreen = ({ navigation, route }) => {
         customerProofPhotos: uploadedPhotos,
       };
 
-      if (selectedTaskId) {
-        payload.taskId = selectedTaskId;
-      }
-
       if (locationCoords) {
         payload.latitude = locationCoords.latitude;
         payload.longitude = locationCoords.longitude;
@@ -345,11 +271,6 @@ export const DutyFormScreen = ({ navigation, route }) => {
       setLoading(false);
     }
   };
-
-  const selectedTaskObj = tasks.find((t) => t._id === selectedTaskId);
-  const taskDisplayName = selectedTaskObj
-    ? `${selectedTaskObj.taskName} (${selectedTaskObj.companyName})`
-    : 'Not Mentioned';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -372,50 +293,6 @@ export const DutyFormScreen = ({ navigation, route }) => {
           {/* Section: Visit Information */}
           <Card style={styles.formCard}>
             <Text style={styles.sectionHeader}>1. Service Visit Information</Text>
-
-            {/* Assigned Task Picker */}
-            <View style={styles.taskFieldWrap}>
-              <View style={styles.taskFieldHeader}>
-                <Text style={styles.fieldLabel}>Assigned Task</Text>
-                {selectedTaskId ? (
-                  <TouchableOpacity
-                    onPress={() => handleSelectTask('', null)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.clearTaskLink}>Clear Selection</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.taskDropdownBtn,
-                  selectedTaskId ? styles.taskDropdownBtnActive : null,
-                ]}
-                onPress={() => setTaskDropdownVisible(true)}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={selectedTaskId ? 'clipboard' : 'clipboard-outline'}
-                  size={18}
-                  color={selectedTaskId ? COLORS.primary : COLORS.textMuted}
-                />
-                <Text
-                  style={[
-                    styles.taskDropdownBtnText,
-                    selectedTaskId ? styles.taskDropdownBtnTextActive : null,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {taskDisplayName}
-                </Text>
-                <Ionicons name="chevron-down" size={18} color={COLORS.textMuted} />
-              </TouchableOpacity>
-              <Text style={styles.taskHelperText}>
-                {selectedTaskId
-                  ? 'Company & phone auto-filled. Enter machine name, customer contact & work description below.'
-                  : 'Select an assigned task to link, or leave as "Not Mentioned".'}
-              </Text>
-            </View>
 
             <View style={styles.datePickerRow}>
               <View style={{ flex: 1 }}>
@@ -724,29 +601,6 @@ export const DutyFormScreen = ({ navigation, route }) => {
         title="Select Check-Out Time"
       />
 
-      <DropdownPickerModal
-        visible={taskDropdownVisible}
-        title="Select Assigned Task"
-        options={[
-          {
-            value: '',
-            label: 'Not Mentioned',
-            subtitle: 'Direct visit - enter details manually',
-          },
-          ...tasks.map((t) => ({
-            value: t._id,
-            label: `${t.taskName || 'Task'} (${t.companyName || 'Company'})`,
-            subtitle: `${t.work || 'Work'} • ${t.phoneNumber || 'No phone'}`,
-            task: t,
-          })),
-        ]}
-        selectedValue={selectedTaskId}
-        onSelect={(val, fullItem) => {
-          handleSelectTask(val, fullItem);
-          setTaskDropdownVisible(false);
-        }}
-        onClose={() => setTaskDropdownVisible(false)}
-      />
     </SafeAreaView>
   );
 };
@@ -1003,51 +857,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.primary,
-  },
-  taskFieldWrap: {
-    marginBottom: SPACING.md,
-  },
-  taskFieldHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  clearTaskLink: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.danger,
-  },
-  taskDropdownBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  taskDropdownBtnActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primarySubtle,
-  },
-  taskDropdownBtnText: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.textMuted,
-    fontWeight: '500',
-  },
-  taskDropdownBtnTextActive: {
-    color: COLORS.primaryDark,
-    fontWeight: '700',
-  },
-  taskHelperText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 4,
   },
 });
 

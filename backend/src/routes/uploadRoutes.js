@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   uploadSignature,
   uploadProofPhotos,
+  uploadAvatar,
   deleteUploadedAsset,
   streamUploadedFile,
 } from '../controllers/uploadController.js';
@@ -9,6 +10,7 @@ import { authenticate } from '../middleware/authenticate.js';
 import {
   uploadSignatureMiddleware,
   uploadProofPhotosMiddleware,
+  uploadAvatarMiddleware,
 } from '../middleware/upload.js';
 
 const router = Router();
@@ -21,6 +23,7 @@ router.use(authenticate);
 
 router.post('/signature', uploadSignatureMiddleware, uploadSignature);
 router.post('/proof-photos', uploadProofPhotosMiddleware, uploadProofPhotos);
+router.post('/avatar', uploadAvatarMiddleware, uploadAvatar);
 router.delete('/:key(*)', deleteUploadedAsset);
 
 export default router;

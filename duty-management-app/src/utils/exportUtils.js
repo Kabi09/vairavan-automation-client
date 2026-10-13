@@ -1,6 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 const LOGO_URL =
   'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
@@ -41,15 +41,120 @@ const escapeCsv = (val) => {
 };
 
 /**
+ * Prompt user to either save directly to device Downloads/documents or share via WhatsApp/other apps
+ */
+const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle, content }) => {
+  const isSharingAvailable = await Sharing.isAvailableAsync().catch(() => false);
+
+  const doDownload = async () => {
+    try {
+      let LegacyFS = null;
+      try {
+        LegacyFS = require('expo-file-system/legacy');
+      } catch {}
+
+      if (!LegacyFS) {
+        try {
+          LegacyFS = require('expo-file-system');
+        } catch {}
+      }
+
+      // Android: Save to user's selected directory (e.g. Downloads) via StorageAccessFramework
+      if (Platform.OS === 'android' && LegacyFS && LegacyFS.StorageAccessFramework) {
+        const permissions = await LegacyFS.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          let base64Data = '';
+          if (fileUri) {
+            base64Data = await LegacyFS.readAsStringAsync(fileUri, {
+              encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+            });
+          } else if (content) {
+            base64Data = typeof btoa !== 'undefined'
+              ? btoa(unescape(encodeURIComponent(content)))
+              : Buffer.from(content, 'utf-8').toString('base64');
+          }
+
+          const createdFileUri = await LegacyFS.StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            filename,
+            mimeType
+          );
+
+          await LegacyFS.writeAsStringAsync(createdFileUri, base64Data, {
+            encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+          });
+
+          Alert.alert(
+            'Download Complete',
+            `File saved successfully to your selected folder:\n\n${filename}`
+          );
+          return;
+        }
+      }
+
+      // iOS or fallback: save to documents directory
+      if (LegacyFS && LegacyFS.documentDirectory && fileUri) {
+        const dest = `${LegacyFS.documentDirectory}${filename}`;
+        await LegacyFS.copyAsync({ from: fileUri, to: dest }).catch(() => {});
+        Alert.alert('Download Complete', `File saved to device documents:\n\n${filename}`);
+        return;
+      }
+
+      Alert.alert('Download Complete', `File is ready on your device:\n\n${filename}`);
+    } catch (err) {
+      console.warn('Download error:', err);
+      if (isSharingAvailable && fileUri) {
+        Alert.alert(
+          'Download Notice',
+          'Direct folder save was cancelled. You can use the Share sheet to save to your files.',
+          [
+            { text: 'Open Share', onPress: () => doShare() },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+      } else {
+        Alert.alert('Download Error', err.message || 'Could not download file');
+      }
+    }
+  };
+
+  const doShare = async () => {
+    if (!isSharingAvailable) {
+      Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
+      return;
+    }
+    await Sharing.shareAsync(fileUri, {
+      mimeType,
+      dialogTitle: dialogTitle || `Share ${filename}`,
+      UTI: mimeType === 'application/pdf' ? '.pdf' : 'public.comma-separated-values-text',
+    });
+  };
+
+  Alert.alert(
+    'Export Ready',
+    `Choose an action for "${filename}":`,
+    [
+      {
+        text: 'Download to Phone',
+        onPress: doDownload,
+      },
+      {
+        text: 'Share (WhatsApp/Apps)',
+        onPress: doShare,
+      },
+      {
+        text: 'Cancel',
+        style: 'cancel',
+      },
+    ],
+    { cancelable: true }
+  );
+};
+
+/**
  * Universal file writer compatible with Expo SDK 52/54/57+ and legacy runtimes
  */
 const writeCsvFileAndShare = async (cleanFilename, csvContent, dialogTitle) => {
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (!isAvailable) {
-    Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
-    return;
-  }
-
   const filenameWithExt = `${cleanFilename}_${Date.now()}.csv`;
   let fileUri = null;
 
@@ -90,10 +195,12 @@ const writeCsvFileAndShare = async (cleanFilename, csvContent, dialogTitle) => {
     throw new Error('Unable to initialize local file system storage for export');
   }
 
-  await Sharing.shareAsync(fileUri, {
+  await promptDownloadOrShare({
+    fileUri,
+    filename: filenameWithExt,
     mimeType: 'text/csv',
     dialogTitle,
-    UTI: 'public.comma-separated-values-text',
+    content: csvContent,
   });
 };
 
@@ -381,8 +488,12 @@ export const exportDutiesToPDF = async ({
       base64: false,
     });
 
-    await Sharing.shareAsync(uri, {
-      UTI: '.pdf',
+    const cleanTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filenameWithExt = `${cleanTitle}_${Date.now()}.pdf`;
+
+    await promptDownloadOrShare({
+      fileUri: uri,
+      filename: filenameWithExt,
       mimeType: 'application/pdf',
       dialogTitle: `Export ${title} (PDF)`,
     });
@@ -671,8 +782,12 @@ export const exportLeavesToPDF = async ({
       base64: false,
     });
 
-    await Sharing.shareAsync(uri, {
-      UTI: '.pdf',
+    const cleanTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filenameWithExt = `${cleanTitle}_${Date.now()}.pdf`;
+
+    await promptDownloadOrShare({
+      fileUri: uri,
+      filename: filenameWithExt,
       mimeType: 'application/pdf',
       dialogTitle: `Export ${title} (PDF)`,
     });
@@ -934,8 +1049,12 @@ export const exportEmployeesToPDF = async ({
       base64: false,
     });
 
-    await Sharing.shareAsync(uri, {
-      UTI: '.pdf',
+    const cleanTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filenameWithExt = `${cleanTitle}_${Date.now()}.pdf`;
+
+    await promptDownloadOrShare({
+      fileUri: uri,
+      filename: filenameWithExt,
       mimeType: 'application/pdf',
       dialogTitle: `Export ${title} (PDF)`,
     });
@@ -1166,8 +1285,12 @@ export const exportCompaniesToPDF = async ({
       base64: false,
     });
 
-    await Sharing.shareAsync(uri, {
-      UTI: '.pdf',
+    const cleanTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filenameWithExt = `${cleanTitle}_${Date.now()}.pdf`;
+
+    await promptDownloadOrShare({
+      fileUri: uri,
+      filename: filenameWithExt,
       mimeType: 'application/pdf',
       dialogTitle: `Export ${title} (PDF)`,
     });
