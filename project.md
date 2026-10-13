@@ -940,14 +940,58 @@
 - Logic changed:
   - Restored active filter state indicator for AllDutiesScreen without runtime errors.
 
+### 2026-10-13
+#### Admin Calendar Modal (Today Leaves & Holiday Management), Employee Highlights Modal (This Month Holidays & Birthdays), Profile Date of Birth & Birthday Highlights
+- What was changed:
+  - **Date of Birth Field**:
+    - Added `dateOfBirth` (Date) to User model (`backend/src/models/User.js`).
+    - Added ISO8601 validation for `dateOfBirth` in `authValidator.js` and `employeeValidator.js`.
+    - Allowed employees to view and edit their `dateOfBirth` in `ProfileScreen.jsx` via `DatePickerModal`.
+    - Allowed admins to view, input, and update employee `dateOfBirth` in `EmployeeFormScreen.jsx` via `DatePickerModal`.
+    - Updated backend `authController.updateProfile` and `employeeController.createEmployee`/`updateEmployee` to persist `dateOfBirth`.
+  - **Admin Dashboard Calendar & Today's Leaves**:
+    - Replaced the 4th metric card ("Pending Reviews") on `AdminDashboardScreen.jsx` with "Calendar & Off" showing calendar icon and count of employees on leave today.
+    - Clicking the card opens an interactive bottom sheet modal with two segmented tabs:
+      - **On Leave Today**: Lists employees currently on leave today with their avatar, name, employee ID, designation, leave type badge, date range, reason, and direct one-tap call button.
+      - **Holidays**: Direct "+ Add New Company Holiday" button (navigates to `HolidayManagementScreen`), lists upcoming holidays, and provides a quick link to open full holiday manager.
+  - **Employee Dashboard Highlights**:
+    - Replaced the quick action card "My Duties (History & logs)" on `EmployeeDashboardScreen.jsx` with "Highlights" (with sparkles icon and subtitle "Holidays & Birthdays").
+    - Clicking it opens an interactive modal where the **first** section prominently displays **only this month's holidays** (`thisMonthHolidays`), followed by **birthdays this month** with celebration badges, and a shortcut link to the full year calendar (`HolidayListScreen`). (Note: "My Duties" remains directly accessible in the bottom navigation tab bar).
+  - **Birthday Celebration Highlights**:
+    - Added dynamic celebration highlight banner on Admin Dashboard when any employee celebrates a birthday today.
+    - Added personalized celebration card on Employee Dashboard if today is the logged-in employee's birthday ("Happy Birthday, [Name]! 🎉🎂"), or team birthday alert if any teammate celebrates their birthday today.
+    - Enhanced `dashboardController.getAdminDashboard` and `dashboardController.getEmployeeDashboard` to compute and return `todaysLeaves`, `todayBirthdays`, `thisMonthBirthdays`, and `thisMonthHolidays`.
+- Files changed:
+  - `backend/src/models/User.js`
+  - `backend/src/validators/authValidator.js`
+  - `backend/src/validators/employeeValidator.js`
+  - `backend/src/controllers/authController.js`
+  - `backend/src/controllers/employeeController.js`
+  - `backend/src/controllers/dashboardController.js`
+  - `duty-management-app/src/screens/common/ProfileScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeFormScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Dashboard API now feeds real-time today leaves, this-month holidays, and birthday celebrations.
+  - Admin dashboard metric 4 converted from reviews to calendar & attendance off.
+  - Employee quick action card converted to monthly highlights modal.
+  - Users can record their date of birth in their profile.
+- Reason: User requested: (1) Admin pending reviews card changed to Calendar showing today's leaves and holiday management/add; (2) Employee "My Duties (History & logs)" changed to "Highlights" showing this month's holidays first; (3) Date of birth profile support and birthday highlights for employees and admin.
+- Impact: Streamlined daily attendance visibility for admins, clear monthly holiday and birthday awareness for employees, and personal date-of-birth customization.
+
 ## Current Progress
 - Completed:
   - Robust client-side PDF and Excel export engine (`src/utils/exportUtils.js`) with dual options: Download directly to phone storage or Share to WhatsApp/social media.
   - All Duties screen Filter Popup Modal with presets (All, Today, Yesterday, Single Date, Custom Range) and summary pills.
-  - Company Details screen fix: Default to showing all duties without pre-filter, plus date presets (All, Today, Yesterday, Single Date, Custom Range).
-  - Total removal of task-oriented code across backend and frontend. System is strictly duty-oriented.
-  - Employee profile edit: Self-service editing of phone, email, and avatar upload to Cloudflare R2 bucket. Change password untouched.
-  - 30/30 backend unit tests passing.
+  - Company Details screen: Default to showing all duties without pre-filter, plus date presets.
+  - Employee profile edit: Self-service editing of phone, email, date of birth, and avatar upload to Cloudflare R2 bucket. Change password untouched.
+  - Admin Dashboard Calendar & Off card with modal detailing who is on leave today and holiday management shortcuts.
+  - Employee Dashboard Highlights card opening modal featuring strictly this month's holidays first and birthdays this month.
+  - Dynamic birthday celebration banners on Admin and Employee dashboards.
+  - Date of birth integration across User model, validators, ProfileScreen, and EmployeeFormScreen.
+  - 30/30 backend unit tests passing; 0 undeclared variables across all mobile screens.
 - In Progress:
   - None.
 - Pending:

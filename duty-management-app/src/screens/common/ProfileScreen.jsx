@@ -24,7 +24,8 @@ import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
 import ErrorMessage from '../../components/ErrorMessage';
 import ConfirmationDialog from '../../components/ConfirmationDialog';
-import { formatDate } from '../../utils/dateUtils';
+import DatePickerModal from '../../components/DatePickerModal';
+import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { isValidEmail, isValidPhone } from '../../utils/validators';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
@@ -38,10 +39,12 @@ export const ProfileScreen = ({ navigation }) => {
   // Avatar upload state
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  // Edit contact info state (Phone and Email only)
+  // Edit contact info state (Phone, Email, and Date of Birth)
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editDob, setEditDob] = useState('');
+  const [dobPickerVisible, setDobPickerVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [editError, setEditError] = useState('');
 
@@ -98,6 +101,7 @@ export const ProfileScreen = ({ navigation }) => {
   const openEditModal = () => {
     setEditPhone(user?.phoneNumber || '');
     setEditEmail(user?.email || '');
+    setEditDob(user?.dateOfBirth ? formatISODateOnly(user.dateOfBirth) : '');
     setEditError('');
     setEditModalVisible(true);
   };
@@ -125,16 +129,22 @@ export const ProfileScreen = ({ navigation }) => {
       const res = await authApi.updateProfile({
         email: cleanEmail,
         phoneNumber: cleanPhone,
+        dateOfBirth: editDob || null,
       });
 
       if (res?.data?.user) {
         updateProfile(res.data.user);
       } else {
-        updateProfile({ ...user, email: cleanEmail, phoneNumber: cleanPhone });
+        updateProfile({
+          ...user,
+          email: cleanEmail,
+          phoneNumber: cleanPhone,
+          dateOfBirth: editDob || null,
+        });
       }
 
       setEditModalVisible(false);
-      Alert.alert('Profile Updated', 'Your phone number and email have been saved successfully.');
+      Alert.alert('Profile Updated', 'Your profile details have been saved successfully.');
     } catch (err) {
       setEditError(extractErrorMessage(err, 'Failed to update contact info'));
     } finally {
@@ -226,6 +236,16 @@ export const ProfileScreen = ({ navigation }) => {
             </View>
           </View>
 
+          <View style={styles.infoRow}>
+            <Ionicons name="gift-outline" size={20} color={COLORS.primary} style={styles.infoIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.infoLabel}>Date of Birth</Text>
+              <Text style={styles.infoValue}>
+                {user?.dateOfBirth ? formatDate(user.dateOfBirth) : 'Not provided'}
+              </Text>
+            </View>
+          </View>
+
           {user?.address ? (
             <View style={styles.infoRow}>
               <Ionicons name="location-outline" size={20} color={COLORS.primary} style={styles.infoIcon} />
@@ -284,7 +304,7 @@ export const ProfileScreen = ({ navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Contact Info</Text>
+              <Text style={styles.modalTitle}>Edit Profile Info</Text>
               <TouchableOpacity
                 onPress={() => setEditModalVisible(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -294,7 +314,7 @@ export const ProfileScreen = ({ navigation }) => {
             </View>
 
             <Text style={styles.modalSubtitle}>
-              Update your email address and 10-digit mobile number. Name and credentials remain managed by administration.
+              Update your email, 10-digit mobile number, and date of birth. Name and credentials remain managed by administration.
             </Text>
 
             {editError ? <ErrorMessage message={editError} style={{ marginBottom: SPACING.md }} /> : null}
@@ -319,6 +339,21 @@ export const ProfileScreen = ({ navigation }) => {
               icon="call-outline"
             />
 
+            <View style={styles.dobContainer}>
+              <Text style={styles.dobLabel}>Date of Birth</Text>
+              <TouchableOpacity
+                style={styles.dobButton}
+                onPress={() => setDobPickerVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="gift-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <Text style={editDob ? styles.dobText : styles.dobPlaceholder}>
+                  {editDob ? formatDate(editDob) : 'Select date of birth'}
+                </Text>
+                <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.modalActions}>
               <SecondaryButton
                 title="Cancel"
@@ -336,6 +371,17 @@ export const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      <DatePickerModal
+        visible={dobPickerVisible}
+        title="Select Date of Birth"
+        selectedDate={editDob}
+        onSelectDate={(d) => {
+          setEditDob(d);
+          setDobPickerVisible(false);
+        }}
+        onClose={() => setDobPickerVisible(false)}
+      />
 
       {/* Logout Confirmation */}
       <ConfirmationDialog
@@ -532,6 +578,34 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: SPACING.md,
     lineHeight: 18,
+  },
+  dobContainer: {
+    marginBottom: SPACING.md,
+  },
+  dobLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  dobButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  dobText: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  dobPlaceholder: {
+    fontSize: 14,
+    color: COLORS.textMuted,
   },
   modalActions: {
     flexDirection: 'row',

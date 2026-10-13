@@ -6,6 +6,8 @@ import {
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
+  Modal,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +31,10 @@ export const AdminDashboardScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+
+  // Calendar & Attendance modal
+  const [calendarModalVisible, setCalendarModalVisible] = useState(false);
+  const [calendarTab, setCalendarTab] = useState('leaves'); // 'leaves' | 'holidays'
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -60,6 +66,9 @@ export const AdminDashboardScreen = ({ navigation }) => {
   const metrics = data?.metrics || {};
   const upcomingHolidays = data?.upcomingHolidays || [];
   const recentDuties = data?.recentDuties || [];
+  const todaysLeaves = data?.todaysLeaves || [];
+  const todayBirthdays = data?.todayBirthdays || [];
+  const thisMonthBirthdays = data?.thisMonthBirthdays || [];
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -111,6 +120,25 @@ export const AdminDashboardScreen = ({ navigation }) => {
           <LoadingIndicator message="Loading dashboard analytics..." />
         ) : (
           <>
+            {/* Birthday Celebration Highlight */}
+            {todayBirthdays.length > 0 && (
+              <Card style={styles.birthdayHighlightCard}>
+                <View style={styles.birthdayRow}>
+                  <View style={styles.birthdayIconWrap}>
+                    <Ionicons name="gift" size={24} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.birthdayTitle}>Today's Birthday Celebration! 🎂</Text>
+                    <Text style={styles.birthdayText}>
+                      {todayBirthdays
+                        .map((b) => `${b.employeeName} (${b.employeeId || b.designation})`)
+                        .join(', ')}
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+            )}
+
             {/* Metric Grid */}
             <Text style={styles.sectionTitle}>Overview Metrics</Text>
             <View style={styles.metricsGrid}>
@@ -155,15 +183,15 @@ export const AdminDashboardScreen = ({ navigation }) => {
 
               <Card
                 style={styles.metricCard}
-                onPress={() => navigation.navigate('DutiesTab')}
+                onPress={() => setCalendarModalVisible(true)}
               >
-                <View style={[styles.metricIcon, { backgroundColor: '#FEF2F2' }]}>
-                  <Ionicons name="hourglass" size={22} color={COLORS.danger} />
+                <View style={[styles.metricIcon, { backgroundColor: '#F5F3FF' }]}>
+                  <Ionicons name="calendar" size={22} color="#7C3AED" />
                 </View>
                 <Text style={styles.metricValue}>
-                  {metrics.pendingDutyReviews ?? 0}
+                  {todaysLeaves.length}
                 </Text>
-                <Text style={styles.metricLabel}>Pending Reviews</Text>
+                <Text style={styles.metricLabel}>Calendar & Off</Text>
               </Card>
             </View>
 
@@ -268,6 +296,195 @@ export const AdminDashboardScreen = ({ navigation }) => {
           </>
         )}
       </ScrollView>
+
+      {/* Calendar & Attendance Modal */}
+      <Modal
+        visible={calendarModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCalendarModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.calendarModalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Company Calendar & Leaves</Text>
+                <Text style={styles.modalSubtitle}>Today's team off-duty logs and holiday schedule</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setCalendarModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Segmented Tabs */}
+            <View style={styles.modalTabsRow}>
+              <TouchableOpacity
+                style={[styles.modalTabBtn, calendarTab === 'leaves' && styles.modalTabBtnActive]}
+                onPress={() => setCalendarTab('leaves')}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="airplane-outline"
+                  size={16}
+                  color={calendarTab === 'leaves' ? COLORS.primary : COLORS.textSecondary}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[styles.modalTabText, calendarTab === 'leaves' && styles.modalTabTextActive]}
+                >
+                  On Leave Today ({todaysLeaves.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalTabBtn, calendarTab === 'holidays' && styles.modalTabBtnActive]}
+                onPress={() => setCalendarTab('holidays')}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={16}
+                  color={calendarTab === 'holidays' ? COLORS.primary : COLORS.textSecondary}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[styles.modalTabText, calendarTab === 'holidays' && styles.modalTabTextActive]}
+                >
+                  Holidays ({upcomingHolidays.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Tab 1: On Leave Today */}
+            {calendarTab === 'leaves' ? (
+              <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={false}>
+                {todaysLeaves.length === 0 ? (
+                  <View style={styles.emptyAttendanceWrap}>
+                    <View style={styles.emptyAttendanceIcon}>
+                      <Ionicons name="checkmark-done-circle" size={48} color={COLORS.success} />
+                    </View>
+                    <Text style={styles.emptyAttendanceTitle}>Full Attendance Today!</Text>
+                    <Text style={styles.emptyAttendanceSub}>
+                      No employees are on leave today. All active field technicians are available.
+                    </Text>
+                  </View>
+                ) : (
+                  todaysLeaves.map((leave) => {
+                    const emp = leave.employee || {};
+                    return (
+                      <Card key={leave._id} style={styles.leaveEmployeeCard}>
+                        <View style={styles.leaveEmployeeHeader}>
+                          <View style={styles.leaveEmployeeAvatar}>
+                            <Text style={styles.leaveAvatarLetters}>
+                              {(emp.employeeName || 'U').substring(0, 2).toUpperCase()}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                            <Text style={styles.leaveEmployeeName}>{emp.employeeName || 'Employee'}</Text>
+                            <Text style={styles.leaveEmployeeMeta}>
+                              ID: {emp.employeeId} • {emp.designation || 'Staff'}
+                            </Text>
+                          </View>
+                          <View style={styles.leaveTypeBadge}>
+                            <Text style={styles.leaveTypeBadgeText}>
+                              {(leave.leaveType || 'LEAVE').toUpperCase()}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.leaveDetailsBox}>
+                          <View style={styles.leaveDateRow}>
+                            <Ionicons name="calendar-outline" size={14} color={COLORS.primary} />
+                            <Text style={styles.leaveDateText}>
+                              {formatDate(leave.startDate)} {leave.startDate !== leave.endDate && `to ${formatDate(leave.endDate)}`}
+                            </Text>
+                          </View>
+                          {leave.reason ? (
+                            <Text style={styles.leaveReasonText} numberOfLines={2}>
+                              "{leave.reason}"
+                            </Text>
+                          ) : null}
+                        </View>
+
+                        {emp.phoneNumber ? (
+                          <TouchableOpacity
+                            style={styles.callEmployeeBtn}
+                            onPress={() => Linking.openURL(`tel:${emp.phoneNumber}`)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="call" size={14} color={COLORS.primary} style={{ marginRight: 6 }} />
+                            <Text style={styles.callEmployeeText}>Call: {emp.phoneNumber}</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </Card>
+                    );
+                  })
+                )}
+              </ScrollView>
+            ) : (
+              /* Tab 2: Holidays Add & List */
+              <ScrollView style={styles.modalBodyScroll} showsVerticalScrollIndicator={false}>
+                <TouchableOpacity
+                  style={styles.addHolidayActionBtn}
+                  onPress={() => {
+                    setCalendarModalVisible(false);
+                    navigation.navigate('HolidayManagement');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add-circle" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.addHolidayActionText}>+ Add New Company Holiday</Text>
+                </TouchableOpacity>
+
+                {upcomingHolidays.length === 0 ? (
+                  <View style={styles.emptyAttendanceWrap}>
+                    <Ionicons name="calendar-outline" size={42} color={COLORS.textMuted} />
+                    <Text style={styles.emptyAttendanceTitle}>No Upcoming Holidays</Text>
+                    <Text style={styles.emptyAttendanceSub}>
+                      Tap the button above to add factory holidays or festival breaks.
+                    </Text>
+                  </View>
+                ) : (
+                  upcomingHolidays.map((holiday) => (
+                    <Card key={holiday._id} style={styles.modalHolidayItem}>
+                      <View style={styles.holidayRow}>
+                        <View style={styles.holidayIcon}>
+                          <Ionicons name="calendar" size={18} color={COLORS.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.holidayName}>{holiday.holidayName}</Text>
+                          <Text style={styles.holidayDate}>
+                            {formatDate(holiday.startDate)} {holiday.startDate !== holiday.endDate && `to ${formatDate(holiday.endDate)}`}
+                          </Text>
+                          {holiday.description ? (
+                            <Text style={styles.holidayDescText}>{holiday.description}</Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    </Card>
+                  ))
+                )}
+
+                <TouchableOpacity
+                  style={styles.viewFullHolidaysBtn}
+                  onPress={() => {
+                    setCalendarModalVisible(false);
+                    navigation.navigate('HolidayManagement');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.viewFullHolidaysText}>Open Full Holiday Manager</Text>
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -484,6 +701,233 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  birthdayHighlightCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+  },
+  birthdayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  birthdayIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.md,
+  },
+  birthdayTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  birthdayText: {
+    fontSize: 13,
+    color: '#B45309',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  calendarModalContent: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: RADIUS.lg,
+    borderTopRightRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  modalTabsRow: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADIUS.md,
+    padding: 4,
+    marginBottom: SPACING.md,
+  },
+  modalTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: RADIUS.sm,
+  },
+  modalTabBtnActive: {
+    backgroundColor: COLORS.surface,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  modalTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  modalTabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  modalBodyScroll: {
+    maxHeight: 400,
+  },
+  emptyAttendanceWrap: {
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  emptyAttendanceIcon: {
+    marginBottom: SPACING.sm,
+  },
+  emptyAttendanceTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  emptyAttendanceSub: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: SPACING.xl,
+    lineHeight: 18,
+  },
+  leaveEmployeeCard: {
+    marginBottom: SPACING.sm,
+    padding: SPACING.md,
+  },
+  leaveEmployeeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  leaveEmployeeAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.primarySubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaveAvatarLetters: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  leaveEmployeeName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  leaveEmployeeMeta: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  leaveTypeBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  leaveTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  leaveDetailsBox: {
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceAlt,
+  },
+  leaveDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  leaveDateText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  leaveReasonText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  callEmployeeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primarySubtle,
+    borderRadius: RADIUS.sm,
+    paddingVertical: 8,
+    marginTop: SPACING.sm,
+  },
+  callEmployeeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  addHolidayActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: 12,
+    marginBottom: SPACING.md,
+  },
+  addHolidayActionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  modalHolidayItem: {
+    marginBottom: SPACING.sm,
+    padding: SPACING.md,
+  },
+  holidayDescText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  viewFullHolidaysBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.md,
+    gap: 4,
+  },
+  viewFullHolidaysText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });
 

@@ -18,6 +18,7 @@ export const createEmployee = asyncHandler(async (req, res) => {
     address,
     designation,
     joiningDate,
+    dateOfBirth,
     role = 'employee',
     accountStatus = 'active',
   } = req.body;
@@ -43,6 +44,7 @@ export const createEmployee = asyncHandler(async (req, res) => {
     address,
     designation,
     joiningDate: joiningDate || Date.now(),
+    dateOfBirth: dateOfBirth || null,
     role: role === 'admin' ? 'admin' : 'employee',
     accountStatus,
     createdBy: req.user._id,
@@ -148,6 +150,7 @@ export const updateEmployee = asyncHandler(async (req, res) => {
     address,
     designation,
     joiningDate,
+    dateOfBirth,
   } = req.body;
 
   const employee = await User.findById(id);
@@ -160,6 +163,7 @@ export const updateEmployee = asyncHandler(async (req, res) => {
   if (address !== undefined) employee.address = address;
   if (designation !== undefined) employee.designation = designation;
   if (joiningDate) employee.joiningDate = joiningDate;
+  if (dateOfBirth !== undefined) employee.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
 
   await employee.save();
 

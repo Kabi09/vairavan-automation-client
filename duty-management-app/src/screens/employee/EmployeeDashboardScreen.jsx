@@ -6,6 +6,7 @@ import {
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
+  Modal,
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +31,9 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+
+  // Highlights modal state
+  const [highlightsModalVisible, setHighlightsModalVisible] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -62,6 +66,10 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const recentDuties = data?.recentDuties || [];
   const leaves = data?.leaves || {};
   const holidays = data?.upcomingHolidays || [];
+  const thisMonthHolidays = data?.thisMonthHolidays || [];
+  const todayBirthdays = data?.todayBirthdays || [];
+  const thisMonthBirthdays = data?.thisMonthBirthdays || [];
+  const isMyBirthday = Boolean(data?.isMyBirthday);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -112,6 +120,37 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
 
         <ErrorMessage message={error} onRetry={fetchDashboard} />
 
+        {/* Birthday Celebration Highlights */}
+        {isMyBirthday ? (
+          <Card style={styles.personalBirthdayCard}>
+            <View style={styles.birthdayRow}>
+              <View style={styles.birthdayIconWrap}>
+                <Ionicons name="gift" size={26} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.personalBirthdayTitle}>Happy Birthday, {user?.employeeName}! 🎂</Text>
+                <Text style={styles.personalBirthdaySub}>
+                  Wishing you a joyful celebration and another great year of success!
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ) : todayBirthdays.length > 0 ? (
+          <Card style={styles.teamBirthdayCard}>
+            <View style={styles.birthdayRow}>
+              <View style={styles.birthdayIconWrap}>
+                <Ionicons name="gift" size={24} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.teamBirthdayTitle}>Today's Team Birthday! 🎂</Text>
+                <Text style={styles.teamBirthdaySub}>
+                  {todayBirthdays.map((b) => `${b.employeeName} (${b.designation || 'Staff'})`).join(', ')}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ) : null}
+
         {loading && !refreshing ? (
           <LoadingIndicator message="Loading your dashboard..." />
         ) : (
@@ -131,15 +170,15 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.quickActionBtn, styles.dutyHistoryAction]}
-                onPress={() => navigation.navigate('MyDutiesTab')}
+                style={[styles.quickActionBtn, styles.highlightsAction]}
+                onPress={() => setHighlightsModalVisible(true)}
                 activeOpacity={0.8}
               >
-                <View style={[styles.quickActionIcon, { backgroundColor: '#EEF2FF' }]}>
-                  <Ionicons name="clipboard" size={24} color="#4F46E5" />
+                <View style={[styles.quickActionIcon, { backgroundColor: '#FEF3C7' }]}>
+                  <Ionicons name="sparkles" size={24} color="#D97706" />
                 </View>
-                <Text style={styles.quickActionTitle}>My Duties</Text>
-                <Text style={styles.quickActionSub}>History & logs</Text>
+                <Text style={styles.quickActionTitle}>Highlights</Text>
+                <Text style={styles.quickActionSub}>This month</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -284,6 +323,129 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
           </>
         )}
       </ScrollView>
+      {/* Monthly Highlights Modal */}
+      <Modal
+        visible={highlightsModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setHighlightsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.highlightsModalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>This Month's Highlights ✨</Text>
+                <Text style={styles.modalSubtitle}>Monthly factory holidays & team celebrations</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setHighlightsModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollBody} showsVerticalScrollIndicator={false}>
+              {/* SECTION 1: FIRST SHOW ONLY THIS MONTH'S HOLIDAYS */}
+              <View style={styles.highlightSectionHeader}>
+                <Ionicons name="calendar" size={16} color={COLORS.primary} />
+                <Text style={styles.highlightSectionTitle}>Only This Month's Holidays</Text>
+                <View style={styles.monthPillBadge}>
+                  <Text style={styles.monthPillText}>{thisMonthHolidays.length} Holidays</Text>
+                </View>
+              </View>
+
+              {thisMonthHolidays.length === 0 ? (
+                <View style={styles.emptyHighlightBox}>
+                  <Ionicons name="sunny-outline" size={32} color={COLORS.textMuted} />
+                  <Text style={styles.emptyHighlightTitle}>No Holidays This Month</Text>
+                  <Text style={styles.emptyHighlightSub}>
+                    Regular operational schedule applies for the current month.
+                  </Text>
+                </View>
+              ) : (
+                thisMonthHolidays.map((h) => (
+                  <Card key={h._id} style={styles.highlightHolidayCard}>
+                    <View style={styles.highlightHolidayRow}>
+                      <View style={styles.highlightHolidayIcon}>
+                        <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.highlightHolidayName}>{h.holidayName}</Text>
+                        <Text style={styles.highlightHolidayDates}>
+                          {formatDate(h.startDate)} {h.startDate !== h.endDate && `to ${formatDate(h.endDate)}`}
+                        </Text>
+                        {h.description ? (
+                          <Text style={styles.highlightHolidayDesc}>{h.description}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  </Card>
+                ))
+              )}
+
+              {/* SECTION 2: THIS MONTH'S BIRTHDAYS */}
+              <View style={[styles.highlightSectionHeader, { marginTop: SPACING.lg }]}>
+                <Ionicons name="gift" size={16} color="#D97706" />
+                <Text style={styles.highlightSectionTitle}>Birthdays This Month 🎂</Text>
+                <View style={[styles.monthPillBadge, { backgroundColor: '#FEF3C7' }]}>
+                  <Text style={[styles.monthPillText, { color: '#B45309' }]}>
+                    {thisMonthBirthdays.length} Celeb
+                  </Text>
+                </View>
+              </View>
+
+              {thisMonthBirthdays.length === 0 ? (
+                <View style={styles.emptyHighlightBox}>
+                  <Ionicons name="balloon-outline" size={32} color={COLORS.textMuted} />
+                  <Text style={styles.emptyHighlightTitle}>No Birthdays This Month</Text>
+                  <Text style={styles.emptyHighlightSub}>
+                    No registered colleague birthdays in the current month.
+                  </Text>
+                </View>
+              ) : (
+                thisMonthBirthdays.map((b) => (
+                  <Card key={b._id} style={styles.birthdayMemberCard}>
+                    <View style={styles.birthdayMemberRow}>
+                      <View style={styles.birthdayMemberAvatar}>
+                        <Text style={styles.birthdayMemberLetters}>
+                          {(b.employeeName || 'U').substring(0, 2).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                        <Text style={styles.birthdayMemberName}>{b.employeeName}</Text>
+                        <Text style={styles.birthdayMemberMeta}>
+                          {b.designation || 'Colleague'} • ID: {b.employeeId}
+                        </Text>
+                      </View>
+                      <View style={styles.birthdayDayPill}>
+                        <Ionicons name="sparkles" size={12} color="#D97706" style={{ marginRight: 4 }} />
+                        <Text style={styles.birthdayDayText}>
+                          {new Date(b.dateOfBirth).getDate()}{' '}
+                          {new Date(b.dateOfBirth).toLocaleString('default', { month: 'short' })}
+                        </Text>
+                      </View>
+                    </View>
+                  </Card>
+                ))
+              )}
+
+              <TouchableOpacity
+                style={styles.viewFullHolidaysBtn}
+                onPress={() => {
+                  setHighlightsModalVisible(false);
+                  navigation.navigate('HolidayList');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.viewFullHolidaysText}>View Full Year Calendar</Text>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -545,6 +707,226 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 1,
+  },
+  personalBirthdayCard: {
+    backgroundColor: '#FEF9C3',
+    borderColor: '#FACC15',
+    borderWidth: 1.5,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+  },
+  teamBirthdayCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+  },
+  birthdayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  birthdayIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.md,
+  },
+  personalBirthdayTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#854D0E',
+  },
+  personalBirthdaySub: {
+    fontSize: 12,
+    color: '#A16207',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  teamBirthdayTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  teamBirthdaySub: {
+    fontSize: 12,
+    color: '#B45309',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  highlightsAction: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#4F46E5',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  highlightsModalContent: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: RADIUS.lg,
+    borderTopRightRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  modalScrollBody: {
+    maxHeight: 460,
+  },
+  highlightSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    gap: 6,
+  },
+  highlightSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    flex: 1,
+  },
+  monthPillBadge: {
+    backgroundColor: COLORS.primarySubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  monthPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  emptyHighlightBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.lg,
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.sm,
+  },
+  emptyHighlightTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginTop: SPACING.xs,
+  },
+  emptyHighlightSub: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 2,
+    paddingHorizontal: SPACING.md,
+  },
+  highlightHolidayCard: {
+    marginBottom: SPACING.sm,
+    padding: SPACING.md,
+  },
+  highlightHolidayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  highlightHolidayIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.primarySubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.md,
+  },
+  highlightHolidayName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  highlightHolidayDates: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  highlightHolidayDesc: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  birthdayMemberCard: {
+    marginBottom: SPACING.sm,
+    padding: SPACING.md,
+  },
+  birthdayMemberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  birthdayMemberAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  birthdayMemberLetters: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  birthdayMemberName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  birthdayMemberMeta: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  birthdayDayPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  birthdayDayText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  viewFullHolidaysBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.md,
+    gap: 4,
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  viewFullHolidaysText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });
 

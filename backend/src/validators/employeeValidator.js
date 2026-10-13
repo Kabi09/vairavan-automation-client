@@ -40,6 +40,10 @@ export const validateCreateEmployee = [
     .optional()
     .isISO8601()
     .withMessage('Joining date must be a valid date'),
+  body('dateOfBirth')
+    .optional({ nullable: true, checkFalsy: true })
+    .isISO8601()
+    .withMessage('Date of birth must be a valid date'),
   body('role')
     .optional()
     .isIn(['admin', 'employee', 'staff'])
@@ -76,6 +80,10 @@ export const validateUpdateEmployee = [
     .optional()
     .isISO8601()
     .withMessage('Joining date must be a valid date'),
+  body('dateOfBirth')
+    .optional({ nullable: true, checkFalsy: true })
+    .isISO8601()
+    .withMessage('Date of birth must be a valid date'),
 ];
 
 export const validateUpdateEmployeeStatus = [

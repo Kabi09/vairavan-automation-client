@@ -45,4 +45,8 @@ export const validateUpdateProfile = [
   body('avatar')
     .optional()
     .isString(),
+  body('dateOfBirth')
+    .optional({ nullable: true, checkFalsy: true })
+    .isISO8601()
+    .withMessage('Date of birth must be a valid date (YYYY-MM-DD)'),
 ];

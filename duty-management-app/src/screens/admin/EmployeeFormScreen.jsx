@@ -6,15 +6,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  TouchableOpacity,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import employeeApi from '../../api/employeeApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
 import TextInputField from '../../components/TextInputField';
 import PrimaryButton from '../../components/PrimaryButton';
 import ErrorMessage from '../../components/ErrorMessage';
+import DatePickerModal from '../../components/DatePickerModal';
+import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { isValidEmail, isValidPhone } from '../../utils/validators';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
@@ -30,6 +34,10 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
   const [phone, setPhone] = useState(existingEmployee?.phoneNumber || '');
   const [designation, setDesignation] = useState(existingEmployee?.designation || '');
   const [address, setAddress] = useState(existingEmployee?.address || '');
+  const [dateOfBirth, setDateOfBirth] = useState(
+    existingEmployee?.dateOfBirth ? formatISODateOnly(existingEmployee.dateOfBirth) : ''
+  );
+  const [dobPickerVisible, setDobPickerVisible] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -77,6 +85,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
           phoneNumber: phone.trim(),
           designation: designation.trim(),
           address: address.trim(),
+          dateOfBirth: dateOfBirth || null,
         });
         Alert.alert('Success', 'Employee details updated successfully', [
           { text: 'OK', onPress: () => navigation.goBack() },
@@ -90,6 +99,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
           phoneNumber: phone.trim(),
           designation: designation.trim() || 'Service Engineer',
           address: address.trim(),
+          dateOfBirth: dateOfBirth || null,
           role: 'employee',
           accountStatus: 'active',
         });
@@ -206,6 +216,21 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
               error={fieldErrors.phone}
             />
 
+            <View style={styles.dobContainer}>
+              <Text style={styles.dobLabel}>Date of Birth (Optional)</Text>
+              <TouchableOpacity
+                style={styles.dobButton}
+                onPress={() => setDobPickerVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="gift-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <Text style={dateOfBirth ? styles.dobText : styles.dobPlaceholder}>
+                  {dateOfBirth ? formatDate(dateOfBirth) : 'Select date of birth'}
+                </Text>
+                <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+            </View>
+
             <TextInputField
               label="Address / Branch"
               placeholder="e.g. Coimbatore Branch"
@@ -224,6 +249,17 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <DatePickerModal
+        visible={dobPickerVisible}
+        title="Select Date of Birth"
+        selectedDate={dateOfBirth}
+        onSelectDate={(d) => {
+          setDateOfBirth(d);
+          setDobPickerVisible(false);
+        }}
+        onClose={() => setDobPickerVisible(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -249,6 +285,34 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: SPACING.md,
+  },
+  dobContainer: {
+    marginBottom: SPACING.md,
+  },
+  dobLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  dobButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  dobText: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  dobPlaceholder: {
+    fontSize: 14,
+    color: COLORS.textMuted,
   },
   submitBtn: {
     marginBottom: SPACING.xxl,

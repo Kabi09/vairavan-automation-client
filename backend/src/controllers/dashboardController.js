@@ -7,6 +7,57 @@ import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
 /**
+ * Helper to compute today's and current month's birthdays
+ */
+const getBirthdayHighlights = async (now) => {
+  const usersWithDob = await User.find({
+    accountStatus: 'active',
+    dateOfBirth: { $ne: null },
+    email: { $ne: 'admin@gmail.com' },
+  }).select('employeeName employeeId designation role avatar dateOfBirth phoneNumber');
+
+  const currentMonth = now.getMonth();
+  const currentDay = now.getDate();
+
+  const todayBirthdays = [];
+  const thisMonthBirthdays = [];
+
+  usersWithDob.forEach((u) => {
+    if (!u.dateOfBirth) return;
+    const dob = new Date(u.dateOfBirth);
+    const dobMonth = dob.getMonth();
+    const dobDay = dob.getDate();
+
+    if (dobMonth === currentMonth) {
+      thisMonthBirthdays.push(u);
+      if (dobDay === currentDay) {
+        todayBirthdays.push(u);
+      }
+    }
+  });
+
+  return { todayBirthdays, thisMonthBirthdays };
+};
+
+/**
+ * Helper to fetch this month's active holidays
+ */
+const getThisMonthHolidays = async (now) => {
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  return Holiday.find({
+    status: 'active',
+    isDeleted: false,
+    $or: [
+      { startDate: { $gte: startOfMonth, $lte: endOfMonth } },
+      { endDate: { $gte: startOfMonth, $lte: endOfMonth } },
+      { startDate: { $lte: startOfMonth }, endDate: { $gte: endOfMonth } },
+    ],
+  }).sort({ startDate: 1 });
+};
+
+/**
  * @desc    Get aggregated metrics for Admin Dashboard
  * @route   GET /api/dashboard/admin
  * @access  Private/Admin
@@ -27,9 +78,11 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
     activeCompaniesCount,
     todayDutiesCount,
     pendingDutyReviewsCount,
+    todaysLeaves,
     leaveMetrics,
     upcomingHolidays,
     recentDuties,
+    { todayBirthdays, thisMonthBirthdays },
   ] = await Promise.all([
     // Total active employees
     User.countDocuments({ role: 'employee', accountStatus: 'active' }),
@@ -44,6 +97,15 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
 
     // Duties awaiting review
     Duty.countDocuments({ status: 'submitted' }),
+
+    // Approved leaves active today
+    Leave.find({
+      status: 'approved',
+      startDate: { $lte: todayEnd },
+      endDate: { $gte: todayStart },
+    })
+      .populate('employee', 'employeeName employeeId phoneNumber designation avatar dateOfBirth')
+      .sort({ startDate: 1 }),
 
     // Aggregated leave counts
     Leave.aggregate([
@@ -63,7 +125,7 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
       startDate: { $lte: next30Days },
     })
       .sort({ startDate: 1 })
-      .limit(5),
+      .limit(10),
 
     // Recent duty activity
     Duty.find()
@@ -72,6 +134,9 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
       .populate('employee', 'employeeName employeeId')
       .populate('company', 'companyName')
       .select('customerName machineName workType status dutyDate createdAt'),
+
+    // Birthdays
+    getBirthdayHighlights(now),
   ]);
 
   const leaveCounts = {
@@ -93,6 +158,7 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
       totalActiveCompanies: activeCompaniesCount,
       todaySubmittedDuties: todayDutiesCount,
       pendingDutyReviews: pendingDutyReviewsCount,
+      todaysLeavesCount: todaysLeaves.length,
       leaves: {
         pending: leaveCounts.pending,
         approved: leaveCounts.approved,
@@ -100,6 +166,9 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
         cancelled: leaveCounts.cancelled,
       },
     },
+    todaysLeaves,
+    todayBirthdays,
+    thisMonthBirthdays,
     upcomingHolidays,
     recentDuties,
   });
@@ -128,6 +197,8 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
     recentDuties,
     leaveMetrics,
     upcomingHolidays,
+    thisMonthHolidays,
+    { todayBirthdays, thisMonthBirthdays },
   ] = await Promise.all([
     // Today's duty reports submitted by this employee
     Duty.find({
@@ -163,7 +234,13 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
       startDate: { $lte: next30Days },
     })
       .sort({ startDate: 1 })
-      .limit(5),
+      .limit(10),
+
+    // Holidays active strictly this current month
+    getThisMonthHolidays(now),
+
+    // Birthday highlights
+    getBirthdayHighlights(now),
   ]);
 
   const leaveSummary = {
@@ -179,6 +256,12 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
     }
   });
 
+  // Check if today is logged in user's birthday
+  const userDob = req.user.dateOfBirth ? new Date(req.user.dateOfBirth) : null;
+  const isMyBirthday = Boolean(
+    userDob && userDob.getMonth() === now.getMonth() && userDob.getDate() === now.getDate()
+  );
+
   return ApiResponse.success(res, 200, 'Employee dashboard retrieved successfully', {
     profile: {
       employeeName: req.user.employeeName,
@@ -186,6 +269,7 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
       email: req.user.email,
       designation: req.user.designation,
       joiningDate: req.user.joiningDate,
+      dateOfBirth: req.user.dateOfBirth,
     },
     todayDuties: {
       count: todayDuties.length,
@@ -194,6 +278,10 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
     recentDuties,
     leaves: leaveSummary,
     upcomingHolidays,
+    thisMonthHolidays,
+    todayBirthdays,
+    thisMonthBirthdays,
+    isMyBirthday,
   });
 });
 

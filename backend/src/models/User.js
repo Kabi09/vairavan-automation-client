@@ -55,6 +55,10 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
     role: {
       type: String,
       enum: {

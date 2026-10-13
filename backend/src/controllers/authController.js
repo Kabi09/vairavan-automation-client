@@ -97,7 +97,7 @@ export const getMe = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const updateProfile = asyncHandler(async (req, res) => {
-  const { phoneNumber, email, avatar } = req.body;
+  const { phoneNumber, email, avatar, dateOfBirth } = req.body;
 
   const user = await User.findById(req.user._id);
   if (!user) {
@@ -122,6 +122,10 @@ export const updateProfile = asyncHandler(async (req, res) => {
 
   if (avatar !== undefined) {
     user.avatar = avatar.trim();
+  }
+
+  if (dateOfBirth !== undefined) {
+    user.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
   }
 
   await user.save();
