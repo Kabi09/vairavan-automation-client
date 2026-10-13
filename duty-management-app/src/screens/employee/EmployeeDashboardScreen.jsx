@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
-import { formatDate, formatTime, getGreeting } from '../../utils/dateUtils';
+import { formatDate, formatTime, getGreeting, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
@@ -71,6 +71,19 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const todayBirthdays = data?.todayBirthdays || [];
   const thisMonthBirthdays = data?.thisMonthBirthdays || [];
   const isMyBirthday = Boolean(data?.isMyBirthday);
+  const todaysLeaves = data?.todaysLeaves || [];
+
+  const todaysHolidays = useMemo(() => {
+    if (data?.todaysHolidays && data.todaysHolidays.length > 0) {
+      return data.todaysHolidays;
+    }
+    const todayStr = getTodayDateString();
+    return (data?.upcomingHolidays || []).filter((h) => {
+      const startStr = h.startDate ? h.startDate.split('T')[0] : '';
+      const endStr = h.endDate ? h.endDate.split('T')[0] : '';
+      return startStr <= todayStr && endStr >= todayStr;
+    });
+  }, [data]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -208,6 +221,108 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                 <Text style={styles.teamBirthdayTitle}>Today's Team Birthday! 🎂</Text>
                 <Text style={styles.teamBirthdaySub}>
                   {todayBirthdays.map((b) => `${b.employeeName} (${b.designation || 'Staff'})`).join(', ')}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ) : null}
+
+        {/* Staff On Leave Today Highlight Box */}
+        {todaysLeaves.length > 0 ? (
+          <Card
+            style={styles.leaveHighlightCard}
+            onPress={() => navigation.navigate('LeavesTab')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.birthdayRow}>
+              {todaysLeaves.length === 1 ? (
+                (() => {
+                  const emp = todaysLeaves[0].employee || {};
+                  const avUrl = typeof emp.avatar === 'string' ? emp.avatar : emp.avatar?.url;
+                  return (
+                    <View style={styles.leaveAvatarWrapper}>
+                      {avUrl ? (
+                        <Image source={{ uri: avUrl }} style={styles.leaveHighlightAvatarImg} />
+                      ) : (
+                        <View style={styles.leaveAvatarLettersWrap}>
+                          <Text style={styles.leaveAvatarLetters}>
+                            {(emp.employeeName || 'U').substring(0, 2).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.leaveBadgeMini}>
+                        <Text style={{ fontSize: 9 }}>🌴</Text>
+                      </View>
+                    </View>
+                  );
+                })()
+              ) : (
+                <View style={styles.multiAvatarRow}>
+                  {todaysLeaves.slice(0, 3).map((l, idx) => {
+                    const emp = l.employee || {};
+                    const avUrl = typeof emp.avatar === 'string' ? emp.avatar : emp.avatar?.url;
+                    return (
+                      <View
+                        key={l._id || idx}
+                        style={[styles.stackedAvatar, { marginLeft: idx > 0 ? -12 : 0 }]}
+                      >
+                        {avUrl ? (
+                          <Image source={{ uri: avUrl }} style={styles.leaveStackedAvatarImg} />
+                        ) : (
+                          <View style={styles.leaveStackedAvatarLettersWrap}>
+                            <Text style={styles.leaveStackedAvatarLetters}>
+                              {(emp.employeeName || 'U').substring(0, 1).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                  <View style={styles.leaveBadgeMini}>
+                    <Text style={{ fontSize: 9 }}>🌴</Text>
+                  </View>
+                </View>
+              )}
+              <View style={{ flex: 1, marginLeft: SPACING.md }}>
+                <View style={styles.highlightHeaderRow}>
+                  <Text style={styles.leaveHighlightTitle}>Colleagues On Leave Today 🌴</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#2563EB" />
+                </View>
+                <Text style={styles.leaveHighlightText} numberOfLines={2}>
+                  {todaysLeaves
+                    .map((l) => {
+                      const emp = l.employee || {};
+                      return `${emp.employeeName || 'Colleague'} (${emp.designation || 'Staff'})`;
+                    })
+                    .join(', ')}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ) : null}
+
+        {/* Company Holiday Today Highlight Box */}
+        {todaysHolidays.length > 0 ? (
+          <Card
+            style={styles.holidayHighlightCard}
+            onPress={() => setHighlightsModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.birthdayRow}>
+              <View style={styles.holidayIconWrap}>
+                <Ionicons name="sparkles" size={20} color="#15803D" />
+                <View style={styles.holidayBadgeMini}>
+                  <Text style={{ fontSize: 9 }}>🎉</Text>
+                </View>
+              </View>
+              <View style={{ flex: 1, marginLeft: SPACING.md }}>
+                <View style={styles.highlightHeaderRow}>
+                  <Text style={styles.holidayHighlightTitle}>Today is a Company Holiday! 🎉</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#15803D" />
+                </View>
+                <Text style={styles.holidayHighlightText} numberOfLines={2}>
+                  {todaysHolidays.map((h) => h.holidayName).join(' • ')}
+                  {todaysHolidays[0]?.description ? ` (${todaysHolidays[0].description})` : ''}
                 </Text>
               </View>
             </View>
@@ -893,6 +1008,135 @@ const styles = StyleSheet.create({
   teamBirthdaySub: {
     fontSize: 12,
     color: '#B45309',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  highlightHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  leaveHighlightCard: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+    borderWidth: 1,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+  },
+  leaveAvatarWrapper: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+  },
+  leaveHighlightAvatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+  },
+  leaveAvatarLettersWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#DBEAFE',
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaveAvatarLetters: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1D4ED8',
+  },
+  leaveBadgeMini: {
+    position: 'absolute',
+    bottom: -3,
+    right: -3,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 9,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    elevation: 2,
+  },
+  leaveStackedAvatarImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  leaveStackedAvatarLettersWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#DBEAFE',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaveStackedAvatarLetters: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1D4ED8',
+  },
+  leaveHighlightTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  leaveHighlightText: {
+    fontSize: 13,
+    color: '#2563EB',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  holidayHighlightCard: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+    borderWidth: 1,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+  },
+  holidayIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#DCFCE7',
+    borderWidth: 2,
+    borderColor: '#22C55E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  holidayBadgeMini: {
+    position: 'absolute',
+    bottom: -3,
+    right: -3,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 9,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    elevation: 2,
+  },
+  holidayHighlightTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  holidayHighlightText: {
+    fontSize: 13,
+    color: '#15803D',
     marginTop: 2,
     fontWeight: '500',
   },

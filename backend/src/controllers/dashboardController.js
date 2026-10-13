@@ -81,6 +81,7 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
     todaysLeaves,
     leaveMetrics,
     upcomingHolidays,
+    todaysHolidays,
     recentDuties,
     { todayBirthdays, thisMonthBirthdays },
   ] = await Promise.all([
@@ -127,6 +128,14 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
       .sort({ startDate: 1 })
       .limit(10),
 
+    // Active holidays today
+    Holiday.find({
+      status: 'active',
+      isDeleted: false,
+      startDate: { $lte: todayEnd },
+      endDate: { $gte: todayStart },
+    }).sort({ startDate: 1 }),
+
     // Recent duty activity
     Duty.find()
       .sort({ createdAt: -1 })
@@ -167,6 +176,7 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
       },
     },
     todaysLeaves,
+    todaysHolidays,
     todayBirthdays,
     thisMonthBirthdays,
     upcomingHolidays,
@@ -198,6 +208,8 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
     leaveMetrics,
     upcomingHolidays,
     thisMonthHolidays,
+    todaysLeaves,
+    todaysHolidays,
     { todayBirthdays, thisMonthBirthdays },
   ] = await Promise.all([
     // Today's duty reports submitted by this employee
@@ -239,6 +251,23 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
     // Holidays active strictly this current month
     getThisMonthHolidays(now),
 
+    // Approved leaves active today across company
+    Leave.find({
+      status: 'approved',
+      startDate: { $lte: todayEnd },
+      endDate: { $gte: todayStart },
+    })
+      .populate('employee', 'employeeName employeeId phoneNumber designation avatar dateOfBirth')
+      .sort({ startDate: 1 }),
+
+    // Active holidays today
+    Holiday.find({
+      status: 'active',
+      isDeleted: false,
+      startDate: { $lte: todayEnd },
+      endDate: { $gte: todayStart },
+    }).sort({ startDate: 1 }),
+
     // Birthday highlights
     getBirthdayHighlights(now),
   ]);
@@ -277,6 +306,8 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
     },
     recentDuties,
     leaves: leaveSummary,
+    todaysLeaves,
+    todaysHolidays,
     upcomingHolidays,
     thisMonthHolidays,
     todayBirthdays,

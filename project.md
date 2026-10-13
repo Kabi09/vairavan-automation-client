@@ -79,6 +79,38 @@
 ## Change History
 
 ### 2026-10-13
+#### Admin Calendar On-Leave Avatar Fix, Top On-Leave Highlight Box, and Top Holiday Highlight Box
+- What was changed:
+  - **Admin Calendar Modal On-Leave Avatar Fix (`AdminDashboardScreen.jsx`)**:
+    - Resolved issue where employee avatars were not showing in the "On Leave Today" list inside the Calendar modal.
+    - Updated avatar container to render `<Image source={{ uri: avatarUrl }} style={styles.leaveEmployeeAvatarImg} />` when `emp.avatar` is present, with fallback initials only when no photo is uploaded.
+    - Configured `overflow: 'hidden'` and `borderRadius: 19` to guarantee proper circular cropping.
+  - **Top Highlight Section Boxes: On Leave Today & Company Holiday (`AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`)**:
+    - Created dedicated, stylish hero cards rendered at the top of the dashboard:
+      - **Staff On Leave Today Highlight Box**:
+        - Displays single avatar or stacked multi-avatar row (up to 3 colleagues) with a `🌴` badge.
+        - Shows staff names and designations.
+        - Tapping opens the Attendance / Leave manager directly.
+      - **Company Holiday Today Highlight Box**:
+        - Displays festive icon wrapper with `🎉` sparkles badge.
+        - Shows official holiday name and celebration description.
+        - Tapping opens the Holiday details view directly.
+    - **Concurrent Box Display**: Configured so that if today has a birthday person, a colleague on leave, and/or a holiday, all respective highlight boxes display concurrently in sequence rather than replacing each other.
+  - **Backend Controller Enhancement (`dashboardController.js`)**:
+    - Added query for `todaysHolidays` (matching `startDate <= todayEnd && endDate >= todayStart`) and returned in `getAdminDashboard` and `getEmployeeDashboard`.
+    - Added company-wide `todaysLeaves` populate query in `getEmployeeDashboard` so employees can also see who is on leave.
+- Files changed:
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `backend/src/controllers/dashboardController.js`
+  - `project.md`
+- Logic changed:
+  - On-leave avatar in calendar modal now renders profile photos.
+  - Dashboards display dedicated top section highlight cards for leaves and holidays alongside birthdays.
+- Reason: User requested: "admin- calender - on leave today- avator not show fix ; also holiday today same like bithday top one section irrru athammari holiday irrutha add pannigo; fix also leave members add like birthdaday;;; incase birthday one person,leave one person two section box show; fix the additional feature;".
+- Impact: Full avatar visibility in calendar modals, clear at-a-glance awareness of colleagues on leave and company holidays from the top of the dashboard.
+
+### 2026-10-13
 #### Employee Features: Duty Form Client Company Dropdown, My Duties Filter Options, and My Leaves Status Tabs
 - What was changed:
   - **Employee Duty Form Client Company Searchable Dropdown (`DutyFormScreen.jsx`)**:
@@ -1224,6 +1256,9 @@
 
 ## Current Progress
 - Completed:
+  - Admin Calendar On-Leave Avatar: Fixed avatar image rendering in Calendar modal on-leave attendee list.
+  - Top Dashboard Highlight Boxes: Added distinct On-Leave Today and Company Holiday Today hero cards running concurrently with Birthday celebration cards across Admin and Employee dashboards.
+  - Backend Dashboard Controller: Enhanced with `todaysHolidays` and company-wide `todaysLeaves` queries.
   - Employee Duty Form: Client company selector upgraded to searchable modal dropdown picker with site subtitle and auto-fill customer phone.
   - Employee My Duties: Multi-criteria filter options added with Date presets, Custom date range, Client company picker, Status chips, active filter summary pills, and centered dialog modal.
   - Employee My Leaves: Segmented status tabs (`All`, `Pending`, `Approved`, `Rejected`, `Cancelled`) with dynamic badge counters and responsive empty states.
