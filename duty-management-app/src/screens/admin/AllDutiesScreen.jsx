@@ -69,7 +69,11 @@ export const AllDutiesScreen = ({ route }) => {
           employeeApi.getEmployees({ limit: 200 }).catch(() => ({ data: { employees: [] } })),
           companyApi.getCompanies({ limit: 200 }).catch(() => ({ data: { companies: [] } })),
         ]);
-        if (empRes.data?.employees) setEmployees(empRes.data.employees);
+        if (empRes.data?.employees) {
+          setEmployees(
+            empRes.data.employees.filter((e) => e.role !== 'admin' && e.email?.toLowerCase() !== 'admin@gmail.com')
+          );
+        }
         if (compRes.data?.companies) setCompanies(compRes.data.companies);
       } catch (err) {
         console.warn('Failed to load filter options:', err);

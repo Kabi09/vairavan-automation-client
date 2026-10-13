@@ -73,7 +73,7 @@ export const TaskAssignScreen = ({ navigation }) => {
 
         if (empRes.data?.employees) {
           const formattedEmp = empRes.data.employees
-            .filter((e) => e.accountStatus === 'active')
+            .filter((e) => e.accountStatus === 'active' && e.role !== 'admin' && e.email?.toLowerCase() !== 'admin@gmail.com')
             .map((e) => ({
               value: e._id,
               id: e._id,

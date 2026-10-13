@@ -70,7 +70,9 @@ export const LeaveRequestsScreen = () => {
       try {
         const res = await employeeApi.getEmployees({ limit: 200 });
         if (res.data?.employees) {
-          setEmployees(res.data.employees);
+          setEmployees(
+            res.data.employees.filter((e) => e.role !== 'admin' && e.email?.toLowerCase() !== 'admin@gmail.com')
+          );
         }
       } catch (err) {
         console.warn('Failed to load employee list:', err);

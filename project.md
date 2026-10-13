@@ -598,6 +598,29 @@
 - Impact: Users can build an installable `.apk` file directly using EAS CLI.
 
 ### 2026-10-13
+#### Leave Application Admin-Only Notification & Developer Login (Hidden from User Management)
+- What was changed:
+  - Fixed leave submission notification: when an employee submits a leave request, only administrators are notified via in-app notification and FCM push (`leaveController.createLeave`). Submitting employees do not receive notification for their own submission.
+  - Added Developer Admin login: `admin@gmail.com` / `Zxcvbnm09#` with role `admin` (Employee ID: `DEV001`). Seeded across MongoDB Atlas databases (`vairavan_auto`, `vairavan_auto23`, `vairavan_automation`, `vairavan01`, `test`) and verified via live authentication on Vercel.
+  - User Management / Employee Directory filtering:
+    - In `backend/src/controllers/employeeController.js`: `getEmployees` defaults to excluding admin accounts (`filter.role = { $ne: 'admin' }`) and strictly excludes developer login `filter.email = { $ne: 'admin@gmail.com' }`. `getEmployeeById` hides `admin@gmail.com` from employee lookups.
+    - In `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`: Excluded admin accounts and `admin@gmail.com` from User Management display.
+    - In `TaskAssignScreen.jsx`, `LeaveRequestsScreen.jsx`, and `AllDutiesScreen.jsx`: Staff selectors filter out admin accounts and developer login.
+- Files changed:
+  - `backend/src/controllers/leaveController.js`
+  - `backend/src/controllers/employeeController.js`
+  - `backend/src/scripts/seedDevAdmin.js`
+  - `backend/package.json`
+  - `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`
+  - `duty-management-app/src/screens/admin/TaskAssignScreen.jsx`
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `project.md`
+- Logic changed: Leave submission notifies only admins; developer login active; admin and dev accounts hidden from employee/user management.
+- Reason: User requested that leave apply only notifies the admin, and added developer login `admin@gmail.com` / `Zxcvbnm09#` hidden from user management.
+- Impact: Employee list cleanly displays only working staff without displaying admin/developer accounts.
+
+### 2026-10-13
 #### Duty Form Auto-fill Refinement, Task Work Type Dropdown & Duty Details Linked Task View
 - What was changed:
   - `DutyFormScreen.jsx`: Removed unwanted auto-fills for machine name/model, customer name, and work description when selecting an assigned task. Technicians now manually enter the exact machine/model, on-site customer contact, and work carried out. Retained smart auto-fill for company and 10-digit phone number.

