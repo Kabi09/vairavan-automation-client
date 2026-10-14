@@ -29,6 +29,7 @@ const notificationSchema = new mongoose.Schema(
         'holiday_created',
         'holiday',
         'announcement',
+        'message',
       ],
       default: 'leave_request',
       index: true,

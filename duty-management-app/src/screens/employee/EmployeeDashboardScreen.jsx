@@ -21,6 +21,7 @@ import notificationApi from '../../api/notificationApi';
 import Card from '../../components/Card';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
+import EmployeeMessagesModal from '../../components/EmployeeMessagesModal';
 import { formatDate, formatTime, getGreeting, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
@@ -39,6 +40,8 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
 
   // Highlights modal state
   const [highlightsModalVisible, setHighlightsModalVisible] = useState(false);
+  // Messages modal state
+  const [messagesModalVisible, setMessagesModalVisible] = useState(false);
 
 
   const fetchDashboard = useCallback(async () => {
@@ -483,6 +486,18 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={[styles.quickActionBtn, styles.messageQuickAction]}
+                onPress={() => setMessagesModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons name="chatbubble-ellipses" size={24} color="#0284C7" />
+                </View>
+                <Text style={styles.quickActionTitle}>Messages</Text>
+                <Text style={styles.quickActionSub}>From Admin</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={[styles.quickActionBtn, styles.highlightsAction]}
                 onPress={() => setHighlightsModalVisible(true)}
                 activeOpacity={0.8}
@@ -646,46 +661,8 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
             </View>
 
             <ScrollView style={styles.modalScrollBody} showsVerticalScrollIndicator={false}>
-              {/* SECTION 1: FIRST SHOW ONLY THIS MONTH'S HOLIDAYS */}
+              {/* SECTION 1: THIS MONTH'S BIRTHDAYS (FIRST) */}
               <View style={styles.highlightSectionHeader}>
-                <Ionicons name="calendar" size={16} color={COLORS.primary} />
-                <Text style={styles.highlightSectionTitle}>Only This Month's Holidays</Text>
-                <View style={styles.monthPillBadge}>
-                  <Text style={styles.monthPillText}>{thisMonthHolidays.length} Holidays</Text>
-                </View>
-              </View>
-
-              {thisMonthHolidays.length === 0 ? (
-                <View style={styles.emptyHighlightBox}>
-                  <Ionicons name="sunny-outline" size={32} color={COLORS.textMuted} />
-                  <Text style={styles.emptyHighlightTitle}>No Holidays This Month</Text>
-                  <Text style={styles.emptyHighlightSub}>
-                    Regular operational schedule applies for the current month.
-                  </Text>
-                </View>
-              ) : (
-                thisMonthHolidays.map((h) => (
-                  <Card key={h._id} style={styles.highlightHolidayCard}>
-                    <View style={styles.highlightHolidayRow}>
-                      <View style={styles.highlightHolidayIcon}>
-                        <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.highlightHolidayName}>{h.holidayName}</Text>
-                        <Text style={styles.highlightHolidayDates}>
-                          {formatDate(h.startDate)} {h.startDate !== h.endDate && `to ${formatDate(h.endDate)}`}
-                        </Text>
-                        {h.description ? (
-                          <Text style={styles.highlightHolidayDesc}>{h.description}</Text>
-                        ) : null}
-                      </View>
-                    </View>
-                  </Card>
-                ))
-              )}
-
-              {/* SECTION 2: THIS MONTH'S BIRTHDAYS */}
-              <View style={[styles.highlightSectionHeader, { marginTop: SPACING.lg }]}>
                 <Ionicons name="gift" size={16} color="#D97706" />
                 <Text style={styles.highlightSectionTitle}>Birthdays This Month 🎂</Text>
                 <View style={[styles.monthPillBadge, { backgroundColor: '#FEF3C7' }]}>
@@ -723,21 +700,59 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                         </View>
                         <View style={{ flex: 1, marginLeft: SPACING.sm }}>
                           <Text style={styles.birthdayMemberName}>{b.employeeName}</Text>
-                        <Text style={styles.birthdayMemberMeta}>
-                          {b.designation || 'Colleague'} • ID: {b.employeeId}
-                        </Text>
+                          <Text style={styles.birthdayMemberMeta}>
+                            {b.designation || 'Colleague'} • ID: {b.employeeId}
+                          </Text>
+                        </View>
+                        <View style={styles.birthdayDayPill}>
+                          <Ionicons name="sparkles" size={12} color="#D97706" style={{ marginRight: 4 }} />
+                          <Text style={styles.birthdayDayText}>
+                            {new Date(b.dateOfBirth).getDate()}{' '}
+                            {new Date(b.dateOfBirth).toLocaleString('default', { month: 'short' })}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={styles.birthdayDayPill}>
-                        <Ionicons name="sparkles" size={12} color="#D97706" style={{ marginRight: 4 }} />
-                        <Text style={styles.birthdayDayText}>
-                          {new Date(b.dateOfBirth).getDate()}{' '}
-                          {new Date(b.dateOfBirth).toLocaleString('default', { month: 'short' })}
+                    </Card>
+                  );
+                })
+              )}
+
+              {/* SECTION 2: THIS MONTH'S HOLIDAYS (BOTTOM) */}
+              <View style={[styles.highlightSectionHeader, { marginTop: SPACING.lg }]}>
+                <Ionicons name="calendar" size={16} color={COLORS.primary} />
+                <Text style={styles.highlightSectionTitle}>This Month's Holidays</Text>
+                <View style={styles.monthPillBadge}>
+                  <Text style={styles.monthPillText}>{thisMonthHolidays.length} Holidays</Text>
+                </View>
+              </View>
+
+              {thisMonthHolidays.length === 0 ? (
+                <View style={styles.emptyHighlightBox}>
+                  <Ionicons name="sunny-outline" size={32} color={COLORS.textMuted} />
+                  <Text style={styles.emptyHighlightTitle}>No Holidays This Month</Text>
+                  <Text style={styles.emptyHighlightSub}>
+                    Regular operational schedule applies for the current month.
+                  </Text>
+                </View>
+              ) : (
+                thisMonthHolidays.map((h) => (
+                  <Card key={h._id} style={styles.highlightHolidayCard}>
+                    <View style={styles.highlightHolidayRow}>
+                      <View style={styles.highlightHolidayIcon}>
+                        <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.highlightHolidayName}>{h.holidayName}</Text>
+                        <Text style={styles.highlightHolidayDates}>
+                          {formatDate(h.startDate)} {h.startDate !== h.endDate && `to ${formatDate(h.endDate)}`}
                         </Text>
+                        {h.description ? (
+                          <Text style={styles.highlightHolidayDesc}>{h.description}</Text>
+                        ) : null}
                       </View>
                     </View>
                   </Card>
-                );
-              })
+                ))
               )}
 
               <TouchableOpacity
@@ -756,6 +771,11 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
         </View>
       </Modal>
 
+      {/* Employee Messages Modal */}
+      <EmployeeMessagesModal
+        visible={messagesModalVisible}
+        onClose={() => setMessagesModalVisible(false)}
+      />
 
     </SafeAreaView>
   );
@@ -828,20 +848,26 @@ const styles = StyleSheet.create({
   },
   quickActionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: SPACING.md,
     marginBottom: SPACING.lg,
   },
   quickActionBtn: {
-    flex: 1,
+    width: '47.5%',
+    flexGrow: 1,
     backgroundColor: COLORS.card,
     borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
+    padding: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   dutyQuickAction: {
     borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
+  },
+  messageQuickAction: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#0284C7',
   },
   leaveQuickAction: {
     borderLeftWidth: 4,

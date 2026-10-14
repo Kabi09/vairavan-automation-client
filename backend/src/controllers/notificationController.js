@@ -3,6 +3,7 @@ import Notification from '../models/Notification.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
+import notificationService from '../services/notificationService.js';
 
 /**
  * @desc    Get user notifications (Admins see admin/broadcast notices, Employees see their own)
@@ -32,6 +33,14 @@ export const getNotifications = asyncHandler(async (req, res) => {
         { recipientRole: 'all' },
       ],
     };
+  }
+
+  if (req.query.type) {
+    if (req.query.type === 'message' && req.user.role === 'admin') {
+      query = { type: 'message', sender: req.user._id };
+    } else {
+      query.type = req.query.type;
+    }
   }
 
   const [notifications, total] = await Promise.all([
@@ -200,6 +209,132 @@ export const removeDeviceToken = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, 200, 'Device token removed successfully');
 });
 
+/**
+ * @desc    Admin send message/announcement to employees (all or selected)
+ * @route   POST /api/notifications/send-message
+ * @access  Private (Admin only)
+ */
+export const sendMessageNotification = asyncHandler(async (req, res) => {
+  const { message, sendToAll, recipientIds } = req.body;
+
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    throw ApiError.badRequest('Message text is required');
+  }
+
+  const trimmedMessage = message.trim();
+  const isAll =
+    sendToAll === true ||
+    sendToAll === 'true' ||
+    !recipientIds ||
+    recipientIds.length === 0 ||
+    recipientIds === 'all';
+
+  let recipientsNotifiedCount = 0;
+
+  if (isAll) {
+    // 1. Broadcast notification to all employees
+    const broadcastNotif = await Notification.create({
+      recipientRole: 'employee',
+      sender: req.user._id,
+      type: 'message',
+      title: 'Message from Admin',
+      message: trimmedMessage,
+      data: {
+        messageText: trimmedMessage,
+        senderName: req.user.employeeName || 'Management',
+        senderId: req.user._id,
+        isBroadcast: true,
+      },
+    });
+
+    // 2. Dispatch push notification to all employees
+    const allEmployees = await User.find({
+      role: { $in: ['employee', 'staff'] },
+      accountStatus: 'active',
+    }).select('_id');
+    recipientsNotifiedCount = allEmployees.length;
+
+    try {
+      await notificationService.notifyAllEmployees(
+        {
+          title: 'Message from Admin',
+          body: trimmedMessage,
+        },
+        {
+          type: 'message',
+          notificationId: broadcastNotif._id.toString(),
+          messageText: trimmedMessage,
+          senderName: req.user.employeeName || 'Management',
+        }
+      );
+    } catch (pushErr) {
+      console.warn('[Push] Error broadcasting message to employees:', pushErr.message);
+    }
+
+    return ApiResponse.success(res, 201, 'Message broadcasted to all employees successfully', {
+      notification: broadcastNotif,
+      recipientsCount: recipientsNotifiedCount,
+      target: 'all',
+    });
+  } else {
+    // Target specific employees
+    const ids = Array.isArray(recipientIds) ? recipientIds : [recipientIds];
+    const targetEmployees = await User.find({
+      _id: { $in: ids },
+      accountStatus: 'active',
+    }).select('_id employeeName deviceTokens');
+
+    if (targetEmployees.length === 0) {
+      throw ApiError.badRequest('No valid active recipient employees found');
+    }
+
+    const createdNotifications = [];
+    for (const emp of targetEmployees) {
+      const notif = await Notification.create({
+        recipient: emp._id,
+        sender: req.user._id,
+        type: 'message',
+        title: 'Message from Admin',
+        message: trimmedMessage,
+        data: {
+          messageText: trimmedMessage,
+          senderName: req.user.employeeName || 'Management',
+          senderId: req.user._id,
+          recipientName: emp.employeeName,
+          isBroadcast: false,
+        },
+      });
+      createdNotifications.push(notif);
+
+      try {
+        await notificationService.sendNotificationToUser(
+          emp._id,
+          {
+            title: 'Message from Admin',
+            body: trimmedMessage,
+          },
+          {
+            type: 'message',
+            notificationId: notif._id.toString(),
+            messageText: trimmedMessage,
+            senderName: req.user.employeeName || 'Management',
+          }
+        );
+      } catch (pushErr) {
+        console.warn(`[Push] Error sending message to user ${emp._id}:`, pushErr.message);
+      }
+    }
+
+    recipientsNotifiedCount = targetEmployees.length;
+
+    return ApiResponse.success(res, 201, `Message sent to ${recipientsNotifiedCount} employee(s) successfully`, {
+      notifications: createdNotifications,
+      recipientsCount: recipientsNotifiedCount,
+      target: 'selected',
+    });
+  }
+});
+
 export default {
   getNotifications,
   markAsRead,
@@ -207,4 +342,5 @@ export default {
   deleteNotification,
   registerDeviceToken,
   removeDeviceToken,
+  sendMessageNotification,
 };

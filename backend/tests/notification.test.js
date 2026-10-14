@@ -129,4 +129,55 @@ describe('In-App Notification Tests', () => {
     assert.equal(empNotif.type, 'leave_reviewed');
     assert.equal(empNotif.data.status, 'approved');
   });
+
+  it('Admin can broadcast message to all employees and specific employee, and employee can view it', async () => {
+    // 1. Employee should NOT be allowed to send admin messages (403)
+    const empSendRes = await request(app)
+      .post('/api/notifications/send-message')
+      .set('Authorization', `Bearer ${employeeUser.token}`)
+      .send({ message: 'Unauthorized message' });
+    assert.equal(empSendRes.status, 403);
+
+    // 2. Admin broadcasts message to all employees
+    const broadcastRes = await request(app)
+      .post('/api/notifications/send-message')
+      .set('Authorization', `Bearer ${adminUser.token}`)
+      .send({
+        message: 'Team meeting tomorrow at 10 AM',
+        sendToAll: true,
+      });
+
+    assert.equal(broadcastRes.status, 201);
+    assert.equal(broadcastRes.body.success, true);
+    assert.equal(broadcastRes.body.data.target, 'all');
+
+    // 3. Employee checks notifications filtered by type=message
+    const empMsgRes = await request(app)
+      .get('/api/notifications?type=message')
+      .set('Authorization', `Bearer ${employeeUser.token}`);
+
+    assert.equal(empMsgRes.status, 200);
+    assert.equal(empMsgRes.body.data.notifications.length, 1);
+    assert.equal(empMsgRes.body.data.notifications[0].type, 'message');
+    assert.equal(empMsgRes.body.data.notifications[0].message, 'Team meeting tomorrow at 10 AM');
+
+    // 4. Admin sends direct message to specific employee
+    const directRes = await request(app)
+      .post('/api/notifications/send-message')
+      .set('Authorization', `Bearer ${adminUser.token}`)
+      .send({
+        message: 'Please review client site documentation',
+        recipientIds: [employeeUser.user._id],
+      });
+
+    assert.equal(directRes.status, 201);
+    assert.equal(directRes.body.data.target, 'selected');
+
+    // 5. Employee now sees 2 messages
+    const empMsgsUpdated = await request(app)
+      .get('/api/notifications?type=message')
+      .set('Authorization', `Bearer ${employeeUser.token}`);
+
+    assert.equal(empMsgsUpdated.body.data.notifications.length, 2);
+  });
 });

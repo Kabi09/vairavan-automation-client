@@ -30,6 +30,16 @@ export const notificationApi = {
     const res = await apiClient.post('/notifications/remove-token', { deviceToken });
     return res.data;
   },
+
+  sendMessage: async ({ message, sendToAll, recipientIds }) => {
+    const res = await apiClient.post('/notifications/send-message', { message, sendToAll, recipientIds });
+    return res.data;
+  },
+
+  getMessages: async (params = {}) => {
+    const res = await apiClient.get('/notifications', { params: { type: 'message', ...params } });
+    return res.data;
+  },
 };
 
 export default notificationApi;

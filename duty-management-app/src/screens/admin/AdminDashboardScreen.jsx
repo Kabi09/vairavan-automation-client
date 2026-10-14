@@ -21,6 +21,7 @@ import notificationApi from '../../api/notificationApi';
 import Card from '../../components/Card';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
+import AdminSendMessageModal from '../../components/AdminSendMessageModal';
 import { formatDate, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
@@ -40,6 +41,9 @@ export const AdminDashboardScreen = ({ navigation }) => {
   // Calendar & Attendance modal
   const [calendarModalVisible, setCalendarModalVisible] = useState(false);
   const [calendarTab, setCalendarTab] = useState('leaves'); // 'leaves' | 'holidays'
+
+  // Admin Send Message modal
+  const [sendMessageModalVisible, setSendMessageModalVisible] = useState(false);
 
 
   const fetchDashboard = useCallback(async () => {
@@ -495,6 +499,27 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </Card>
             </View>
 
+            {/* Quick Staff Broadcast / Message Action */}
+            <TouchableOpacity
+              style={styles.sendMessageBanner}
+              onPress={() => setSendMessageModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.sendMessageLeft}>
+                <View style={styles.sendMessageIconWrap}>
+                  <Ionicons name="chatbubbles" size={22} color="#FFFFFF" />
+                </View>
+                <View style={styles.sendMessageTextWrap}>
+                  <Text style={styles.sendMessageTitle}>Send Message to Staff</Text>
+                  <Text style={styles.sendMessageSub}>Send notice or broadcast to employees</Text>
+                </View>
+              </View>
+              <View style={styles.sendMessageBtnPill}>
+                <Ionicons name="paper-plane" size={13} color="#FFFFFF" />
+                <Text style={styles.sendMessageBtnText}>New Message</Text>
+              </View>
+            </TouchableOpacity>
+
             {/* Leave Summaries Banner */}
             <Card
               style={styles.leaveBannerCard}
@@ -806,6 +831,15 @@ export const AdminDashboardScreen = ({ navigation }) => {
         </View>
       </Modal>
 
+      {/* Admin Send Message Modal */}
+      <AdminSendMessageModal
+        visible={sendMessageModalVisible}
+        onClose={() => setSendMessageModalVisible(false)}
+        onMessageSent={() => {
+          refreshNotifications();
+          fetchDashboard();
+        }}
+      />
 
     </SafeAreaView>
   );
@@ -1509,6 +1543,57 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 3.5,
     backgroundColor: COLORS.primary,
+  },
+  sendMessageBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.primaryDark,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  sendMessageLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  sendMessageIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.md,
+  },
+  sendMessageTextWrap: {
+    flex: 1,
+  },
+  sendMessageTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  sendMessageSub: {
+    fontSize: 11.5,
+    color: '#BFDBFE',
+    marginTop: 2,
+  },
+  sendMessageBtnPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    gap: 4,
+  },
+  sendMessageBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
   },
 });
 

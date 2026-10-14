@@ -74,9 +74,52 @@
 - `DatePickerModal`: Reusable modal calendar date picker with year/month pagination, interactive day-of-month grid, and "Today" quick selector returning formatted `YYYY-MM-DD` strings.
 - `TimePickerModal`: Reusable 12-hour/24-hour clock time picker modal with AM/PM toggle, hour/minute selectors, preset quick time slots, and clean `HH:mm` format.
 - `DropdownPickerModal`: Reusable searchable dropdown selection modal supporting "All" defaults, dynamic item filtering, active checkmark highlighting, and full list support.
-- `NotificationsScreen`: Real-time notification feed displaying staff details, leave reason, date range, status badge, and direct inline Approve and Reject actions with admin remarks.
+- `NotificationsScreen`: Real-time notification feed displaying staff details, leave reason, date range, status badge, direct inline Approve and Reject actions with admin remarks, and tap-to-view full message details.
+- `AdminSendMessageModal`: Admin broadcast and targeted message dispatch modal with two simple fields (Message box and Multi-select employee picker with "All Employees" toggle).
+- `EmployeeMessagesModal`: Employee modal displaying the list of received management notices and announcements with unread indicators and 1-tap full detail viewing.
+- `MessageDetailsModal`: Full message view modal displaying sender, timestamp, broadcast/direct tag, and complete notice content.
 
 ## Change History
+
+### 2026-10-14
+#### Highlights Modal Section Reorder & Admin Message Broadcast with Multi-Employee Select and Employee Full Details View
+- What was changed:
+  - **Employee Highlights Modal Section Swap (`EmployeeDashboardScreen.jsx`)**:
+    - Reordered the modal content so that "Birthdays This Month 🎂" is rendered first at the top, and "This Month's Holidays" is rendered at the bottom.
+  - **Backend Notification Model, Controller & Route (`backend/src/models/Notification.js`, `backend/src/controllers/notificationController.js`, `backend/src/routes/notificationRoutes.js`)**:
+    - Added `'message'` to the `Notification` schema `type` enum.
+    - Implemented `sendMessageNotification` handler at `POST /api/notifications/send-message` protected by admin authorization.
+    - Supports broadcast (`sendToAll: true`) and targeted employee delivery (`recipientIds: [...]`), persisting in-app notifications and triggering push notifications via `notificationService.notifyAllEmployees` and `sendNotificationToUser`.
+    - Updated `getNotifications` with optional `?type=message` filter query.
+    - Automated unit test suite added in `backend/tests/notification.test.js` (40/40 tests passing across 6 test suites).
+  - **Mobile API Client (`notificationApi.js`)**:
+    - Added `sendMessage({ message, sendToAll, recipientIds })` and `getMessages(params)`.
+  - **Admin Message Dispatch UI (`AdminSendMessageModal.jsx`, `AdminDashboardScreen.jsx`)**:
+    - Created `AdminSendMessageModal` containing only two inputs: multi-select employee picker (with "All Employees" toggle + individual employee checkboxes) and a multiline message box.
+    - Added a prominent "Send Message to Staff" banner button on `AdminDashboardScreen.jsx` to open the dispatch modal.
+  - **Employee Message List & Full Details View (`EmployeeMessagesModal.jsx`, `MessageDetailsModal.jsx`, `EmployeeDashboardScreen.jsx`, `NotificationsScreen.jsx`)**:
+    - Added "Messages" quick action card in `EmployeeDashboardScreen.jsx` opening `EmployeeMessagesModal`.
+    - `EmployeeMessagesModal` lists received messages from management with unread dot indicators, formatted timestamps, and message previews.
+    - Created `MessageDetailsModal` showing complete message content, sender name, timestamp, and broadcast/direct pill.
+    - Integrated with `NotificationsScreen.jsx`: clicking any notification of type `message` automatically marks it as read and opens `MessageDetailsModal`.
+- Files changed:
+  - `backend/src/models/Notification.js`
+  - `backend/src/controllers/notificationController.js`
+  - `backend/src/routes/notificationRoutes.js`
+  - `backend/tests/notification.test.js`
+  - `duty-management-app/src/api/notificationApi.js`
+  - `duty-management-app/src/components/AdminSendMessageModal.jsx`
+  - `duty-management-app/src/components/EmployeeMessagesModal.jsx`
+  - `duty-management-app/src/components/MessageDetailsModal.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+- Logic changed:
+  - Highlights modal now displays Birthdays first and Holidays second.
+  - Admins can dispatch broadcast or targeted employee messages directly from the dashboard.
+  - Employees can view the list of received messages from the dashboard and open full message details on tap.
+- Reason: User requested: "one simple modification employee => highlights click this month- show this month holiday and birthdays;; change /move to first show - birthdays then bottom holidays; fix; also add addtional feature-> admin - add message box, and multiselect(employess,all) only two - meaasge,employee send - notification send to employee (message); click full details of the message; enough; employee dashboard message click- show list the message; simple; fix ;".
+- Impact: Streamlined communication channel between Admin and staff with instant push notifications, simple 2-input sender modal, and full detail viewing for employees.
 
 ### 2026-10-14
 #### Highlight Carousel Auto-Scroll with Animation & Task Assignment with Multi-Employee Support & Notification Details
@@ -1653,12 +1696,17 @@
 
 ## Current Progress
 - Completed:
+  - Highlights Modal Section Reorder: Birthdays are displayed first at the top ("Birthdays This Month 🎂"), and Holidays are displayed at the bottom ("This Month's Holidays") in `EmployeeDashboardScreen.jsx`.
+  - Admin Message Broadcast & Targeted Dispatch: Simple 2-field form (`AdminSendMessageModal.jsx`) allowing Admins to compose a message and select recipients via "All Employees" toggle or searchable multi-select checkboxes.
+  - Push & In-App Notification Delivery: Backend `POST /api/notifications/send-message` delivers instant in-app notices and triggers FCM/Expo push notifications to targeted or all active employees.
+  - Employee Message List: "Messages" quick action card added to `EmployeeDashboardScreen.jsx` opening `EmployeeMessagesModal.jsx` to list all received announcements with unread indicators.
+  - 1-Tap Full Message Details: `MessageDetailsModal.jsx` displays complete message text, sender name, timestamp, and target badge when tapping any message from the list or in `NotificationsScreen.jsx`.
   - Highlight Carousel Auto-Scroll with Animation: 3.5s smooth looping scroll animation for Birthdays, On-Leave, and Holidays across Admin and Employee dashboards.
   - Custom "Other" Work Type Display: When "Other" is chosen with custom details entered, it is displayed as `Other (custom data)` across all views (forms, cards, details, modals) and in both PDF and Excel exports.
   - Client Company Location in Work Details & Cards: Company location is displayed alongside or under the company name in `DutyDetailsScreen`, `MyDutiesScreen`, `AllDutiesScreen`, `EmployeeDetailsScreen`, and dashboard activity cards.
   - Removed Duty/Work Status Workflow: Removed `StatusBadge` and status labels (`approved`, `needs fix`, `rejected`, `submitted`) from duty cards and details, removed status filter chips from the filter modal, and removed the manager feedback card. Leave status workflow remains intact.
   - Automatic Phone Download: Persisted SAF directory URI via `SecureStore` in `exportUtils.js`, allowing downloads to save directly without prompt after initial authorization.
-  - 39/39 backend unit tests passing (6 suites); 0 syntax errors across all mobile screens.
+  - 40/40 backend unit tests passing (6 suites); 0 syntax errors across all 65 mobile files.
 - In Progress:
   - None.
 - Pending:

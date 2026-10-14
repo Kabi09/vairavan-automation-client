@@ -26,6 +26,7 @@ import SecondaryButton from '../../components/SecondaryButton';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
+import MessageDetailsModal from '../../components/MessageDetailsModal';
 import { formatDate } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
@@ -44,6 +45,10 @@ export const NotificationsScreen = ({ navigation }) => {
   const [decisionType, setDecisionType] = useState('approved'); // 'approved' | 'rejected'
   const [adminRemarks, setAdminRemarks] = useState('');
   const [submittingDecision, setSubmittingDecision] = useState(false);
+
+  // Message Details Modal State
+  const [messageDetailsModalVisible, setMessageDetailsModalVisible] = useState(false);
+  const [selectedMessageNotif, setSelectedMessageNotif] = useState(null);
 
 
   const fetchNotifications = useCallback(async () => {
@@ -161,6 +166,11 @@ export const NotificationsScreen = ({ navigation }) => {
     // 2. Navigate based on notification type
     const notifType = item.type || '';
 
+    if (notifType === 'message') {
+      setSelectedMessageNotif(item);
+      setMessageDetailsModalVisible(true);
+      return;
+    }
 
     if (notifType === 'holiday' || notifType === 'holiday_created') {
       if (isAdmin) {
@@ -197,6 +207,7 @@ export const NotificationsScreen = ({ navigation }) => {
   const renderNotificationCard = ({ item }) => {
     const isHoliday = item.type === 'holiday' || item.type === 'holiday_created';
     const isLeave = item.type === 'leave_request' || item.type === 'leave_reviewed';
+    const isMessage = item.type === 'message';
     const leaveData = item.data || {};
     const leaveStatus = leaveData.status || 'pending';
     const isPending = leaveStatus === 'pending';
@@ -219,7 +230,9 @@ export const NotificationsScreen = ({ navigation }) => {
               <View
                 style={[
                   styles.statusDot,
-                  isHoliday
+                  isMessage
+                    ? styles.dotMessage
+                    : isHoliday
                     ? styles.dotHoliday
                     : item.type === 'leave_request'
                     ? styles.dotWarning
@@ -240,8 +253,36 @@ export const NotificationsScreen = ({ navigation }) => {
               <Text style={styles.holidayBadgePillText}>Holiday 🎉</Text>
             </View>
           )}
-
+          {isMessage && (
+            <View style={styles.messageBadgePill}>
+              <Text style={styles.messageBadgePillText}>Message 💬</Text>
+            </View>
+          )}
         </View>
+
+        {/* Message Details */}
+        {isMessage && (
+          <View style={styles.messageDetailsBox}>
+            <View style={styles.detailRow}>
+              <Ionicons name="chatbubble-ellipses-outline" size={15} color={COLORS.primary} />
+              <Text style={styles.detailLabel}>From:</Text>
+              <Text style={[styles.detailValue, { fontWeight: '700', color: COLORS.text }]}>
+                {item.data?.senderName || item.sender?.employeeName || 'Management'}
+              </Text>
+            </View>
+            <View style={[styles.detailRow, { alignItems: 'flex-start', marginTop: 4 }]}>
+              <Ionicons name="document-text-outline" size={15} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
+              <Text style={styles.detailLabel}>Notice:</Text>
+              <Text style={[styles.detailValue, styles.reasonText]} numberOfLines={2}>
+                {item.data?.messageText || item.message}
+              </Text>
+            </View>
+            <View style={styles.tapToViewRow}>
+              <Text style={styles.tapToViewText}>Tap to view full message details</Text>
+              <Ionicons name="arrow-forward" size={12} color="#2563EB" />
+            </View>
+          </View>
+        )}
 
         {/* Holiday Details */}
         {isHoliday && (
@@ -459,6 +500,12 @@ export const NotificationsScreen = ({ navigation }) => {
         </View>
       </Modal>
 
+      {/* Message Details Modal */}
+      <MessageDetailsModal
+        visible={messageDetailsModalVisible}
+        onClose={() => setMessageDetailsModalVisible(false)}
+        messageItem={selectedMessageNotif}
+      />
 
     </SafeAreaView>
   );
@@ -673,6 +720,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.md,
     marginTop: SPACING.md,
+  },
+  dotMessage: {
+    backgroundColor: '#0284C7',
+  },
+  messageBadgePill: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  messageBadgePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  messageDetailsBox: {
+    marginTop: SPACING.xs,
+    padding: SPACING.md,
+    backgroundColor: '#F0F9FF',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
   },
 });
 
