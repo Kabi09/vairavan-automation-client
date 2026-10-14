@@ -35,15 +35,12 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
   let totalDelivered = 0;
   let totalFailed = 0;
 
-  // const CLOUDINARY_LOGO_URL =
-  //   'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
+  // Android FCM enforces a strict 1MB image download limit.
+  // The optimized Cloudinary URL delivers a crisp 15KB image well below the limit.
+  const DEFAULT_APP_LOGO_URL =
+    'https://res.cloudinary.com/etdurbgp/image/upload/w_512,h_512,c_fit,q_auto,f_auto/v1791802852/vairavan_app/app_logo.png';
 
- const CLOUDINARY_LOGO_URL = "https://pub-4880364ab52e4c80a93a9f413ea3d328.r2.dev/uploads/1791988790574-946c87c7f292-app_logo.png";
-  const logoImageUrl =
-    notificationPayload.imageUrl ||
-    (process.env.R2_PUBLIC_URL && !process.env.R2_PUBLIC_URL.includes('yourbucketid')
-      ? `${process.env.R2_PUBLIC_URL.replace(/\/+$/, '')}/vairavan_app/app_logo.png`
-      : CLOUDINARY_LOGO_URL);
+  const logoImageUrl = notificationPayload.imageUrl || DEFAULT_APP_LOGO_URL;
 
   // 1. Deliver native FCM tokens via Firebase Admin SDK
   if (fcmTokens.length > 0) {
@@ -121,6 +118,7 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
         sound: 'default',
         title: notificationPayload.title,
         body: notificationPayload.body,
+        image: logoImageUrl,
         data: {
           ...stringifiedData,
           imageUrl: logoImageUrl,

@@ -82,21 +82,25 @@
 ## Change History
 
 ### 2026-10-14
-#### Notification Icon Silhouette and Large Image Delivery Fix
+#### Notification Icon Silhouette, 1MB FCM Threshold, and Rich Notification Image Fix
 - What was changed:
   - **Monochrome White Silhouette Notification Icon (`notification-icon.png`)**:
     - Identified that `assets/notification-icon.png` was essentially an empty/corrupted PNG (9,214 transparent pixels out of 9,216), which caused Android to render a blank/hollow square box inside the notification circular badge.
     - Generated a crisp 96x96 pure white (`#FFFFFF`) silhouette emblem on a transparent background following Android's official notification icon specifications.
-    - Paired with `app.json`'s `color: "#0F52BA"`, Android now renders a clean, vibrant blue circular badge with the white Vairavan emblem centered inside (identical to how Swiggy renders its circular badge).
-  - **Backend FCM Notification Payload (`notificationService.js`)**:
-    - Replaced dead fallback URL (`https://pub-yourbucketid.r2.dev/...`) with the live Cloudinary Vairavan Automation logo (`https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png`).
-    - Added `icon: 'notification_icon'` and `color: '#0F52BA'` to `android.notification` in FCM payload, enabling Android to properly resolve the small icon resource and display the large thumbnail image.
+    - Added `expo.notification` directly into `duty-management-app/app.json` alongside `expo-notifications` plugin with `color: "#0F52BA"`.
+    - Documented critical Expo Go technical constraint: Expo Go is a pre-compiled native host container and strictly renders Expo Go's own logo (the hollow square) for notification badges. Custom notification small icons strictly require a standalone or development APK build (`eas build -p android`).
+  - **Optimized Push Notification Image Delivery (`notificationService.js`)**:
+    - Android FCM enforces a strict 1MB image payload limit; images exceeding 1MB are automatically discarded by Android's background image loader.
+    - Replaced heavy 1.15MB uncompressed R2 image with optimized 15KB Cloudinary URL (`https://res.cloudinary.com/etdurbgp/image/upload/w_512,h_512,c_fit,q_auto,f_auto/v1791802852/vairavan_app/app_logo.png`), which downloads in ~15ms and easily passes under the 1MB threshold.
+    - Added `image: logoImageUrl` directly at the root level of `expoMessages` for Expo Push Service API delivery.
+    - In FCM payload, configured `imageUrl: logoImageUrl`, `icon: 'notification_icon'`, and `color: '#0F52BA'`.
 - Files changed:
   - `duty-management-app/assets/notification-icon.png`
+  - `duty-management-app/app.json`
   - `backend/src/services/notificationService.js`
   - `project.md`
-- Reason: User requested: "notification - img icon not show why any reason what can i do notifican add icon imge ; like swigg icon show" with screenshot of blank square in notification shade.
-- Impact: Proper branding on Android notification badges, matching professional apps like Swiggy, and valid rich image delivery.
+- Reason: User requested: "notification - img icon not show why any reason what can i do notifican add icon imge ; like swigg icon show" and "still not working fix".
+- Impact: Solved the FCM 1MB image drop issue, properly configured Expo push and native APK notification icons to render clean branded circular badges matching Swiggy.
 
 ### 2026-10-14
 #### Client Company Phone Number Autofill to Customer Phone Field

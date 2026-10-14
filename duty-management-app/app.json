@@ -9,6 +9,10 @@
     "splash": {
       "backgroundColor": "#0F172A"
     },
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#0F52BA"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vairavan.dutymanagement",
