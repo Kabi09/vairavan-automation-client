@@ -96,6 +96,11 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   const canDelete = isAdmin;
   const displayDutyId = duty.dutyId || ('WORK-' + duty._id.substring(duty._id.length - 6).toUpperCase());
 
+  const isOffice =
+    duty?.company?.companyType === 'office' ||
+    (typeof duty?.company?.companyName === 'string' &&
+      duty.company.companyName.toLowerCase().includes('office'));
+
   const signatureTimestamp = duty.customerSignature?.signedAt
     ? new Date(duty.customerSignature.signedAt).toLocaleDateString('en-IN', {
         day: '2-digit',
@@ -115,16 +120,24 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   const handleOpenPhotoPreview = (url, index) => {
     setPreviewImageUri(url);
     setPreviewTitle(`Proof Photo #${index + 1}`);
-    setPreviewSubtitle(duty.customerName ? `Client: ${duty.customerName}` : 'Service Verification');
+    setPreviewSubtitle(
+      duty.customerName
+        ? (isOffice ? `Contact: ${duty.customerName}` : `Client: ${duty.customerName}`)
+        : (isOffice ? 'Office Duty Verification' : 'Service Verification')
+    );
     setPreviewTimestamp(formatDate(duty.dutyDate) || '');
     setPreviewIsSignature(false);
     setPreviewModalVisible(true);
   };
 
-  const handleOpenSignaturePreview = (url, title = 'Customer Signature') => {
+  const handleOpenSignaturePreview = (url, title = isOffice ? 'Office Sign-Off' : 'Customer Signature') => {
     setPreviewImageUri(url);
     setPreviewTitle(title);
-    setPreviewSubtitle(duty.customerName ? `Client: ${duty.customerName}` : 'Service Verification');
+    setPreviewSubtitle(
+      duty.customerName
+        ? (isOffice ? `Contact: ${duty.customerName}` : `Client: ${duty.customerName}`)
+        : (isOffice ? 'Office Duty Verification' : 'Service Verification')
+    );
     setPreviewTimestamp(signatureTimestamp);
     setPreviewIsSignature(true);
     setPreviewModalVisible(true);
@@ -133,19 +146,23 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
-        title="Work Visit Details"
+        title={isOffice ? 'Office Work Details' : 'Work Visit Details'}
         subtitle={`Report #${displayDutyId}`}
         onBack={() => navigation.goBack()}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Client & Timing Banner */}
+        {/* Timing & Location Banner */}
         <Card style={styles.headerCard}>
           <View style={styles.headerTop}>
-            <Text style={styles.customerName}>{duty.customerName}</Text>
+            <Text style={styles.customerName}>
+              {isOffice ? (duty.company?.companyName || 'Office') : duty.customerName}
+            </Text>
           </View>
           <Text style={styles.companyName}>
-            {duty.company?.companyName || 'Client Company'}
+            {isOffice
+              ? `In-Charge: ${duty.customerName || 'Office Staff'}`
+              : (duty.company?.companyName || 'Client Company')}
           </Text>
           {(duty.company?.location || duty.location?.address) ? (
             <View style={styles.companyLocationRow}>
@@ -168,13 +185,15 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           <Text style={styles.sectionTitle}>Equipment & Work Type</Text>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Client Company:</Text>
-            <Text style={styles.detailValue}>{duty.company?.companyName || 'N/A'}</Text>
+            <Text style={styles.detailLabel}>{isOffice ? 'Office:' : 'Client Company:'}</Text>
+            <Text style={styles.detailValue}>
+              {duty.company?.companyName || (isOffice ? 'Office' : 'N/A')}
+            </Text>
           </View>
 
           {(duty.company?.location || duty.location?.address) ? (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Site Location:</Text>
+              <Text style={styles.detailLabel}>{isOffice ? 'Office Location:' : 'Site Location:'}</Text>
               <Text style={styles.detailValue}>{duty.company?.location || duty.location?.address}</Text>
             </View>
           ) : null}
@@ -190,8 +209,12 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           </View>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Contact Phone:</Text>
-            <Text style={styles.detailValue}>{duty.customerPhoneNumber}</Text>
+            <Text style={styles.detailLabel}>{isOffice ? 'Contact In-Charge:' : 'Contact Phone:'}</Text>
+            <Text style={styles.detailValue}>
+              {isOffice
+                ? `${duty.customerName} (${duty.customerPhoneNumber})`
+                : duty.customerPhoneNumber}
+            </Text>
           </View>
         </Card>
 
@@ -251,7 +274,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
         {duty.customerProofPhotos?.length > 0 && (
           <Card style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>
-              Service Proof Photos ({duty.customerProofPhotos.length})
+              {isOffice ? 'Office Proof Photos' : 'Service Proof Photos'} ({duty.customerProofPhotos.length})
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
               {duty.customerProofPhotos.map((photo, i) => (
@@ -274,10 +297,12 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           </Card>
         )}
 
-        {/* Customer Signature */}
+        {/* Signature */}
         {(duty.customerSignature?.url || (typeof duty.customerSignature === 'string' && duty.customerSignature) || duty.signature?.url) ? (
           <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Customer Signature Verification</Text>
+            <Text style={styles.sectionTitle}>
+              {isOffice ? 'Office Sign-Off Verification' : 'Customer Signature Verification'}
+            </Text>
             <View style={styles.signatureBox}>
               <SignatureImage
                 uri={
@@ -292,7 +317,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
                     duty.customerSignature?.url ||
                     (typeof duty.customerSignature === 'string' ? duty.customerSignature : '') ||
                     duty.signature?.url;
-                  handleOpenSignaturePreview(sigUrl, 'Customer Signature');
+                  handleOpenSignaturePreview(sigUrl, isOffice ? 'Office Sign-Off' : 'Customer Signature');
                 }}
               />
             </View>

@@ -82,6 +82,63 @@
 ## Change History
 
 ### 2026-10-14
+#### Office vs Client Dynamic Labeling in Duty Details, Forms, Lists, and Reports
+- What was changed:
+  - **Duty Details View Dynamic Office Support (`DutyDetailsScreen.jsx`)**:
+    - Evaluates `isOffice` (`company.companyType === 'office'` or company name includes `'office'`).
+    - Removes all mentions of "Client Company" and replaces with "Office" when duty is for an office:
+      - Header Title: `"Office Work Details"` (instead of `"Work Visit Details"`).
+      - Card Banner: Displays `"In-Charge: <name>"` and Office Name (instead of `"Client Company"`).
+      - Technical Details Row: `"Office:"` (instead of `"Client Company:"`).
+      - Location Row: `"Office Location:"` (instead of `"Site Location:"`).
+      - Contact Row: `"Contact In-Charge: <name> (<phone>)"` (instead of `"Contact Phone:"`).
+      - Photos Section: `"Office Proof Photos"` (instead of `"Service Proof Photos"`).
+      - Signature Section: `"Office Sign-Off Verification"` (instead of `"Customer Signature Verification"`).
+      - Lightbox Modal Titles & Subtitles: Display `"Office Sign-Off"` / `"Office Duty Verification"` instead of customer/client text.
+  - **Admin All Duties Sheet & List (`AllDutiesScreen.jsx`)**:
+    - Modal Sheet Title: `"Office Work Report"` vs `"Service Work Report"`.
+    - Modal Sheet Detail Block: `"Office & Contact"` vs `"Client Company & Contact"`.
+    - Modal Sheet Contact Label: `"Contact In-Charge:"` vs `"Contact:"`.
+    - Signature & Proof Photos Sections: Dynamically shows `"Office Sign-Off Verification"` and `"Office Proof Photos"`.
+    - Filter Title & Labels: Updated from `"Client Company"` to `"Company / Office"` with `"All Companies & Offices (Default)"`.
+    - List Item Card: Displays `business` icon and `"Office"` badge vs `storefront-outline` icon and `"Company"`.
+  - **Duty Form Terminology & In-Charge Verification (`DutyFormScreen.jsx`, `SignaturePadModal.jsx`)**:
+    - When `companyCategory === 'office'`:
+      - Subtitle: `"Log office duty and sign-off verification"`.
+      - Contact Field: `"Contact / In-Charge Name"` with placeholder `"e.g. Senthil Kumar (Office In-Charge)"`.
+      - Phone Field: `"Contact Phone Number (10 Digits)"`.
+      - GPS Info: `"Tag your visit location to verify attendance at the office"`.
+      - Signature Section: `"Office Sign-Off"` and `"Office sign-off captured"`.
+      - Action Button: `"Open Sign-Off Pad"`.
+      - Photos Section: `"Office Proof Photos (X/3)"`.
+      - Validation Errors: `"Please select an office"`, `"Contact in-charge name is required"`, `"Contact phone is required"`.
+      - `SignaturePadModal`: Accepts `title` and `instruction` props; displays `"Office Sign-Off"` and instructions to sign for office duties.
+  - **Employee Duty List & Details (`MyDutiesScreen.jsx`, `EmployeeDetailsScreen.jsx`)**:
+    - Cards display `"Office"` with `business` icon vs `"Company"` with `storefront-outline` icon.
+    - Contact label shows `"Contact In-Charge:"` for offices vs `"Customer Contact:"` for client sites.
+    - Company filter updated to `"Company / Office"`.
+  - **Backend Duty Controller Population (`dutyController.js`)**:
+    - Added `companyType` to `.populate('company', 'companyName location companyPhoneNumber companyType')` across `createDuty`, `getMyDuties`, `getDutyById`, `updateDuty`, and `getAllDuties`.
+  - **PDF & Excel Exports (`exportUtils.js`)**:
+    - PDF export highlights `Office:` / `Contact In-Charge:` vs `Client Company:` / `Customer Contact:`.
+    - Excel export provides distinct `Location / Entity Type` (`Office` vs `Client Company`) and unified `Company / Office Name` column.
+- Files changed:
+  - `backend/src/controllers/dutyController.js`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `duty-management-app/src/components/SignaturePadModal.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `project.md`
+- Logic changed:
+  - When duty/company belongs to an Office, "Client Company", "Customer Contact", "Customer Signature", and "Service Verification" are replaced throughout the UI, exports, and forms with "Office", "Contact In-Charge", "Office Sign-Off", and "Office Duty Verification".
+  - "Company" or "Client Company" is displayed only when the entity is actually a client company.
+- Reason: User requested: "work -> i select office -> view details client company mention so remove i want office;; only client company compant other wise mention office".
+- Impact: Accurate contextual representation of internal office tasks versus external client field-service jobs across every duty touchpoint in the application.
+
+### 2026-10-14
 #### Proof Photos 3 Max Limit, Required Fields Submit Gate, & Office vs Client Company Selection Flow
 - What was changed:
   - **Duty Report Proof Photos Maximum Limit (3 Photos)**:
@@ -1812,7 +1869,8 @@
   - Proof Photos Limit & Submission Gate: Duty report proof photos capped at maximum 3 photos; submission button is strictly disabled and unclickable until all required fields (date, company, contact name, valid 10-digit phone, machine name, work type/custom details, in/out timings with order validation, work description) are filled.
   - Company Classification Flow: Company model, validator, and controller support `office` vs `client`. Admin company form allows toggling between Office and Client. Company list provides quick tabs (All, Offices, Clients) and colored type badges. Company details display type badge.
   - Add Work Company Picker: Duty form location defaults to Office and auto-selects the first office; selecting Client Company automatically triggers the client company directory list modal.
-  - Export Verification: PDF and Excel exports include the `Type` / classification column for all companies.
+  - Dynamic Office vs Client Duty Details & Views: When an Office is selected (`companyType === 'office'`), all duty views (`DutyDetailsScreen`, `AllDutiesScreen`, `MyDutiesScreen`, `EmployeeDetailsScreen`, `DutyFormScreen`) dynamically remove "Client Company", "Customer Contact", "Customer Signature", and "Service Verification", replacing them with "Office", "Contact In-Charge", "Office Sign-Off", and "Office Proof Photos". "Company" is only mentioned when it is an actual client company.
+  - Export Verification: PDF and Excel exports include the `Type` / classification column for all companies and distinguish Office vs Client Company for duty reports.
   - 41/41 backend unit tests passing (6 suites); 0 syntax errors and 0 raw text issues across all mobile files.
 - In Progress:
   - None.

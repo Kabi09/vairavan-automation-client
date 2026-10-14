@@ -116,7 +116,7 @@ export const createDuty = asyncHandler(async (req, res) => {
   const duty = await Duty.create(dutyData);
 
   const populatedDuty = await Duty.findById(duty._id)
-    .populate('company', 'companyName location companyPhoneNumber')
+    .populate('company', 'companyName location companyPhoneNumber companyType')
     .populate('employee', 'employeeName employeeId email designation');
 
   return ApiResponse.created(res, 'Duty report submitted successfully', {
@@ -199,7 +199,7 @@ export const getMyDuties = asyncHandler(async (req, res) => {
       .sort({ dutyDate: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('company', 'companyName location companyPhoneNumber')
+      .populate('company', 'companyName location companyPhoneNumber companyType')
       .populate('adminReview.reviewedBy', 'employeeName employeeId'),
     Duty.countDocuments(filter),
   ]);
@@ -226,7 +226,7 @@ export const getDutyById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const duty = await Duty.findById(id)
-    .populate('company', 'companyName location companyPhoneNumber')
+    .populate('company', 'companyName location companyPhoneNumber companyType')
     .populate('employee', 'employeeName employeeId email designation')
     .populate('adminReview.reviewedBy', 'employeeName employeeId')
     .populate('auditTrail.changedBy', 'employeeName employeeId');
@@ -349,7 +349,7 @@ export const updateDuty = asyncHandler(async (req, res) => {
   await duty.save();
 
   const updatedDuty = await Duty.findById(id)
-    .populate('company', 'companyName location companyPhoneNumber')
+    .populate('company', 'companyName location companyPhoneNumber companyType')
     .populate('employee', 'employeeName employeeId');
 
   return ApiResponse.success(res, 200, 'Duty report updated successfully', { duty: updatedDuty });
@@ -446,7 +446,7 @@ export const getAllDuties = asyncHandler(async (req, res) => {
       .skip(skip)
       .limit(limit)
       .populate('employee', 'employeeName employeeId email designation')
-      .populate('company', 'companyName location companyPhoneNumber')
+      .populate('company', 'companyName location companyPhoneNumber companyType')
       .populate('adminReview.reviewedBy', 'employeeName employeeId'),
     Duty.countDocuments(filter),
   ]);

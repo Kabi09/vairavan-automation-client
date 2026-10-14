@@ -372,6 +372,10 @@ export const exportDutiesToPDF = async ({
              </div>`
           : '<span style="color: #64748b; font-size: 11px;">No signature recorded</span>';
 
+        const isOffice =
+          d.company?.companyType === 'office' ||
+          (compName && compName.toLowerCase().includes('office'));
+
         return `
           <div class="duty-card">
             <div class="card-header">
@@ -386,8 +390,8 @@ export const exportDutiesToPDF = async ({
                 <td style="width: 50%;">
                   <strong>Work ID:</strong> ${dutyId}<br/>
                   <strong>Employee:</strong> ${empName} (${empId})<br/>
-                  <strong>Company:</strong> ${compName} ${compLoc ? `• ${compLoc}` : ''}<br/>
-                  <strong>Customer Contact:</strong> ${customer} (${customerPhone})<br/>
+                  <strong>${isOffice ? 'Office:' : 'Client Company:'}</strong> ${compName || (isOffice ? 'Office' : 'Client Company')} ${compLoc ? `• ${compLoc}` : ''}<br/>
+                  <strong>${isOffice ? 'Contact In-Charge:' : 'Customer Contact:'}</strong> ${customer} (${customerPhone})<br/>
                   <strong>Machine / Asset:</strong> ${machine}
                 </td>
                 <td style="width: 50%;">
@@ -625,10 +629,11 @@ export const exportDutiesToExcel = async ({
       'Employee ID',
       'Employee Name',
       'Employee Designation',
-      'Company Name',
+      'Location / Entity Type',
+      'Company / Office Name',
       'Company Location',
-      'Customer Contact Name',
-      'Customer Phone Number',
+      'Contact Person',
+      'Contact Phone Number',
       'Machine Name',
       'Work Type',
       'In Time',
@@ -683,6 +688,10 @@ export const exportDutiesToExcel = async ({
         : '';
       const createdAt = d.createdAt ? new Date(d.createdAt).toISOString() : '';
 
+      const isOffice =
+        d.company?.companyType === 'office' ||
+        (compName && compName.toLowerCase().includes('office'));
+
       return [
         index + 1,
         escapeCsv(dutyId),
@@ -690,7 +699,8 @@ export const exportDutiesToExcel = async ({
         escapeCsv(empId),
         escapeCsv(empName),
         escapeCsv(empDesig),
-        escapeCsv(compName),
+        escapeCsv(isOffice ? 'Office' : 'Client Company'),
+        escapeCsv(compName || (isOffice ? 'Office' : 'Client Company')),
         escapeCsv(compLoc),
         escapeCsv(customer),
         escapeCsv(customerPhone),

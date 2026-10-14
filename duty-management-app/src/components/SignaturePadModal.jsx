@@ -36,7 +36,13 @@ export const formatSignatureTimestamp = (date = new Date()) => {
   return `${day} ${month} ${year}, ${strHours}:${minutes} ${ampm}`;
 };
 
-export const SignaturePadModal = ({ visible, onClose, onSave }) => {
+export const SignaturePadModal = ({
+  visible,
+  onClose,
+  onSave,
+  title = 'Customer Signature',
+  instruction = 'Ask customer to sign with finger inside the box below',
+}) => {
   const [paths, setPaths] = useState([]);
   const [currentPath, setCurrentPath] = useState('');
   const [currentTimestamp, setCurrentTimestamp] = useState(formatSignatureTimestamp());
@@ -137,10 +143,8 @@ export const SignaturePadModal = ({ visible, onClose, onSave }) => {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.container}>
-          <Text style={styles.title}>Customer Signature</Text>
-          <Text style={styles.instruction}>
-            Ask customer to sign with finger inside the box below
-          </Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.instruction}>{instruction}</Text>
 
           <View style={styles.canvasContainer} {...panResponder.panHandlers}>
             <Svg width={CANVAS_WIDTH} height={CANVAS_HEIGHT}>

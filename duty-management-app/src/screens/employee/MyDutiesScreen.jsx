@@ -202,11 +202,23 @@ export const MyDutiesScreen = ({ navigation }) => {
               <Text style={styles.dutyIdBadge}>{dutyId}</Text>
             </View>
             <Text style={styles.customerName}>{item.customerName}</Text>
-            <Text style={styles.companyName}>
-              <Ionicons name="business-outline" size={13} color={COLORS.textSecondary} />{' '}
-              {item.company?.companyName || 'Client Site'}
-              {companyLocation ? ` • ${companyLocation}` : ''}
-            </Text>
+            {(() => {
+              const isItemOffice =
+                item.company?.companyType === 'office' ||
+                (typeof item.company?.companyName === 'string' &&
+                  item.company.companyName.toLowerCase().includes('office'));
+              return (
+                <Text style={styles.companyName}>
+                  <Ionicons
+                    name={isItemOffice ? 'business' : 'storefront-outline'}
+                    size={13}
+                    color={COLORS.textSecondary}
+                  />{' '}
+                  {item.company?.companyName || (isItemOffice ? 'Office' : 'Company')}
+                  {companyLocation ? ` • ${companyLocation}` : ''}
+                </Text>
+              );
+            })()}
           </View>
         </View>
 
@@ -580,9 +592,9 @@ export const MyDutiesScreen = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* Client Company Filter */}
+              {/* Company / Office Filter */}
               <Text style={[styles.filterSectionTitle, { marginTop: SPACING.md }]}>
-                Client Company
+                Company / Office
               </Text>
               <TouchableOpacity
                 style={styles.dropdownTriggerBtn}
@@ -593,7 +605,7 @@ export const MyDutiesScreen = ({ navigation }) => {
                 <Text style={styles.dropdownTriggerText} numberOfLines={1}>
                   {draftCompanyId
                     ? companies.find((c) => c._id === draftCompanyId)?.companyName || 'Company Selected'
-                    : 'All Client Companies (Default)'}
+                    : 'All Companies & Offices (Default)'}
                 </Text>
                 <Ionicons
                   name="chevron-down"
@@ -660,16 +672,16 @@ export const MyDutiesScreen = ({ navigation }) => {
       <DropdownPickerModal
         visible={companyDropdownVisible}
         onClose={() => setCompanyDropdownVisible(false)}
-        title="Filter by Client Company"
-        searchPlaceholder="Search company by name or location..."
+        title="Filter by Company / Office"
+        searchPlaceholder="Search company or office..."
         selectedValue={draftCompanyId}
         onSelect={(val) => setDraftCompanyId(val)}
-        allOptionLabel="All Client Companies"
+        allOptionLabel="All Companies & Offices"
         items={companies.map((c) => ({
           label: c.companyName,
           value: c._id,
           id: c._id,
-          subtitle: `${c.location || 'Client Site'}${c.companyPhoneNumber ? ' • ' + c.companyPhoneNumber : ''}`,
+          subtitle: `${c.companyType === 'office' ? 'Office' : 'Client Site'}: ${c.location || ''}${c.companyPhoneNumber ? ' • ' + c.companyPhoneNumber : ''}`,
         }))}
       />
     </SafeAreaView>

@@ -105,16 +105,25 @@ export const AllDutiesScreen = ({ route, navigation }) => {
   }, [selectedDuty]);
 
   // Lightbox openers
+  const isSelectedDutyOffice =
+    selectedDuty?.company?.companyType === 'office' ||
+    (typeof selectedDuty?.company?.companyName === 'string' &&
+      selectedDuty.company.companyName.toLowerCase().includes('office'));
+
   const handleOpenPhotoPreview = (url, index) => {
     setPreviewImageUri(url);
     setPreviewTitle(`Proof Photo #${index + 1}`);
-    setPreviewSubtitle(selectedDuty?.customerName ? `Client: ${selectedDuty.customerName}` : 'Service Verification');
+    setPreviewSubtitle(
+      selectedDuty?.customerName
+        ? (isSelectedDutyOffice ? `Contact: ${selectedDuty.customerName}` : `Client: ${selectedDuty.customerName}`)
+        : (isSelectedDutyOffice ? 'Office Duty' : 'Service Verification')
+    );
     setPreviewTimestamp(selectedDuty?.dutyDate ? formatDate(selectedDuty.dutyDate) : '');
     setPreviewIsSignature(false);
     setPreviewModalVisible(true);
   };
 
-  const handleOpenSignaturePreview = (url, title = 'Customer Signature') => {
+  const handleOpenSignaturePreview = (url, title = isSelectedDutyOffice ? 'Office Sign-Off' : 'Customer Signature') => {
     const sigTime = selectedDuty?.customerSignature?.signedAt
       ? new Date(selectedDuty.customerSignature.signedAt).toLocaleDateString('en-IN', {
           day: '2-digit',
@@ -133,7 +142,11 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
     setPreviewImageUri(url);
     setPreviewTitle(title);
-    setPreviewSubtitle(selectedDuty?.customerName ? `Client: ${selectedDuty.customerName}` : 'Service Verification');
+    setPreviewSubtitle(
+      selectedDuty?.customerName
+        ? (isSelectedDutyOffice ? `Contact: ${selectedDuty.customerName}` : `Client: ${selectedDuty.customerName}`)
+        : (isSelectedDutyOffice ? 'Office Duty' : 'Service Verification')
+    );
     setPreviewTimestamp(sigTime);
     setPreviewIsSignature(true);
     setPreviewModalVisible(true);
@@ -339,6 +352,10 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
   const renderDutyItem = ({ item }) => {
     const dutyId = item.dutyId || ('WORK-' + (item._id || '').slice(-4).toUpperCase());
+    const isItemOffice =
+      item.company?.companyType === 'office' ||
+      (typeof item.company?.companyName === 'string' &&
+        item.company.companyName.toLowerCase().includes('office'));
     const companyLocation = item.company?.location || item.location?.address;
 
     return (
@@ -350,8 +367,12 @@ export const AllDutiesScreen = ({ route, navigation }) => {
             </View>
             <Text style={styles.customerName}>{item.customerName}</Text>
             <Text style={styles.companyName}>
-              <Ionicons name="business-outline" size={13} color={COLORS.textSecondary} />{' '}
-              {item.company?.companyName || 'Client Site'}
+              <Ionicons
+                name={isItemOffice ? 'business' : 'storefront-outline'}
+                size={13}
+                color={COLORS.textSecondary}
+              />{' '}
+              {item.company?.companyName || (isItemOffice ? 'Office' : 'Company')}
               {companyLocation ? ` • ${companyLocation}` : ''}
             </Text>
           </View>
@@ -579,10 +600,10 @@ export const AllDutiesScreen = ({ route, navigation }) => {
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.sheetTitle}>
-                  Duty Report #{selectedDuty?.dutyId || ('DUTY-' + (selectedDuty?._id || '').slice(-6).toUpperCase())}
+                  {isSelectedDutyOffice ? 'Office Work Report' : 'Service Work Report'} #{selectedDuty?.dutyId || ('WORK-' + (selectedDuty?._id || '').slice(-6).toUpperCase())}
                 </Text>
                 <Text style={styles.sheetSub}>
-                  {selectedDuty?.customerName} • {formatDate(selectedDuty?.dutyDate)}
+                  {isSelectedDutyOffice ? (selectedDuty?.company?.companyName || 'Office') : selectedDuty?.customerName} • {formatDate(selectedDuty?.dutyDate)}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedDuty(null)}>
@@ -605,12 +626,15 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
               {/* Company & Customer */}
               <View style={styles.detailBlock}>
-                <Text style={styles.blockLabel}>Client Company & Contact</Text>
+                <Text style={styles.blockLabel}>
+                  {isSelectedDutyOffice ? 'Office & Contact' : 'Client Company & Contact'}
+                </Text>
                 <Text style={styles.blockValue}>
-                  {selectedDuty?.company?.companyName} ({selectedDuty?.company?.location})
+                  {selectedDuty?.company?.companyName || (isSelectedDutyOffice ? 'Office' : 'Client Company')}
+                  {selectedDuty?.company?.location ? ` (${selectedDuty?.company?.location})` : ''}
                 </Text>
                 <Text style={styles.blockSub}>
-                  Contact: {selectedDuty?.customerName} ({selectedDuty?.customerPhoneNumber})
+                  {isSelectedDutyOffice ? 'Contact In-Charge:' : 'Contact:'} {selectedDuty?.customerName} ({selectedDuty?.customerPhoneNumber})
                 </Text>
               </View>
 
@@ -679,10 +703,12 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                 <Text style={styles.descriptionBox}>{selectedDuty?.workDescription}</Text>
               </View>
 
-              {/* Customer Signature Verification */}
+              {/* Signature Verification */}
               {(selectedDuty?.customerSignature?.url || (typeof selectedDuty?.customerSignature === 'string' && selectedDuty?.customerSignature)) ? (
                 <View style={styles.detailBlock}>
-                  <Text style={styles.blockLabel}>Customer Signature Verification</Text>
+                  <Text style={styles.blockLabel}>
+                    {isSelectedDutyOffice ? 'Office Sign-Off Verification' : 'Customer Signature Verification'}
+                  </Text>
                   <SignatureImage
                     uri={selectedDuty.customerSignature?.url || selectedDuty.customerSignature}
                     height={130}
@@ -705,7 +731,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                     }
                     onPress={() => {
                       const sigUrl = selectedDuty.customerSignature?.url || selectedDuty.customerSignature;
-                      handleOpenSignaturePreview(sigUrl, 'Customer Signature');
+                      handleOpenSignaturePreview(sigUrl, isSelectedDutyOffice ? 'Office Sign-Off' : 'Customer Signature');
                     }}
                   />
                 </View>
@@ -732,7 +758,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
               {selectedDuty?.customerProofPhotos?.length > 0 && (
                 <View style={styles.detailBlock}>
                   <Text style={styles.blockLabel}>
-                    Service Proof Photos ({selectedDuty.customerProofPhotos.length})
+                    {isSelectedDutyOffice ? 'Office Proof Photos' : 'Service Proof Photos'} ({selectedDuty.customerProofPhotos.length})
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {selectedDuty.customerProofPhotos.map((photo, i) => (
@@ -947,7 +973,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
               {/* Company Filter */}
               <Text style={[styles.filterSectionTitle, { marginTop: SPACING.md }]}>
-                Client Company
+                Company / Office
               </Text>
               <TouchableOpacity
                 style={styles.dropdownTriggerBtn}
@@ -958,7 +984,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                 <Text style={styles.dropdownTriggerText}>
                   {draftCompanyId
                     ? companies.find((c) => c._id === draftCompanyId)?.companyName || 'Company Selected'
-                    : 'All Companies (Default)'}
+                    : 'All Companies & Offices (Default)'}
                 </Text>
                 <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
               </TouchableOpacity>
@@ -1028,15 +1054,16 @@ export const AllDutiesScreen = ({ route, navigation }) => {
       <DropdownPickerModal
         visible={companyDropdownVisible}
         onClose={() => setCompanyDropdownVisible(false)}
-        title="Filter by Company"
+        title="Filter by Company / Office"
+        searchPlaceholder="Search company or office..."
         selectedValue={draftCompanyId}
         onSelect={(val) => setDraftCompanyId(val)}
-        allOptionLabel="All Companies"
+        allOptionLabel="All Companies & Offices"
         items={companies.map((c) => ({
-          label: `${c.companyName} (${c.location || 'Site'})`,
+          label: c.companyName,
           value: c._id,
           id: c._id,
-          subtitle: c.companyPhoneNumber || '',
+          subtitle: `${c.companyType === 'office' ? 'Office' : 'Client Site'}: ${c.location || ''}${c.companyPhoneNumber ? ' • ' + c.companyPhoneNumber : ''}`,
         }))}
       />
 

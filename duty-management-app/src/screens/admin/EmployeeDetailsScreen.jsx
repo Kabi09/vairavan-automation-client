@@ -463,12 +463,17 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
     const signatureUrl = item.customerSignature?.url;
     const companyLocation = item.company?.location || item.location?.address;
 
+    const isItemOffice =
+      item.company?.companyType === 'office' ||
+      (typeof item.company?.companyName === 'string' &&
+        item.company.companyName.toLowerCase().includes('office'));
+
     return (
       <Card style={styles.itemCard}>
         <View style={styles.cardHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.workCompanyName}>
-              {item.company?.companyName || 'Client Site'}
+              {item.company?.companyName || (isItemOffice ? 'Office' : 'Company')}
               {companyLocation ? ` • ${companyLocation}` : ''}
             </Text>
             <Text style={styles.workSub}>
@@ -489,7 +494,9 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
             </Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Customer Contact:</Text>
+            <Text style={styles.detailLabel}>
+              {isItemOffice ? 'Contact In-Charge:' : 'Customer Contact:'}
+            </Text>
             <Text style={styles.detailValue}>
               {item.customerName} ({item.customerPhoneNumber})
             </Text>

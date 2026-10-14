@@ -239,7 +239,11 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const handleOpenPhotoPreview = (uri, index) => {
     setPreviewImageUri(uri);
     setPreviewTitle(`Proof Photo #${index + 1}`);
-    setPreviewSubtitle(customerName ? `Client: ${customerName}` : 'Service Verification');
+    setPreviewSubtitle(
+      customerName
+        ? (companyCategory === 'office' ? `Contact: ${customerName}` : `Client: ${customerName}`)
+        : (companyCategory === 'office' ? 'Office Duty' : 'Service Verification')
+    );
     setPreviewTimestamp(dutyDate || '');
     setPreviewIsSignature(false);
     setPreviewModalVisible(true);
@@ -248,8 +252,12 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const handleOpenSignaturePreview = () => {
     if (!signatureData?.dataUri && !signatureData?.url) return;
     setPreviewImageUri(signatureData?.dataUri || signatureData?.url || '');
-    setPreviewTitle('Customer Signature');
-    setPreviewSubtitle(customerName ? `Client: ${customerName}` : 'Service Verification');
+    setPreviewTitle(companyCategory === 'office' ? 'Office Sign-Off' : 'Customer Signature');
+    setPreviewSubtitle(
+      customerName
+        ? (companyCategory === 'office' ? `Contact: ${customerName}` : `Client: ${customerName}`)
+        : (companyCategory === 'office' ? 'Office Duty' : 'Service Verification')
+    );
     setPreviewTimestamp(signatureData?.timestamp || '');
     setPreviewIsSignature(true);
     setPreviewModalVisible(true);
@@ -310,12 +318,16 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const validate = () => {
     const errors = {};
     if (!dutyDate) errors.dutyDate = 'Duty date is required';
-    if (!selectedCompanyId) errors.company = 'Please select a client company';
-    if (!customerName.trim()) errors.customerName = 'Customer contact name is required';
+    if (!selectedCompanyId) {
+      errors.company = companyCategory === 'office' ? 'Please select an office' : 'Please select a client company';
+    }
+    if (!customerName.trim()) {
+      errors.customerName = companyCategory === 'office' ? 'Contact in-charge name is required' : 'Customer contact name is required';
+    }
     if (!customerPhone.trim()) {
-      errors.customerPhone = 'Customer phone is required';
+      errors.customerPhone = companyCategory === 'office' ? 'Contact phone is required' : 'Customer phone is required';
     } else if (!isValidPhone(customerPhone)) {
-      errors.customerPhone = 'Customer phone must be exactly 10 digits';
+      errors.customerPhone = 'Contact phone must be exactly 10 digits';
     }
     if (!machineName.trim()) errors.machineName = 'Machine name is required';
     if (workType === 'Other' && !customWorkDetails.trim()) {
@@ -467,7 +479,13 @@ export const DutyFormScreen = ({ navigation, route }) => {
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
         title={isEditing ? 'Edit Work Report' : 'Submit Work Report'}
-        subtitle={isEditing ? `Report #${(dutyToEdit.dutyId || dutyToEdit._id.slice(-6)).toUpperCase()}` : 'Log service visit and customer verification'}
+        subtitle={
+          isEditing
+            ? `Report #${(dutyToEdit.dutyId || dutyToEdit._id.slice(-6)).toUpperCase()}`
+            : companyCategory === 'office'
+            ? 'Log office duty and sign-off verification'
+            : 'Log service visit and customer verification'
+        }
         onBack={() => navigation.goBack()}
       />
 
@@ -635,8 +653,8 @@ export const DutyFormScreen = ({ navigation, route }) => {
             ) : null}
 
             <TextInputField
-              label="Customer Contact Name"
-              placeholder="e.g. Senthil Kumar (Factory Mgr)"
+              label={companyCategory === 'office' ? 'Contact / In-Charge Name' : 'Customer Contact Name'}
+              placeholder={companyCategory === 'office' ? 'e.g. Senthil Kumar (Office In-Charge)' : 'e.g. Senthil Kumar (Factory Mgr)'}
               value={customerName}
               onChangeText={setCustomerName}
               error={fieldErrors.customerName}
@@ -644,7 +662,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
             />
 
             <TextInputField
-              label="Customer Phone Number (10 Digits)"
+              label={companyCategory === 'office' ? 'Contact Phone Number (10 Digits)' : 'Customer Phone Number (10 Digits)'}
               placeholder="10-digit mobile number"
               value={customerPhone}
               onChangeText={(t) => {
@@ -801,7 +819,8 @@ export const DutyFormScreen = ({ navigation, route }) => {
                 </View>
               ) : (
                 <Text style={styles.locationEmptyText}>
-                  Tag your visit location to verify attendance at the customer site.
+                  Tag your visit location to verify attendance at the{' '}
+                  {companyCategory === 'office' ? 'office' : 'customer site'}.
                 </Text>
               )}
 
@@ -815,17 +834,21 @@ export const DutyFormScreen = ({ navigation, route }) => {
             </View>
           </Card>
 
-          {/* Section: Customer Signature & Photos */}
+          {/* Section: Signature & Photos */}
           <Card style={styles.formCard}>
             <Text style={styles.sectionHeader}>3. Verification & Proofs</Text>
 
             {/* Signature */}
-            <Text style={styles.fieldLabel}>Customer Signature</Text>
+            <Text style={styles.fieldLabel}>
+              {companyCategory === 'office' ? 'Office Sign-Off' : 'Customer Signature'}
+            </Text>
             {signatureData ? (
               <View style={styles.signaturePreviewWrap}>
                 <View style={styles.signaturePreviewContainer}>
                   <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                  <Text style={styles.signatureSuccessText}>Customer signature captured</Text>
+                  <Text style={styles.signatureSuccessText}>
+                    {companyCategory === 'office' ? 'Office sign-off captured' : 'Customer signature captured'}
+                  </Text>
                   <TouchableOpacity
                     onPress={() => setSignatureModalVisible(true)}
                     style={styles.resignLink}
@@ -848,7 +871,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
               </View>
             ) : (
               <SecondaryButton
-                title="Open Signature Pad"
+                title={companyCategory === 'office' ? 'Open Sign-Off Pad' : 'Open Signature Pad'}
                 icon={<Ionicons name="pencil-outline" size={18} color={COLORS.primary} style={{ marginRight: 6 }} />}
                 onPress={() => setSignatureModalVisible(true)}
                 style={{ marginBottom: SPACING.md }}
@@ -857,7 +880,9 @@ export const DutyFormScreen = ({ navigation, route }) => {
 
             {/* Photos */}
             <View style={styles.photosHeader}>
-              <Text style={styles.fieldLabel}>Proof Photos ({photos.length}/3)</Text>
+              <Text style={styles.fieldLabel}>
+                {companyCategory === 'office' ? 'Office Proof Photos' : 'Proof Photos'} ({photos.length}/3)
+              </Text>
               <TouchableOpacity onPress={handlePickPhoto}>
                 <Text style={styles.addPhotoLink}>+ Attach Photo</Text>
               </TouchableOpacity>
@@ -915,6 +940,12 @@ export const DutyFormScreen = ({ navigation, route }) => {
         visible={signatureModalVisible}
         onClose={() => setSignatureModalVisible(false)}
         onSave={(data) => setSignatureData(data)}
+        title={companyCategory === 'office' ? 'Office Sign-Off' : 'Customer Signature'}
+        instruction={
+          companyCategory === 'office'
+            ? 'Ask office in-charge to sign with finger inside the box below'
+            : 'Ask customer to sign with finger inside the box below'
+        }
       />
 
       <ImageViewerModal
