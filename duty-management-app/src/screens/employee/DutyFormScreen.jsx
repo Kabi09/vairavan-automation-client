@@ -1026,8 +1026,28 @@ export const DutyFormScreen = ({ navigation, route }) => {
           if (fieldErrors.company) {
             setFieldErrors((prev) => ({ ...prev, company: null }));
           }
-          if (item?.companyPhoneNumber && !customerPhone && companyCategory === 'office') {
-            setCustomerPhone(item.companyPhoneNumber);
+          const targetComp = companies.find((c) => c._id === val) || item;
+          const isOff = isOfficeCompany(targetComp) || companyCategory === 'office';
+          const rawDigits = targetComp?.companyPhoneNumber
+            ? String(targetComp.companyPhoneNumber).replace(/\D/g, '')
+            : '';
+          const phone10 = rawDigits.length >= 10 ? rawDigits.slice(-10) : rawDigits;
+
+          if (!isOff) {
+            // Client company selected: autofill phone if available (editable), else empty for manual entry
+            if (phone10) {
+              setCustomerPhone(phone10);
+              if (fieldErrors.customerPhone) {
+                setFieldErrors((prev) => ({ ...prev, customerPhone: null }));
+              }
+            } else {
+              setCustomerPhone('');
+            }
+          } else {
+            // Office selected
+            if (phone10) {
+              setCustomerPhone(phone10);
+            }
           }
         }}
         items={displayedCompanies.map((c) => ({

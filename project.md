@@ -82,6 +82,24 @@
 ## Change History
 
 ### 2026-10-14
+#### Client Company Phone Number Autofill to Customer Phone Field
+- What was changed:
+  - **Duty Form Screen (`DutyFormScreen.jsx`)**:
+    - Updated `DropdownPickerModal.onSelect`:
+      - When a client company is selected, if that company has a registered phone number (`companyPhoneNumber`), it automatically extracts the 10-digit number and autofills it into the `customerPhone` field.
+      - Any previous `customerPhone` validation error is immediately cleared upon autofill.
+      - The `customerPhone` field remains 100% editable by the user at all times.
+      - If the selected client company has no phone number (omitted/empty), `customerPhone` defaults to empty string `''`, allowing manual input.
+      - If switching between companies, phone number updates accordingly or clears for manual entry.
+- Files changed:
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Previously, `onSelect` only checked `companyCategory === 'office'` for phone assignment, leaving client companies with empty customer phone even when the company had a registered phone number. Now client companies automatically populate the customer phone field with their registered phone number while preserving complete editability.
+- Reason: User requested: "onbug ther add work- client company if phone number irrutha autofill(editable) to cutomer phone number fix the bug; incase not client phone number not manually enter; fix".
+- Impact: Smoother field service workflow with fewer redundant manual entries when client companies have existing contact numbers.
+
+### 2026-10-14
 #### Client Company Selection Fix, Optional Company Phone, Ascending Work ID Export, and Project-Wide Fresh Data Sync
 - What was changed:
   - **Add Work Client Company Selection Flow (`DutyFormScreen.jsx`, `DropdownPickerModal.jsx`)**:
