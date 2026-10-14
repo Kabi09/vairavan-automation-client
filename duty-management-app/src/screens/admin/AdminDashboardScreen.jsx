@@ -41,6 +41,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
   const [calendarModalVisible, setCalendarModalVisible] = useState(false);
   const [calendarTab, setCalendarTab] = useState('leaves'); // 'leaves' | 'holidays'
 
+
   const fetchDashboard = useCallback(async () => {
     try {
       setError('');
@@ -281,23 +282,59 @@ export const AdminDashboardScreen = ({ navigation }) => {
           </Card>
         ),
       });
+    } else if (upcomingHolidays.length > 0) {
+      const nextH = upcomingHolidays[0];
+      slides.push({
+        id: 'holiday-upcoming',
+        node: (
+          <Card
+            style={[styles.holidayHighlightCard, { marginBottom: 0 }]}
+            onPress={() => {
+              setCalendarTab('holidays');
+              setCalendarModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.birthdayRow}>
+              <View style={styles.holidayIconWrap}>
+                <Ionicons name="calendar" size={20} color="#15803D" />
+                <View style={styles.holidayBadgeMini}>
+                  <Text style={{ fontSize: 9 }}>📅</Text>
+                </View>
+              </View>
+              <View style={{ flex: 1, marginLeft: SPACING.md, justifyContent: 'center' }}>
+                <View style={styles.highlightHeaderRow}>
+                  <Text style={styles.holidayHighlightTitle}>Upcoming Holiday 🎉</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#15803D" />
+                </View>
+                <Text style={styles.holidayHighlightText} numberOfLines={2}>
+                  {nextH.holidayName} • {formatDate(nextH.startDate)}
+                  {nextH.description ? ` (${nextH.description})` : ''}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ),
+      });
     }
 
     return slides;
-  }, [todayBirthdays, todaysLeaves, todaysHolidays]);
+  }, [todayBirthdays, todaysLeaves, todaysHolidays, upcomingHolidays]);
 
   // Smooth animated auto-scroll for highlight slides (Birthday, Holiday, Leaves)
   useEffect(() => {
     if (highlightSlides.length <= 1) return;
 
     const interval = setInterval(() => {
-      const nextIdx = (activeHighlightIndexRef.current + 1) % highlightSlides.length;
+      const currentIdx = activeHighlightIndexRef.current;
+      const nextIdx = (currentIdx + 1) % highlightSlides.length;
+      activeHighlightIndexRef.current = nextIdx;
+      setActiveHighlightIndex(nextIdx);
       carouselRef.current?.scrollTo({
         x: nextIdx * SLIDE_WIDTH,
         animated: true,
       });
-      setActiveHighlightIndex(nextIdx);
-    }, 3500);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [highlightSlides.length]);
@@ -370,17 +407,11 @@ export const AdminDashboardScreen = ({ navigation }) => {
                   decelerationRate="fast"
                   bounces={false}
                   showsHorizontalScrollIndicator={false}
-                  onScroll={(e) => {
-                    const offsetX = e.nativeEvent.contentOffset.x;
-                    const idx = Math.round(offsetX / SLIDE_WIDTH);
-                    if (idx !== activeHighlightIndex && idx >= 0 && idx < highlightSlides.length) {
-                      setActiveHighlightIndex(idx);
-                    }
-                  }}
                   onMomentumScrollEnd={(e) => {
                     const offsetX = e.nativeEvent.contentOffset.x;
                     const idx = Math.round(offsetX / SLIDE_WIDTH);
                     if (idx >= 0 && idx < highlightSlides.length) {
+                      activeHighlightIndexRef.current = idx;
                       setActiveHighlightIndex(idx);
                     }
                   }}
@@ -1456,6 +1487,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  carouselContainer: {
+    marginBottom: SPACING.md,
+  },
+  carouselDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  carouselDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#CBD5E1',
+  },
+  carouselDotActive: {
+    width: 20,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: COLORS.primary,
   },
 });
 

@@ -1635,6 +1635,22 @@
 - Reason: User reported: "fix ERROR [ReferenceError: Property 'loadTasks' doesn't exist]; also verify the old functioaliy;".
 - Impact: Admin and Employee dashboard screens mount, fetch metrics, and run highlight auto-scroll cleanly without crashes.
 
+### 2026-10-14
+#### Fix Highlight Auto-Scroll Next-to-Next Step-by-Step Looping & Carousel Styles
+- What was changed:
+  - Fixed carousel auto-scrolling loop in both `AdminDashboardScreen.jsx` and `EmployeeDashboardScreen.jsx`:
+    - Synchronized `activeHighlightIndexRef` directly inside the timer callback and on `onMomentumScrollEnd`, guaranteeing strictly sequential 3-second step progression (Slide 0 -> Slide 1 -> Slide 2 -> Slide 0 ...).
+    - Added support for upcoming holidays and upcoming birthdays in highlight slides when there are no events scheduled today, guaranteeing multiple slides are available to demonstrate continuous next-to-next step scrolling.
+    - Added missing StyleSheet entries (`carouselContainer`, `carouselDotsRow`, `carouselDot`, and active pill indicator `carouselDotActive`).
+    - Verified all 62 mobile files parse cleanly with 0 Babel AST errors and all 39 backend tests pass.
+- Files changed:
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed: Guaranteed reliable 3-second auto-scroll advancing next-to-next smoothly with active step pill indicators.
+- Reason: User requested: "also fix the auto scroll highlight me next scroll the automatticatally next to next like step 3; fix;".
+- Impact: Dashboard highlight banners automatically advance step-by-step next to next every 3 seconds with animated indicator dots.
+
 ## Current Progress
 - Completed:
   - Highlight Carousel Auto-Scroll with Animation: 3.5s smooth looping scroll animation for Birthdays, On-Leave, and Holidays across Admin and Employee dashboards.
