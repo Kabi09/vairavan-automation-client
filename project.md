@@ -79,6 +79,28 @@
 ## Change History
 
 ### 2026-10-14
+#### Streamline Login Input UI - Static Label, Clean Bottom Layout, and Auto-Changing Icon
+- What was changed:
+  - **Static Label & Placeholder (`LoginScreen.jsx`)**:
+    - Removed dynamic label change to "Mobile Number (10 Digits)" and placeholder switching.
+    - Always displays `label="Email or Mobile Number"` and `placeholder="e.g. 9876543210 or name@vairavan.com"` for a clean, non-distracting UI.
+  - **Removed Bottom Mobile Mode Helper Badge (`LoginScreen.jsx`)**:
+    - Completely removed the bottom `phoneModeRow` (`Mobile login mode: X/10 digits`) text and icon below the input.
+  - **Dynamic Icon Auto-Switching (`LoginScreen.jsx`)**:
+    - Retained automatic icon switching based on input content:
+      - `call-outline` (phone icon) when typing numbers.
+      - `mail-outline` (email icon) when typing text/email.
+      - `person-outline` when empty.
+    - Input caps at 10 digits when numbers are entered, while allowing full email formats when letters are entered.
+- Files changed:
+  - `duty-management-app/src/screens/auth/LoginScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Label and placeholder remain constant. Bottom badge is removed. Only the left input icon toggles automatically between phone and email icons.
+- Reason: User requested: "i enter 5digit ->auto change mobile number(10digit) so remove also bottom mobile login mode remove this;; only show the emaol or mobile number and aloow to auto change the icon; fix;".
+- Impact: Minimalist, clean, and intuitive login interface where the user always sees "Email or Mobile Number" with icon-only mode indicators.
+
+### 2026-10-14
 #### Fix Login Keyboard Layout - Maintain Single Unified Keyboard for Both Letters and Numbers
 - What was changed:
   - **Single Unified Keyboard Type (`LoginScreen.jsx`)**:

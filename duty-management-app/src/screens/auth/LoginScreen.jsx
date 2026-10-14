@@ -56,11 +56,12 @@ export const LoginScreen = () => {
       // Pure numbers: cap strictly at 10 digits
       const cleaned = testText.slice(0, 10);
       setIdentifier(cleaned);
-      // Once 5 or more digits are entered, activate phone indicator badge
-      setIsPhoneMode(cleaned.length >= 5);
+      // Auto-change icon to phone icon
+      setIsPhoneMode(true);
     } else {
       // Contains letters (like "g") or symbols: treat as email/username without length restriction
       setIdentifier(text);
+      // Auto-change icon to email icon
       setIsPhoneMode(false);
     }
   };
@@ -151,8 +152,8 @@ export const LoginScreen = () => {
             <ErrorMessage message={errorMessage} />
 
             <TextInputField
-              label={isPhoneMode ? 'Mobile Number (10 Digits)' : 'Email or Mobile Number'}
-              placeholder={isPhoneMode ? 'Enter 10-digit mobile number' : 'e.g. 9876543210 or name@vairavan.com'}
+              label="Email or Mobile Number"
+              placeholder="e.g. 9876543210 or name@vairavan.com"
               value={identifier}
               onChangeText={handleIdentifierChange}
               keyboardType="email-address"
@@ -162,15 +163,6 @@ export const LoginScreen = () => {
               error={identifierError}
               required
             />
-
-            {isPhoneMode && (
-              <View style={styles.phoneModeRow}>
-                <Ionicons name="phone-portrait-outline" size={13} color={COLORS.primary} />
-                <Text style={styles.phoneModeText}>
-                  Mobile login mode: {identifier.length}/10 digits
-                </Text>
-              </View>
-            )}
 
             <TextInputField
               label="Password"
@@ -271,19 +263,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
     marginBottom: SPACING.lg,
-  },
-  phoneModeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: -8,
-    marginBottom: SPACING.md,
-    paddingHorizontal: 4,
-  },
-  phoneModeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.primary,
   },
   loginButton: {
     marginTop: SPACING.md,
