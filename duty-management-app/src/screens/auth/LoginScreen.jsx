@@ -44,22 +44,22 @@ export const LoginScreen = () => {
     let testText = text;
     if (text.startsWith('+91')) {
       const remaining = text.replace(/^\+91[\s-]*/, '');
-      if (remaining.length > 0 && /^\d+$/.test(remaining.slice(0, Math.min(remaining.length, 5)))) {
+      if (remaining.length > 0 && /^\d+$/.test(remaining)) {
         testText = remaining;
       }
     }
 
-    // Check first 5 characters (or up to text length if < 5)
-    // If the leading characters are digits, treat as 10-digit mobile number
-    // If not, allow email entry without the 10-character limit
-    const sample = testText.slice(0, Math.min(testText.length, 5));
-    const isDigits = /^\d+$/.test(sample);
+    // Check if current text is purely numbers
+    const isPureDigits = /^\d+$/.test(testText);
 
-    if (isDigits) {
-      const cleaned = testText.replace(/[^0-9]/g, '').slice(0, 10);
+    if (isPureDigits) {
+      // Pure numbers: cap strictly at 10 digits
+      const cleaned = testText.slice(0, 10);
       setIdentifier(cleaned);
-      setIsPhoneMode(true);
+      // Once 5 or more digits are entered, activate phone indicator badge
+      setIsPhoneMode(cleaned.length >= 5);
     } else {
+      // Contains letters (like "g") or symbols: treat as email/username without length restriction
       setIdentifier(text);
       setIsPhoneMode(false);
     }
@@ -155,7 +155,7 @@ export const LoginScreen = () => {
               placeholder={isPhoneMode ? 'Enter 10-digit mobile number' : 'e.g. 9876543210 or name@vairavan.com'}
               value={identifier}
               onChangeText={handleIdentifierChange}
-              keyboardType={isPhoneMode ? 'number-pad' : 'email-address'}
+              keyboardType="email-address"
               autoCapitalize="none"
               icon={isPhoneMode ? 'call-outline' : identifier ? 'mail-outline' : 'person-outline'}
               maxLength={isPhoneMode ? 10 : undefined}

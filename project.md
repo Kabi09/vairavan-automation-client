@@ -79,6 +79,24 @@
 ## Change History
 
 ### 2026-10-14
+#### Fix Login Keyboard Layout - Maintain Single Unified Keyboard for Both Letters and Numbers
+- What was changed:
+  - **Single Unified Keyboard Type (`LoginScreen.jsx`)**:
+    - Changed `keyboardType` from dynamically toggling `{isPhoneMode ? 'number-pad' : 'email-address'}` to a static `'email-address'`.
+    - Eliminates jarring keyboard dismissal/re-opening and prevents hiding the alphabet when typing a number first (e.g. entering "6" then "g").
+    - Users can now freely type both letters and numbers on the exact same keyboard.
+  - **Refined Smart Input Detection (`handleIdentifierChange`)**:
+    - If the input consists purely of digits (`/^\d+$/.test`), caps strictly at 10 digits (`testText.slice(0, 10)`), and turns on the phone mode badge once 5 or more digits are entered.
+    - If the input contains any letters (e.g. "g") or symbols, keeps the text unrestricted in email mode without stripping characters.
+- Files changed:
+  - `duty-management-app/src/screens/auth/LoginScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Keyboard remains on standard email keyboard without switching to numeric keypad.
+- Reason: User requested: "one small bug here login ui-> i enter first number then change to number keyboard i dont want ; fix i wanto enter "g" one keybord visable so i enter 6 also same keyborad i want fix;".
+- Impact: Seamless typing experience with zero keyboard flickering, allowing instant input of letters and numbers on one unified keyboard.
+
+### 2026-10-14
 #### Email or 10-Digit Mobile Login with Smart Input Detection & Strict Uniqueness Checks for Phone & Email
 - What was changed:
   - **Smart Input Detection & Mobile Mode on Login Screen (`LoginScreen.jsx`, `TextInputField.jsx`)**:
