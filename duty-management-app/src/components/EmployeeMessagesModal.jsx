@@ -84,6 +84,10 @@ export const EmployeeMessagesModal = ({ visible, onClose }) => {
       item.data?.isBroadcast ||
       item.recipientRole === 'employee' ||
       item.recipientRole === 'all';
+    const recipientName =
+      item.data?.recipientName ||
+      item.recipient?.employeeName ||
+      '';
     const messagePreview =
       item.data?.messageText ||
       item.message ||
@@ -129,8 +133,27 @@ export const EmployeeMessagesModal = ({ visible, onClose }) => {
                 {isBroadcast ? 'All Staff' : 'Direct'}
               </Text>
             </View>
-            {!item.isRead && <View style={styles.unreadDot} />}
+            {Boolean(!item.isRead) ? <View style={styles.unreadDot} /> : null}
           </View>
+        </View>
+
+        {/* Recipient Target Details: (employee or all) */}
+        <View style={styles.recipientTargetRow}>
+          <Ionicons
+            name={isBroadcast ? 'megaphone-outline' : 'person-outline'}
+            size={12}
+            color={isBroadcast ? '#047857' : COLORS.primary}
+          />
+          <Text
+            style={[
+              styles.recipientTargetText,
+              { color: isBroadcast ? '#047857' : COLORS.primary },
+            ]}
+          >
+            {isBroadcast
+              ? 'Target: All Employees (Broadcast)'
+              : `Target: Specific Employee ${recipientName ? `(${recipientName})` : '(Direct)'}`}
+          </Text>
         </View>
 
         <Text style={styles.previewText} numberOfLines={2}>
@@ -164,11 +187,11 @@ export const EmployeeMessagesModal = ({ visible, onClose }) => {
                 <View>
                   <View style={styles.titleRow}>
                     <Text style={styles.modalTitle}>Messages</Text>
-                    {unreadCount > 0 && (
+                    {Boolean(unreadCount > 0) ? (
                       <View style={styles.badgeWrap}>
                         <Text style={styles.badgeText}>{unreadCount} new</Text>
                       </View>
-                    )}
+                    ) : null}
                   </View>
                   <Text style={styles.modalSubTitle}>Notices from Management</Text>
                 </View>
@@ -213,7 +236,7 @@ export const EmployeeMessagesModal = ({ visible, onClose }) => {
                   <EmptyState
                     icon="chatbox-outline"
                     title="No Messages"
-                    message="You have no messages from management yet. Important broadcasts and notes will appear here."
+                    description="You have no messages from management yet. Important broadcasts and notes will appear here."
                   />
                 }
               />
@@ -412,6 +435,17 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: COLORS.primary,
+  },
+  recipientTargetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  recipientTargetText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   previewText: {
     fontSize: 13,

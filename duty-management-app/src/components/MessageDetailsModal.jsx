@@ -32,6 +32,11 @@ export const MessageDetailsModal = ({ visible, onClose, messageItem }) => {
     messageItem.recipientRole === 'employee' ||
     messageItem.recipientRole === 'all';
 
+  const recipientName =
+    messageItem.data?.recipientName ||
+    messageItem.recipient?.employeeName ||
+    '';
+
   const dateStr = messageItem.createdAt
     ? formatDate(messageItem.createdAt)
     : 'Recent';
@@ -79,6 +84,37 @@ export const MessageDetailsModal = ({ visible, onClose, messageItem }) => {
           </View>
 
           <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+            {/* Target Audience Banner: All Employees vs Specific Employee */}
+            <View
+              style={[
+                styles.targetAudienceCard,
+                isBroadcast ? styles.targetAudienceAll : styles.targetAudienceDirect,
+              ]}
+            >
+              <Ionicons
+                name={isBroadcast ? 'megaphone' : 'person'}
+                size={18}
+                color={isBroadcast ? '#047857' : COLORS.primary}
+              />
+              <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                <Text
+                  style={[
+                    styles.targetAudienceTitle,
+                    { color: isBroadcast ? '#047857' : COLORS.primary },
+                  ]}
+                >
+                  {isBroadcast ? 'Recipient: All Employees' : 'Recipient: Specific Employee'}
+                </Text>
+                <Text style={styles.targetAudienceSubtitle}>
+                  {isBroadcast
+                    ? 'Broadcast message sent to all active employees'
+                    : recipientName
+                    ? `Direct message sent to ${recipientName}`
+                    : 'Direct message sent to designated employee'}
+                </Text>
+              </View>
+            </View>
+
             {/* Sender and meta card */}
             <View style={styles.senderCard}>
               <View style={styles.avatarWrap}>
@@ -204,6 +240,31 @@ const styles = StyleSheet.create({
   scrollArea: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
+  },
+  targetAudienceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+  },
+  targetAudienceAll: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  targetAudienceDirect: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  targetAudienceTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  targetAudienceSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   senderCard: {
     flexDirection: 'row',

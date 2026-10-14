@@ -391,18 +391,27 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity
+              style={styles.messageBadgeBtn}
+              onPress={() => setMessagesModalVisible(true)}
+              activeOpacity={0.7}
+              accessibilityLabel="View messages from management"
+            >
+              <Ionicons name="chatbubbles-outline" size={24} color={COLORS.text} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.notificationBadgeBtn}
               onPress={() => navigation.navigate('Notifications')}
               activeOpacity={0.7}
             >
               <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
-              {unreadCount > 0 && (
+              {Boolean(unreadCount > 0) ? (
                 <View style={styles.unreadDotBadge}>
                   <Text style={styles.unreadBadgeText}>
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </Text>
                 </View>
-              )}
+              ) : null}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -418,13 +427,13 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
         <ErrorMessage message={error} onRetry={fetchDashboard} />
 
         {/* Sliding Highlight Banners (Birthday, On-Leave, Holiday) */}
-        {highlightSlides.length === 1 && (
+        {Boolean(highlightSlides.length === 1) ? (
           <View style={{ marginBottom: SPACING.md, paddingHorizontal: 4 }}>
             {highlightSlides[0].node}
           </View>
-        )}
+        ) : null}
 
-        {highlightSlides.length > 1 && (
+        {Boolean(highlightSlides.length > 1) ? (
           <View style={styles.carouselContainer}>
             <ScrollView
               ref={carouselRef}
@@ -465,7 +474,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               ))}
             </View>
           </View>
-        )}
+        ) : null}
 
         {loading && !refreshing ? (
           <LoadingIndicator message="Loading your dashboard..." />
@@ -818,6 +827,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
+  },
+  messageBadgeBtn: {
+    padding: SPACING.xs,
+    marginRight: 2,
   },
   notificationBadgeBtn: {
     position: 'relative',

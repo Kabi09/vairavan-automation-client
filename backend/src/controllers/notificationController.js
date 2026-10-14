@@ -23,6 +23,7 @@ export const getNotifications = asyncHandler(async (req, res) => {
         { recipient: req.user._id },
         { recipientRole: 'admin' },
         { recipientRole: 'all' },
+        { sender: req.user._id, type: 'message' },
       ],
     };
   } else {

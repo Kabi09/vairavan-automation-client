@@ -27,6 +27,8 @@ import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
 import MessageDetailsModal from '../../components/MessageDetailsModal';
+import AdminSendMessageModal from '../../components/AdminSendMessageModal';
+import EmployeeMessagesModal from '../../components/EmployeeMessagesModal';
 import { formatDate } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
@@ -50,6 +52,9 @@ export const NotificationsScreen = ({ navigation }) => {
   const [messageDetailsModalVisible, setMessageDetailsModalVisible] = useState(false);
   const [selectedMessageNotif, setSelectedMessageNotif] = useState(null);
 
+  // Send Message Modal State (Admin) & Message List Modal State (Employee)
+  const [sendMessageModalVisible, setSendMessageModalVisible] = useState(false);
+  const [employeeMessagesModalVisible, setEmployeeMessagesModalVisible] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -247,21 +252,21 @@ export const NotificationsScreen = ({ navigation }) => {
               <Text style={styles.notifTime}>{formatDate(item.createdAt)}</Text>
             </View>
           </View>
-          {isLeave && <StatusBadge status={leaveStatus} />}
-          {isHoliday && (
+          {Boolean(isLeave) ? <StatusBadge status={leaveStatus} /> : null}
+          {Boolean(isHoliday) ? (
             <View style={styles.holidayBadgePill}>
               <Text style={styles.holidayBadgePillText}>Holiday 🎉</Text>
             </View>
-          )}
-          {isMessage && (
+          ) : null}
+          {Boolean(isMessage) ? (
             <View style={styles.messageBadgePill}>
               <Text style={styles.messageBadgePillText}>Message 💬</Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Message Details */}
-        {isMessage && (
+        {Boolean(isMessage) ? (
           <View style={styles.messageDetailsBox}>
             <View style={styles.detailRow}>
               <Ionicons name="chatbubble-ellipses-outline" size={15} color={COLORS.primary} />
@@ -270,11 +275,56 @@ export const NotificationsScreen = ({ navigation }) => {
                 {item.data?.senderName || item.sender?.employeeName || 'Management'}
               </Text>
             </View>
+
+            {/* Target Details: (employee or all) */}
+            <View style={styles.detailRow}>
+              <Ionicons
+                name={
+                  item.data?.isBroadcast ||
+                  item.recipientRole === 'employee' ||
+                  item.recipientRole === 'all'
+                    ? 'megaphone-outline'
+                    : 'person-outline'
+                }
+                size={15}
+                color={
+                  item.data?.isBroadcast ||
+                  item.recipientRole === 'employee' ||
+                  item.recipientRole === 'all'
+                    ? '#047857'
+                    : COLORS.primary
+                }
+              />
+              <Text style={styles.detailLabel}>Target:</Text>
+              <Text
+                style={[
+                  styles.detailValue,
+                  {
+                    fontWeight: '600',
+                    color:
+                      item.data?.isBroadcast ||
+                      item.recipientRole === 'employee' ||
+                      item.recipientRole === 'all'
+                        ? '#047857'
+                        : COLORS.primary,
+                  },
+                ]}
+              >
+                {item.data?.isBroadcast ||
+                item.recipientRole === 'employee' ||
+                item.recipientRole === 'all'
+                  ? 'All Employees (Broadcast)'
+                  : `Specific Employee ${
+                      item.data?.recipientName ? `(${item.data.recipientName})` : '(Direct)'
+                    }`}
+              </Text>
+            </View>
+
             <View style={[styles.detailRow, { alignItems: 'flex-start', marginTop: 4 }]}>
               <Ionicons name="document-text-outline" size={15} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
               <Text style={styles.detailLabel}>Notice:</Text>
               <Text style={[styles.detailValue, styles.reasonText]} numberOfLines={2}>
-                {item.data?.messageText || item.message}
+                {item.data?.messageText || item.message || ''}
               </Text>
             </View>
             <View style={styles.tapToViewRow}>
@@ -282,16 +332,16 @@ export const NotificationsScreen = ({ navigation }) => {
               <Ionicons name="arrow-forward" size={12} color="#2563EB" />
             </View>
           </View>
-        )}
+        ) : null}
 
         {/* Holiday Details */}
-        {isHoliday && (
+        {Boolean(isHoliday) ? (
           <View style={styles.holidayDetailsBox}>
             <View style={styles.detailRow}>
               <Ionicons name="sparkles" size={15} color="#15803D" />
               <Text style={styles.detailLabel}>Holiday:</Text>
               <Text style={[styles.detailValue, { fontWeight: '700', color: '#15803D' }]}>
-                {item.data?.holidayName || item.title}
+                {item.data?.holidayName || item.title || 'Company Holiday'}
               </Text>
             </View>
             {item.data?.startDate ? (
@@ -310,7 +360,7 @@ export const NotificationsScreen = ({ navigation }) => {
               <Ionicons name="information-circle-outline" size={15} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
               <Text style={styles.detailLabel}>Details:</Text>
               <Text style={[styles.detailValue, styles.reasonText]}>
-                {item.data?.description || item.message}
+                {item.data?.description || item.message || ''}
               </Text>
             </View>
             <View style={styles.tapToViewRow}>
@@ -318,12 +368,10 @@ export const NotificationsScreen = ({ navigation }) => {
               <Ionicons name="arrow-forward" size={12} color="#15803D" />
             </View>
           </View>
-        )}
-
-
+        ) : null}
 
         {/* Detailed Information for Leave */}
-        {isLeave && (
+        {Boolean(isLeave) ? (
           <View style={styles.detailsBox}>
             {/* User / Employee */}
             <View style={styles.detailRow}>
@@ -349,7 +397,7 @@ export const NotificationsScreen = ({ navigation }) => {
               <Ionicons name="document-text-outline" size={15} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
               <Text style={styles.detailLabel}>Reason:</Text>
               <Text style={[styles.detailValue, styles.reasonText]}>
-                {leaveData.reason || item.message}
+                {leaveData.reason || item.message || ''}
               </Text>
             </View>
 
@@ -369,10 +417,10 @@ export const NotificationsScreen = ({ navigation }) => {
               <Ionicons name="arrow-forward" size={12} color="#2563EB" />
             </View>
           </View>
-        )}
+        ) : null}
 
         {/* Action Buttons for Admin when leave is Pending */}
-        {isAdmin && isPending && leaveData.leaveId && (
+        {Boolean(isLeave && isAdmin && isPending && leaveData?.leaveId) ? (
           <View style={styles.actionButtonsRow}>
             <TouchableOpacity
               style={[styles.actionBtn, styles.approveBtn]}
@@ -398,7 +446,7 @@ export const NotificationsScreen = ({ navigation }) => {
               <Text style={styles.actionBtnText}>Reject</Text>
             </TouchableOpacity>
           </View>
-        )}
+        ) : null}
       </Card>
     );
   };
@@ -409,11 +457,31 @@ export const NotificationsScreen = ({ navigation }) => {
         title="Notifications"
         onBack={() => navigation.goBack()}
         rightAction={
-          unreadCount > 0 ? (
-            <TouchableOpacity onPress={handleMarkAllRead}>
-              <Text style={styles.markReadText}>Mark all read</Text>
+          <View style={styles.headerRightActionsRow}>
+            {/* Header Message Button: "nofification pagthula message symbol add pannu click add message" */}
+            <TouchableOpacity
+              style={styles.headerMessageActionBtn}
+              onPress={() => {
+                if (isAdmin) {
+                  setSendMessageModalVisible(true);
+                } else {
+                  setEmployeeMessagesModalVisible(true);
+                }
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="chatbubbles-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.headerMessageActionBtnText}>
+                {isAdmin ? 'Add Message' : 'Messages'}
+              </Text>
             </TouchableOpacity>
-          ) : null
+
+            {Boolean(unreadCount > 0) ? (
+              <TouchableOpacity onPress={handleMarkAllRead} style={styles.markAllReadBtn}>
+                <Text style={styles.markReadText}>Mark all read</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         }
       />
 
@@ -438,7 +506,7 @@ export const NotificationsScreen = ({ navigation }) => {
             <EmptyState
               icon="notifications-off-outline"
               title="No Notifications"
-              message="You have no notifications at this time. New leave requests and updates will appear here."
+              description="You have no notifications at this time. New leave requests and updates will appear here."
             />
           }
         />
@@ -505,6 +573,21 @@ export const NotificationsScreen = ({ navigation }) => {
         visible={messageDetailsModalVisible}
         onClose={() => setMessageDetailsModalVisible(false)}
         messageItem={selectedMessageNotif}
+      />
+
+      {/* Admin Send Message Modal */}
+      {isAdmin ? (
+        <AdminSendMessageModal
+          visible={sendMessageModalVisible}
+          onClose={() => setSendMessageModalVisible(false)}
+          onMessageSent={fetchNotifications}
+        />
+      ) : null}
+
+      {/* Employee Messages Modal */}
+      <EmployeeMessagesModal
+        visible={employeeMessagesModalVisible}
+        onClose={() => setEmployeeMessagesModalVisible(false)}
       />
 
     </SafeAreaView>
@@ -680,6 +763,31 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  headerRightActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  headerMessageActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primarySubtle,
+    paddingHorizontal: SPACING.sm + 2,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  headerMessageActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  markAllReadBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
   },
   markReadText: {
     fontSize: 13,

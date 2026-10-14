@@ -82,6 +82,43 @@
 ## Change History
 
 ### 2026-10-14
+#### Text Strings Rendering Error Fix & Header Message Actions & Detailed Recipient Target (Employee or All)
+- What was changed:
+  - **Fixed React Native Error: `Text strings must be rendered within a <Text> component`**:
+    - Converted all conditional JSX expressions inside non-`Text` components (such as `<Card>`, `<View>`, `<TouchableOpacity>`, `<ScrollView>`) to strict boolean ternaries `{Boolean(condition) ? <Component /> : null}` across `NotificationsScreen.jsx`, `AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`, and `EmployeeMessagesModal.jsx`.
+    - Guarded pending leave action buttons on `NotificationsScreen.jsx` with `{Boolean(isLeave && isAdmin && isPending && leaveData?.leaveId) ? (...) : null}` to prevent empty-string or non-boolean values from rendering as child text into `<Card>`.
+    - Corrected `EmptyState` prop from `message` to `description` in `NotificationsScreen.jsx` and `EmployeeMessagesModal.jsx`.
+  - **Header Message Symbol Added Next to Notifications ("nofification pagthula message symbol add pannu")**:
+    - **Notifications Screen (`NotificationsScreen.jsx`)**: In `ScreenHeader` `rightAction`, added a dedicated message action button:
+      - Admin: Displays "Add Message" button with `chatbubbles-outline` icon -> opens `AdminSendMessageModal` on 1 tap.
+      - Employee: Displays "Messages" button with `chatbubbles-outline` icon -> opens `EmployeeMessagesModal` (message list).
+      - Preserved "Mark all read" link beside it when unread notifications exist.
+      - Integrated `AdminSendMessageModal` and `EmployeeMessagesModal` into `NotificationsScreen.jsx`.
+    - **Admin Dashboard (`AdminDashboardScreen.jsx`)**: Added `messageBadgeBtn` in `headerActions` directly beside the notification bell (`notificationBadgeBtn`), allowing the Admin to quickly compose and send messages/notices to staff.
+    - **Employee Dashboard (`EmployeeDashboardScreen.jsx`)**: Added `messageBadgeBtn` in `headerActions` directly beside the notification bell (`notificationBadgeBtn`), allowing Employees to access their message list with 1 tap.
+  - **Detailed Recipient Target Display `(employee or all)` ("message list click lisout the meaage detail(employee or all ),etc...")**:
+    - **Message Details Modal (`MessageDetailsModal.jsx`)**: Added a dedicated `Target Audience` banner card displaying clearly whether the message was sent to `All Employees (📢 Broadcast message sent to all active employees)` or `Specific Employee (👤 Direct message sent to ${recipientName || 'designated employee'})`.
+    - **Employee Messages Modal (`EmployeeMessagesModal.jsx`)**: Each card item in the message list now explicitly displays `Target: All Employees (Broadcast)` or `Target: Specific Employee (Direct / Name)` alongside sender name, avatar, and timestamp.
+    - **Notification Card Feed (`NotificationsScreen.jsx`)**: Each message card in the notifications list explicitly displays the recipient target row (`All Employees (Broadcast)` vs `Specific Employee (Direct)`).
+  - **Backend Controller (`backend/src/controllers/notificationController.js`)**:
+    - Updated `getNotifications` for admin role to include `{ sender: req.user._id, type: 'message' }`, allowing admins to view their dispatched broadcast and direct messages directly in their notifications feed.
+- Files changed:
+  - `backend/src/controllers/notificationController.js`
+  - `duty-management-app/src/components/MessageDetailsModal.jsx`
+  - `duty-management-app/src/components/EmployeeMessagesModal.jsx`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Eliminated raw string and falsy non-boolean evaluation crashes in React Native views.
+  - Quick message actions are accessible both from dashboard headers (beside the notification bell) and from the notification screen header.
+  - Both message list and full message detail modal clearly display target audience `(employee or all)`.
+  - Admins can review sent messages within their notification feed.
+- Reason: User requested: "ERROR Text strings must be rendered within a <Text> component.;;; also nofification pagthula message symbol add pannu click add message,message list click lisout the meaage detail(employee or all ),etc...;".
+- Impact: 100% eliminated React Native text rendering errors, provided quick 1-tap message dispatch and retrieval across both admin and employee flows, and gave clear visibility into whether notices were sent to all staff or targeted employees.
+
+### 2026-10-14
 #### Highlights Modal Section Reorder & Admin Message Broadcast with Multi-Employee Select and Employee Full Details View
 - What was changed:
   - **Employee Highlights Modal Section Swap (`EmployeeDashboardScreen.jsx`)**:
