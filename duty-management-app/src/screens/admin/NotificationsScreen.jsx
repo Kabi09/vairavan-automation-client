@@ -23,6 +23,7 @@ import StatusBadge from '../../components/StatusBadge';
 import TextInputField from '../../components/TextInputField';
 import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
+import TaskDetailsModal from '../../components/TaskDetailsModal';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
@@ -44,6 +45,10 @@ export const NotificationsScreen = ({ navigation }) => {
   const [decisionType, setDecisionType] = useState('approved'); // 'approved' | 'rejected'
   const [adminRemarks, setAdminRemarks] = useState('');
   const [submittingDecision, setSubmittingDecision] = useState(false);
+
+  // Task Details Modal State
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [taskModalVisible, setTaskModalVisible] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -159,6 +164,13 @@ export const NotificationsScreen = ({ navigation }) => {
 
     // 2. Navigate based on notification type
     const notifType = item.type || '';
+
+    if (notifType === 'task_assigned' || notifType === 'task' || item.data?.taskId) {
+      setSelectedTaskId(item.data?.taskId);
+      setTaskModalVisible(true);
+      return;
+    }
+
     if (notifType === 'holiday' || notifType === 'holiday_created') {
       if (isAdmin) {
         navigation.navigate('HolidayManagement');
@@ -194,6 +206,7 @@ export const NotificationsScreen = ({ navigation }) => {
   const renderNotificationCard = ({ item }) => {
     const isHoliday = item.type === 'holiday' || item.type === 'holiday_created';
     const isLeave = item.type === 'leave_request' || item.type === 'leave_reviewed';
+    const isTask = item.type === 'task_assigned' || item.type === 'task' || Boolean(item.data?.taskId);
     const leaveData = item.data || {};
     const leaveStatus = leaveData.status || 'pending';
     const isPending = leaveStatus === 'pending';
@@ -216,7 +229,9 @@ export const NotificationsScreen = ({ navigation }) => {
               <View
                 style={[
                   styles.statusDot,
-                  isHoliday
+                  isTask
+                    ? styles.dotTask
+                    : isHoliday
                     ? styles.dotHoliday
                     : item.type === 'leave_request'
                     ? styles.dotWarning
@@ -235,6 +250,17 @@ export const NotificationsScreen = ({ navigation }) => {
           {isHoliday && (
             <View style={styles.holidayBadgePill}>
               <Text style={styles.holidayBadgePillText}>Holiday 🎉</Text>
+            </View>
+          )}
+          {isTask && (
+            <View style={styles.taskBadgePill}>
+              <Text style={styles.taskBadgePillText}>
+                {item.data?.status === 'completed'
+                  ? 'Completed ✅'
+                  : item.data?.status === 'in_progress'
+                  ? 'In Progress ⏳'
+                  : 'Task 📌'}
+              </Text>
             </View>
           )}
         </View>
@@ -271,6 +297,45 @@ export const NotificationsScreen = ({ navigation }) => {
             <View style={styles.tapToViewRow}>
               <Text style={styles.tapToViewText}>Tap to view holiday calendar</Text>
               <Ionicons name="arrow-forward" size={12} color="#15803D" />
+            </View>
+          </View>
+        )}
+
+        {/* Task Details */}
+        {isTask && (
+          <View style={styles.taskDetailsBox}>
+            <View style={styles.detailRow}>
+              <Ionicons name="construct" size={15} color={COLORS.primary} />
+              <Text style={styles.detailLabel}>Task:</Text>
+              <Text style={[styles.detailValue, { fontWeight: '700', color: COLORS.text }]}>
+                {item.data?.taskName || item.title}
+              </Text>
+            </View>
+
+            {item.data?.companyName ? (
+              <View style={styles.detailRow}>
+                <Ionicons name="business-outline" size={15} color={COLORS.textSecondary} />
+                <Text style={styles.detailLabel}>Company:</Text>
+                <Text style={[styles.detailValue, { color: COLORS.primary, fontWeight: '600' }]}>
+                  {item.data.companyName}
+                  {item.data.companyLocation ? ` • ${item.data.companyLocation}` : ''}
+                </Text>
+              </View>
+            ) : null}
+
+            {item.data?.description ? (
+              <View style={[styles.detailRow, { alignItems: 'flex-start' }]}>
+                <Ionicons name="document-text-outline" size={15} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
+                <Text style={styles.detailLabel}>Details:</Text>
+                <Text style={[styles.detailValue, styles.reasonText]} numberOfLines={2}>
+                  {item.data.description}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.tapToViewRow}>
+              <Text style={[styles.tapToViewText, { color: COLORS.primary }]}>Tap to view full task details & update status</Text>
+              <Ionicons name="arrow-forward" size={12} color={COLORS.primary} />
             </View>
           </View>
         )}
@@ -452,6 +517,21 @@ export const NotificationsScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Task Details Modal */}
+      <TaskDetailsModal
+        visible={taskModalVisible}
+        taskId={selectedTaskId}
+        onClose={() => {
+          setTaskModalVisible(false);
+          setSelectedTaskId(null);
+        }}
+        onTaskUpdated={() => {
+          fetchNotifications();
+          refreshGlobalNotifications();
+        }}
+        currentUser={user}
+      />
     </SafeAreaView>
   );
 };
@@ -665,6 +745,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.md,
     marginTop: SPACING.md,
+  },
+  dotTask: {
+    backgroundColor: '#3B82F6',
+  },
+  taskBadgePill: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  taskBadgePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  taskDetailsBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: SPACING.xs,
   },
 });
 

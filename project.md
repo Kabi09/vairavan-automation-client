@@ -79,6 +79,49 @@
 ## Change History
 
 ### 2026-10-14
+#### Highlight Carousel Auto-Scroll with Animation & Task Assignment with Multi-Employee Support & Notification Details
+- What was changed:
+  - **Animated Auto-Scroll on Highlight Banners (`AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`)**:
+    - Attached `useRef` carousel reference and index trackers to the highlight `ScrollView`.
+    - Added animated auto-scroll timer (`setInterval` every 3.5s) that smoothly advances to the next slide with `{ animated: true }`.
+    - Synchronized pagination dots and enabled touch-resume so manual user swipes smoothly pick up from the active card.
+  - **Task Data Model, Validation & Controller (`backend/src/models/Task.js`, `taskValidator.js`, `taskController.js`, `taskRoutes.js`, `Notification.js`)**:
+    - Created `Task` Mongoose model with `taskName`, `company` (ref: 'Company'), `description`, `assignedEmployees` ([ref: 'User']), `createdBy`, `status` (`pending`, `in_progress`, `completed`), and `priority`.
+    - Extended `Notification.js` with `'task_assigned'` and `'task'` notification types and task metadata.
+    - Added express-validator rules and controllers for `createTask`, `getTasks`, `getTaskById`, `updateTaskStatus`, and `deleteTask`.
+    - Admin task creation automatically dispatches in-app `Notification` documents and FCM/Expo push notifications to all assigned employees.
+    - Automated unit test suite added in `backend/tests/task.test.js` (4 tests passing, bringing total tests to 43/43).
+  - **Frontend Task Components & Mobile Integration (`taskApi.js`, `MultiSelectEmployeeModal.jsx`, `TaskCreateModal.jsx`, `TaskDetailsModal.jsx`, `NotificationsScreen.jsx`, `AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`)**:
+    - Created `MultiSelectEmployeeModal` allowing Admins to search, check/uncheck multiple employees with live selection count badge and select-all/clear-all toggles.
+    - Created `TaskCreateModal` with Task Name, Client Company dropdown picker, multi-select employee picker, description, priority, and instant assignment.
+    - Created `TaskDetailsModal` showing full details (Task name, Client Company name, Location, description, assigned employees, status pill, and 1-tap status transition actions).
+    - Integrated with `NotificationsScreen.jsx`: tapping a task assignment notification immediately opens `TaskDetailsModal` with complete task and company details.
+    - Added "Assigned Tasks" section to Admin Dashboard with "+ Assign Task" button.
+    - Added "My Assigned Tasks" section to Employee Dashboard with pending badge and 1-tap detail view.
+- Files changed:
+  - `backend/src/models/Notification.js`
+  - `backend/src/models/Task.js`
+  - `backend/src/validators/taskValidator.js`
+  - `backend/src/controllers/taskController.js`
+  - `backend/src/routes/taskRoutes.js`
+  - `backend/src/routes/index.js`
+  - `backend/tests/task.test.js`
+  - `duty-management-app/src/api/taskApi.js`
+  - `duty-management-app/src/components/MultiSelectEmployeeModal.jsx`
+  - `duty-management-app/src/components/TaskCreateModal.jsx`
+  - `duty-management-app/src/components/TaskDetailsModal.jsx`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Highlight banners automatically transition on a 3.5s loop with animated scroll.
+  - Admins can assign tasks to multiple employees for specific client companies.
+  - Assigned employees receive push and in-app notifications that deep-link to full task details with one-tap status updates.
+- Reason: User requested: "add higlight like birthday,holiday auto scroll add with animation ; fix;; one small aditional feature add -> task - task name,company dropdown,description admin add and assign to employee (multi select employes) - notification to send a employee task,company click that notification full details show ;; simple workflow;; fix;;".
+- Impact: Engaging animated dashboard highlights and a streamlined, end-to-end task assignment and notification workflow.
+
+### 2026-10-14
 #### Support Custom "Other" Work Type Display, Company Location in Work Details & Lists, and Remove Duty Statuses from UI
 - What was changed:
   - **Work Type "Other" Custom Specification (`dutyUtils.js`, `Duty.js`, `dutyValidator.js`, `dutyController.js`, `DutyFormScreen.jsx`, `exportUtils.js`)**:
@@ -1499,18 +1542,65 @@
   - Work IDs are atomic 4-digit sequential strings (`WORK-1000`, etc.).
 - Reason: User requested automatic Chrome-like downloads, sliding highlight cards, verified notification rules with deep linking, Work/Employee nomenclature, and sequential 4-digit work IDs.
 - Impact: Streamlined exporting, interactive notification workflows, consistent nomenclature, and clean sequential record tracking.
+### 2026-10-14
+#### Dashboard Highlights Animated Auto-Scroll & Task Assignment Multi-Employee Notification Workflow
+- What was changed:
+  - **1. Dashboard Highlights Animated Auto-Scroll (`AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`)**:
+    - Implemented looping animated auto-scroll for dashboard highlight banners (Birthdays, Holidays, On-Leave).
+    - Uses `setInterval` (3.5s) with `activeHighlightIndexRef` and `scrollTo({ x: nextIdx * SLIDE_WIDTH, animated: true })`.
+    - Integrated touch scroll synchronization via `onMomentumScrollEnd` to update the active page index ref dynamically when manually swiped.
+  - **2. Task Assignment Backend System (`Task.js`, `taskValidator.js`, `taskController.js`, `taskRoutes.js`, `Notification.js`)**:
+    - Created Mongoose model `backend/src/models/Task.js` with fields `taskName`, `company` (ref: 'Company'), `description`, `assignedEmployees` ([ref: 'User']), `createdBy`, `status` (`pending`, `in_progress`, `completed`), and `priority`.
+    - Added express-validator rules in `backend/src/validators/taskValidator.js` validating task creation, status transitions, and ID parameters.
+    - Implemented `backend/src/controllers/taskController.js` supporting task creation with multi-employee assignment, role-filtered list queries, full task detail lookups, status transitions (notifying admins on completion), and deletion.
+    - Extended `backend/src/models/Notification.js` to include notification types `'task_assigned'` and `'task'` with metadata fields for `taskId`, `taskName`, `companyId`, `companyName`, `companyLocation`, and `description`.
+    - Automated in-app and push notification dispatches to all assigned employees with client company and task details upon task assignment.
+    - Mounted routes at `/api/tasks` in `backend/src/routes/index.js`.
+    - Created test suite `backend/tests/task.test.js` validating end-to-end task assignment, permission security, role-based visibility, and status transitions. All 43 backend tests pass.
+  - **3. Frontend Client, Modals & Task Management Workflows**:
+    - Created `duty-management-app/src/api/taskApi.js` for task CRUD and status endpoints.
+    - Created `duty-management-app/src/components/MultiSelectEmployeeModal.jsx` allowing admins to search, toggle, and batch-select employees with live badges and select/clear controls.
+    - Created `duty-management-app/src/components/TaskCreateModal.jsx` allowing admins to create and assign tasks with task name, client company picker (`DropdownPickerModal`), multi-employee picker (`MultiSelectEmployeeModal`), priority selector, and description.
+    - Created `duty-management-app/src/components/TaskDetailsModal.jsx` displaying task name, status, priority, full client company information (name, address, location, direct dial phone link), work description, assigned team members, and 1-tap status transition actions (`Start Task`, `Mark Completed`).
+    - Integrated task assignment list and "+ Assign Task" button into `AdminDashboardScreen.jsx`.
+    - Integrated "My Assigned Tasks" card list with active count badge into `EmployeeDashboardScreen.jsx`.
+    - Integrated task notification handling into `NotificationsScreen.jsx` with direct tap-to-open `TaskDetailsModal` inspection.
+- Files changed:
+  - `backend/src/models/Task.js`
+  - `backend/src/models/Notification.js`
+  - `backend/src/validators/taskValidator.js`
+  - `backend/src/controllers/taskController.js`
+  - `backend/src/routes/taskRoutes.js`
+  - `backend/src/routes/index.js`
+  - `backend/tests/task.test.js`
+  - `duty-management-app/src/api/taskApi.js`
+  - `duty-management-app/src/components/MultiSelectEmployeeModal.jsx`
+  - `duty-management-app/src/components/TaskCreateModal.jsx`
+  - `duty-management-app/src/components/TaskDetailsModal.jsx`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Highlights auto-scroll smoothly on a 3.5s interval with animation.
+  - Admins can assign tasks to multiple employees with instant push and in-app notifications.
+  - Employees can tap notifications to see complete task and company details and update task status with one tap.
+- Reason: User requested: (1) highlight auto-scroll with animation for birthdays/holidays, (2) task assignment workflow with task name, company dropdown, description, multi-select employees, notifications sent to employees with task and company info, and notification tap opening full task details.
+- Impact: Streamlined ad-hoc field dispatching, instant employee awareness, and animated dashboard highlights.
 
 ## Current Progress
 - Completed:
+  - Highlight Carousel Auto-Scroll with Animation: 3.5s smooth looping scroll animation for Birthdays, On-Leave, and Holidays across Admin and Employee dashboards.
+  - Task Assignment Workflow: Task data model, validation, and routes supporting Admin task creation for Client Companies with multi-employee selection.
+  - Multi-Select Employee Modal: Admin can search and select multiple employees with live count indicators and select all/clear toggles.
+  - Task In-App & Push Notifications: Assigned employees receive push and in-app notifications with task and company details.
+  - Notification Deep-Linking & Task Details Modal: Tapping task notification directly opens `TaskDetailsModal` showing full task and company details with 1-tap status updates (Pending, In Progress, Completed).
+  - Dashboard Integration: "Assigned Tasks" section on Admin Dashboard with "+ Assign Task" action; "My Assigned Tasks" on Employee Dashboard.
   - Custom "Other" Work Type Display: When "Other" is chosen with custom details entered, it is displayed as `Other (custom data)` across all views (forms, cards, details, modals) and in both PDF and Excel exports.
   - Client Company Location in Work Details & Cards: Company location is displayed alongside or under the company name in `DutyDetailsScreen`, `MyDutiesScreen`, `AllDutiesScreen`, `EmployeeDetailsScreen`, and dashboard activity cards.
   - Removed Duty/Work Status Workflow: Removed `StatusBadge` and status labels (`approved`, `needs fix`, `rejected`, `submitted`) from duty cards and details, removed status filter chips from the filter modal, and removed the manager feedback card. Leave status workflow remains intact.
   - Automatic Phone Download: Persisted SAF directory URI via `SecureStore` in `exportUtils.js`, allowing downloads to save directly without prompt after initial authorization.
-  - Dashboard Highlight Carousel: Horizontal swipeable carousel with indicator dots for Birthdays, On-Leave, and Holidays across Admin and Employee dashboards.
-  - Notification Routing & Badge Decrement: Leave creation notifies admins only; leave review notifies employee; holiday creation notifies all employees; tapping notification marks it as read, decreases badge count, and navigates to the relevant detail screen.
-  - Nomenclature Alignment: Duty/Duties changed to Work/Works; Staff changed to Employee across navigation, headers, export titles, buttons, and empty states.
-  - Sequential 4-Digit Work IDs: Atomic counter generates `WORK-1000`, `WORK-1001`... with full database migration backfill completed.
-  - 39/39 backend unit tests passing; 0 syntax errors across all mobile screens.
+  - 43/43 backend unit tests passing (7 suites); 0 syntax errors across all mobile screens.
 - In Progress:
   - None.
 - Pending:

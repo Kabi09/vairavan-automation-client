@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,9 +18,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import dashboardApi from '../../api/dashboardApi';
 import notificationApi from '../../api/notificationApi';
+import taskApi from '../../api/taskApi';
 import Card from '../../components/Card';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
+import TaskDetailsModal from '../../components/TaskDetailsModal';
 import { formatDate, formatTime, getGreeting, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
@@ -40,6 +42,22 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   // Highlights modal state
   const [highlightsModalVisible, setHighlightsModalVisible] = useState(false);
 
+  // Assigned Tasks state
+  const [assignedTasks, setAssignedTasks] = useState([]);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [taskModalVisible, setTaskModalVisible] = useState(false);
+
+  const loadTasks = useCallback(async () => {
+    try {
+      const res = await taskApi.getTasks();
+      if (res.data?.tasks) {
+        setAssignedTasks(res.data.tasks);
+      }
+    } catch (err) {
+      console.warn('Failed to load employee tasks:', err);
+    }
+  }, []);
+
   const fetchDashboard = useCallback(async () => {
     try {
       setError('');
@@ -47,13 +65,14 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
       if (dashRes?.data) {
         setData(dashRes.data);
       }
+      loadTasks();
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load dashboard'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [loadTasks]);
 
   useFocusEffect(
     useCallback(() => {
@@ -90,6 +109,12 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   }, [data]);
 
   const [activeHighlightIndex, setActiveHighlightIndex] = useState(0);
+  const carouselRef = useRef(null);
+  const activeHighlightIndexRef = useRef(0);
+
+  useEffect(() => {
+    activeHighlightIndexRef.current = activeHighlightIndex;
+  }, [activeHighlightIndex]);
 
   const highlightSlides = useMemo(() => {
     const slides = [];
@@ -309,6 +334,22 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     return slides;
   }, [isMyBirthday, todayBirthdays, todaysLeaves, todaysHolidays, user]);
 
+  // Smooth animated auto-scroll for highlight slides (Birthday, Holiday, Leaves)
+  useEffect(() => {
+    if (highlightSlides.length <= 1) return;
+
+    const interval = setInterval(() => {
+      const nextIdx = (activeHighlightIndexRef.current + 1) % highlightSlides.length;
+      carouselRef.current?.scrollTo({
+        x: nextIdx * SLIDE_WIDTH,
+        animated: true,
+      });
+      setActiveHighlightIndex(nextIdx);
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [highlightSlides.length]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -368,6 +409,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
         {highlightSlides.length > 1 && (
           <View style={styles.carouselContainer}>
             <ScrollView
+              ref={carouselRef}
               horizontal
               pagingEnabled
               snapToInterval={SLIDE_WIDTH}
@@ -486,8 +528,102 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               </View>
             </Card>
 
-            {/* Today's Work Visits */}
+            {/* Assigned Tasks Section */}
             <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.sectionHeaderTitle}>My Assigned Tasks</Text>
+                {assignedTasks.filter((t) => t.status !== 'completed').length > 0 && (
+                  <View style={styles.taskPendingCountBadge}>
+                    <Text style={styles.taskPendingCountText}>
+                      {assignedTasks.filter((t) => t.status !== 'completed').length} Active
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {assignedTasks.length === 0 ? (
+              <Card style={[styles.emptyCard, { marginBottom: SPACING.md }]}>
+                <Ionicons name="checkbox-outline" size={30} color={COLORS.textMuted} />
+                <Text style={styles.emptyCardTitle}>No Assigned Tasks</Text>
+                <Text style={styles.emptyCardSub}>
+                  You're all caught up! New tasks assigned by management will appear here.
+                </Text>
+              </Card>
+            ) : (
+              assignedTasks.slice(0, 4).map((task) => {
+                const isCompleted = task.status === 'completed';
+                const isInProgress = task.status === 'in_progress';
+                const companyLoc = task.company?.location || task.company?.address || '';
+
+                return (
+                  <Card
+                    key={task._id}
+                    style={[styles.taskCardItem, isCompleted && { opacity: 0.85 }]}
+                    onPress={() => {
+                      setSelectedTask(task);
+                      setTaskModalVisible(true);
+                    }}
+                  >
+                    <View style={styles.taskCardHeader}>
+                      <Text style={styles.taskCardTitle} numberOfLines={1}>
+                        {task.taskName}
+                      </Text>
+                      <View
+                        style={[
+                          styles.taskStatusPill,
+                          isCompleted
+                            ? styles.statusPillDone
+                            : isInProgress
+                            ? styles.statusPillProg
+                            : styles.statusPillPend,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.taskStatusText,
+                            isCompleted
+                              ? styles.textDone
+                              : isInProgress
+                              ? styles.textProg
+                              : styles.textPend,
+                          ]}
+                        >
+                          {task.status === 'in_progress'
+                            ? 'In Progress'
+                            : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.taskCompanyText} numberOfLines={1}>
+                      <Ionicons name="business-outline" size={13} color={COLORS.primary} />{' '}
+                      {task.company?.companyName || 'Client Site'}
+                      {companyLoc ? ` • ${companyLoc}` : ''}
+                    </Text>
+
+                    {task.description ? (
+                      <Text style={styles.taskDescText} numberOfLines={2}>
+                        {task.description}
+                      </Text>
+                    ) : null}
+
+                    <View style={styles.taskCardFooter}>
+                      <Text style={styles.taskDateText}>
+                        <Ionicons name="calendar-outline" size={11} color={COLORS.textMuted} />{' '}
+                        Assigned {formatDate(task.createdAt)}
+                      </Text>
+                      <Text style={styles.tapToViewTaskText}>
+                        Tap to update status <Ionicons name="chevron-forward" size={11} color={COLORS.primary} />
+                      </Text>
+                    </View>
+                  </Card>
+                );
+              })
+            )}
+
+            {/* Today's Work Visits */}
+            <View style={[styles.sectionHeaderRow, { marginTop: SPACING.md }]}>
               <Text style={styles.sectionHeaderTitle}>Today's Work Visits</Text>
               <TouchableOpacity
                 style={styles.viewAllBtn}
@@ -702,6 +838,20 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Task Details Modal */}
+      <TaskDetailsModal
+        visible={taskModalVisible}
+        task={selectedTask}
+        onClose={() => {
+          setTaskModalVisible(false);
+          setSelectedTask(null);
+        }}
+        onTaskUpdated={() => {
+          loadTasks();
+        }}
+        currentUser={user}
+      />
     </SafeAreaView>
   );
 };
@@ -910,6 +1060,92 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     marginTop: 2,
+  },
+  taskPendingCountBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  taskPendingCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  taskCardItem: {
+    marginBottom: SPACING.sm,
+  },
+  taskCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  taskCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    flex: 1,
+    marginRight: 8,
+  },
+  taskStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+  },
+  taskStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  statusPillDone: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusPillProg: {
+    backgroundColor: '#DBEAFE',
+  },
+  statusPillPend: {
+    backgroundColor: '#FEF3C7',
+  },
+  textDone: {
+    color: '#15803D',
+  },
+  textProg: {
+    color: '#1E40AF',
+  },
+  textPend: {
+    color: '#B45309',
+  },
+  taskCompanyText: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  taskDescText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 17,
+    marginBottom: 6,
+  },
+  taskCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceAlt,
+  },
+  taskDateText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  tapToViewTaskText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   dutyCard: {
     marginBottom: SPACING.sm,
