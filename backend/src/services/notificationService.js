@@ -35,9 +35,10 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
   let totalDelivered = 0;
   let totalFailed = 0;
 
-  const CLOUDINARY_LOGO_URL =
-    'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
+  // const CLOUDINARY_LOGO_URL =
+  //   'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
 
+ const CLOUDINARY_LOGO_URL = "https://pub-4880364ab52e4c80a93a9f413ea3d328.r2.dev/uploads/1791988790574-946c87c7f292-app_logo.png";
   const logoImageUrl =
     notificationPayload.imageUrl ||
     (process.env.R2_PUBLIC_URL && !process.env.R2_PUBLIC_URL.includes('yourbucketid')
