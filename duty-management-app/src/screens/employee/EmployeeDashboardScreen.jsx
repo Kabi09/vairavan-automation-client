@@ -53,7 +53,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadTasks]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {

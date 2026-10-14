@@ -1621,6 +1621,20 @@
 - Reason: User requested: "remove the previous update ,create task realted coding and file ,structure,ui remove i dont want; fix".
 - Impact: Codebase restored to clean operational baseline without task clutter, while preserving highlight carousel auto-scroll animation.
 
+### 2026-10-14
+#### Fix loadTasks ReferenceError in Admin & Employee Dashboard Callbacks
+- What was changed:
+  - Removed lingering `loadTasks` from `useCallback` dependency arrays `[loadTasks]` in `AdminDashboardScreen.jsx` and `EmployeeDashboardScreen.jsx`, changing them to `[]`.
+  - Verified with Babel AST parser that all 62 mobile files compile and parse with 0 errors.
+  - Verified all 39 backend automated tests pass without issues.
+- Files changed:
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed: Removed stale function reference from dependencies, resolving runtime ReferenceError on screen mount.
+- Reason: User reported: "fix ERROR [ReferenceError: Property 'loadTasks' doesn't exist]; also verify the old functioaliy;".
+- Impact: Admin and Employee dashboard screens mount, fetch metrics, and run highlight auto-scroll cleanly without crashes.
+
 ## Current Progress
 - Completed:
   - Highlight Carousel Auto-Scroll with Animation: 3.5s smooth looping scroll animation for Birthdays, On-Leave, and Holidays across Admin and Employee dashboards.

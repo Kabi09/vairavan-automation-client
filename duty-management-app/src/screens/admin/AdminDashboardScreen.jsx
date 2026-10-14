@@ -54,7 +54,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadTasks]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
