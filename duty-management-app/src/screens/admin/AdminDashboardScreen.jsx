@@ -18,12 +18,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import dashboardApi from '../../api/dashboardApi';
 import notificationApi from '../../api/notificationApi';
-import taskApi from '../../api/taskApi';
 import Card from '../../components/Card';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
-import TaskCreateModal from '../../components/TaskCreateModal';
-import TaskDetailsModal from '../../components/TaskDetailsModal';
 import { formatDate, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
@@ -44,23 +41,6 @@ export const AdminDashboardScreen = ({ navigation }) => {
   const [calendarModalVisible, setCalendarModalVisible] = useState(false);
   const [calendarTab, setCalendarTab] = useState('leaves'); // 'leaves' | 'holidays'
 
-  // Task assignment states
-  const [tasks, setTasks] = useState([]);
-  const [taskCreateModalVisible, setTaskCreateModalVisible] = useState(false);
-  const [taskDetailsModalVisible, setTaskDetailsModalVisible] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
-
-  const loadTasks = useCallback(async () => {
-    try {
-      const res = await taskApi.getTasks({ limit: 10 });
-      if (res.data?.tasks) {
-        setTasks(res.data.tasks);
-      }
-    } catch (err) {
-      console.warn('Failed to load tasks in admin dashboard:', err);
-    }
-  }, []);
-
   const fetchDashboard = useCallback(async () => {
     try {
       setError('');
@@ -68,7 +48,6 @@ export const AdminDashboardScreen = ({ navigation }) => {
       if (dashRes.data) {
         setData(dashRes.data);
       }
-      loadTasks();
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load admin dashboard'));
     } finally {
@@ -518,93 +497,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </View>
             </Card>
 
-            {/* Assigned Tasks Section */}
-            <View style={styles.sectionHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.sectionTitle}>Assigned Tasks</Text>
-                {tasks.length > 0 && (
-                  <View style={styles.taskCountBadge}>
-                    <Text style={styles.taskCountText}>{tasks.length}</Text>
-                  </View>
-                )}
-              </View>
-              <TouchableOpacity
-                style={styles.assignTaskBtn}
-                onPress={() => setTaskCreateModalVisible(true)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="add" size={16} color="#FFFFFF" />
-                <Text style={styles.assignTaskBtnText}>Assign Task</Text>
-              </TouchableOpacity>
-            </View>
 
-            {tasks.length === 0 ? (
-              <Card style={{ marginBottom: SPACING.md }}>
-                <Text style={styles.emptyText}>
-                  No tasks assigned yet. Tap "+ Assign Task" to assign work to employees.
-                </Text>
-              </Card>
-            ) : (
-              tasks.slice(0, 4).map((t) => {
-                const isDone = t.status === 'completed';
-                const isInProg = t.status === 'in_progress';
-                return (
-                  <Card
-                    key={t._id}
-                    style={styles.taskCardItem}
-                    onPress={() => {
-                      setSelectedTask(t);
-                      setTaskDetailsModalVisible(true);
-                    }}
-                  >
-                    <View style={styles.taskCardHeader}>
-                      <Text style={styles.taskCardTitle} numberOfLines={1}>
-                        {t.taskName}
-                      </Text>
-                      <View
-                        style={[
-                          styles.taskStatusPill,
-                          isDone
-                            ? styles.statusPillDone
-                            : isInProg
-                            ? styles.statusPillProg
-                            : styles.statusPillPend,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.taskStatusText,
-                            isDone
-                              ? styles.textDone
-                              : isInProg
-                              ? styles.textProg
-                              : styles.textPend,
-                          ]}
-                        >
-                          {t.status === 'in_progress'
-                            ? 'In Progress'
-                            : t.status.charAt(0).toUpperCase() + t.status.slice(1)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <Text style={styles.taskCompanyText} numberOfLines={1}>
-                      <Ionicons name="business-outline" size={13} color={COLORS.primary} />{' '}
-                      {t.company?.companyName || 'Client'}
-                      {t.company?.location ? ` • ${t.company.location}` : ''}
-                    </Text>
-
-                    <View style={styles.taskCardFooter}>
-                      <Text style={styles.taskStaffText} numberOfLines={1}>
-                        <Ionicons name="people-outline" size={12} color={COLORS.textSecondary} />{' '}
-                        {t.assignedEmployees?.map((e) => e.employeeName).join(', ') || 'Staff'}
-                      </Text>
-                      <Text style={styles.taskDateText}>{formatDate(t.createdAt)}</Text>
-                    </View>
-                  </Card>
-                );
-              })
-            )}
 
             {/* Recent Work Submissions */}
             <View style={[styles.sectionHeaderRow, { marginTop: SPACING.md }]}>
@@ -882,28 +775,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
         </View>
       </Modal>
 
-      {/* Create Task Modal */}
-      <TaskCreateModal
-        visible={taskCreateModalVisible}
-        onClose={() => setTaskCreateModalVisible(false)}
-        onTaskCreated={() => {
-          loadTasks();
-        }}
-      />
 
-      {/* Task Details Modal */}
-      <TaskDetailsModal
-        visible={taskDetailsModalVisible}
-        task={selectedTask}
-        onClose={() => {
-          setTaskDetailsModalVisible(false);
-          setSelectedTask(null);
-        }}
-        onTaskUpdated={() => {
-          loadTasks();
-        }}
-        currentUser={user}
-      />
     </SafeAreaView>
   );
 };
@@ -1097,101 +969,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     fontSize: 13,
   },
-  assignTaskBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: RADIUS.full,
-  },
-  assignTaskBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  taskCountBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  taskCountText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  taskCardItem: {
-    marginBottom: SPACING.sm,
-  },
-  taskCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  taskCardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
-    flex: 1,
-    marginRight: 8,
-  },
-  taskStatusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: RADIUS.full,
-  },
-  taskStatusText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  statusPillDone: {
-    backgroundColor: '#DCFCE7',
-  },
-  statusPillProg: {
-    backgroundColor: '#DBEAFE',
-  },
-  statusPillPend: {
-    backgroundColor: '#FEF3C7',
-  },
-  textDone: {
-    color: '#15803D',
-  },
-  textProg: {
-    color: '#1E40AF',
-  },
-  textPend: {
-    color: '#B45309',
-  },
-  taskCompanyText: {
-    fontSize: 13,
-    color: COLORS.primary,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  taskCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.surfaceAlt,
-  },
-  taskStaffText: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    flex: 1,
-    marginRight: 6,
-  },
-  taskDateText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
+
   holidayCard: {
     marginBottom: SPACING.sm,
   },

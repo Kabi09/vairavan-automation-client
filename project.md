@@ -1586,21 +1586,49 @@
   - Admins can assign tasks to multiple employees with instant push and in-app notifications.
   - Employees can tap notifications to see complete task and company details and update task status with one tap.
 - Reason: User requested: (1) highlight auto-scroll with animation for birthdays/holidays, (2) task assignment workflow with task name, company dropdown, description, multi-select employees, notifications sent to employees with task and company info, and notification tap opening full task details.
-- Impact: Streamlined ad-hoc field dispatching, instant employee awareness, and animated dashboard highlights.
+### 2026-10-14
+#### Removal of Task Assignment Feature & Retention of Highlights Animated Auto-Scroll
+- What was changed:
+  - **1. Removal of Task Assignment Feature (`Task.js`, `taskController.js`, `taskRoutes.js`, `taskValidator.js`, `taskApi.js`, modals, and UI)**:
+    - Removed all task-related backend files: `backend/src/models/Task.js`, `backend/src/controllers/taskController.js`, `backend/src/routes/taskRoutes.js`, `backend/src/validators/taskValidator.js`, and `backend/tests/task.test.js`.
+    - Unmounted `/tasks` route in `backend/src/routes/index.js`.
+    - Removed `'task_assigned'` and `'task'` notification types from `backend/src/models/Notification.js`.
+    - Removed all task-related frontend components and API clients: `duty-management-app/src/api/taskApi.js`, `duty-management-app/src/components/MultiSelectEmployeeModal.jsx`, `duty-management-app/src/components/TaskCreateModal.jsx`, and `duty-management-app/src/components/TaskDetailsModal.jsx`.
+    - Removed task notification rendering, deep-link triggers, and modals from `duty-management-app/src/screens/admin/NotificationsScreen.jsx`.
+    - Removed "Assigned Tasks" section, task creation button/modal, and task details modal from `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`.
+    - Removed "My Assigned Tasks" section and task details modal from `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`.
+  - **2. Retained Dashboard Highlights Animated Auto-Scroll (`AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`)**:
+    - Preserved 3.5s interval smooth looping scroll animation for Birthday, On-Leave, and Holiday highlights on both Admin and Employee dashboards.
+- Files changed:
+  - `backend/src/models/Task.js` (Deleted)
+  - `backend/src/controllers/taskController.js` (Deleted)
+  - `backend/src/routes/taskRoutes.js` (Deleted)
+  - `backend/src/validators/taskValidator.js` (Deleted)
+  - `backend/tests/task.test.js` (Deleted)
+  - `duty-management-app/src/api/taskApi.js` (Deleted)
+  - `duty-management-app/src/components/MultiSelectEmployeeModal.jsx` (Deleted)
+  - `duty-management-app/src/components/TaskCreateModal.jsx` (Deleted)
+  - `duty-management-app/src/components/TaskDetailsModal.jsx` (Deleted)
+  - `backend/src/models/Notification.js`
+  - `backend/src/routes/index.js`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Complete removal of task assignment schema, routes, controllers, and UI.
+  - Retained highlight banner animated auto-scrolling on dashboards.
+- Reason: User requested: "remove the previous update ,create task realted coding and file ,structure,ui remove i dont want; fix".
+- Impact: Codebase restored to clean operational baseline without task clutter, while preserving highlight carousel auto-scroll animation.
 
 ## Current Progress
 - Completed:
   - Highlight Carousel Auto-Scroll with Animation: 3.5s smooth looping scroll animation for Birthdays, On-Leave, and Holidays across Admin and Employee dashboards.
-  - Task Assignment Workflow: Task data model, validation, and routes supporting Admin task creation for Client Companies with multi-employee selection.
-  - Multi-Select Employee Modal: Admin can search and select multiple employees with live count indicators and select all/clear toggles.
-  - Task In-App & Push Notifications: Assigned employees receive push and in-app notifications with task and company details.
-  - Notification Deep-Linking & Task Details Modal: Tapping task notification directly opens `TaskDetailsModal` showing full task and company details with 1-tap status updates (Pending, In Progress, Completed).
-  - Dashboard Integration: "Assigned Tasks" section on Admin Dashboard with "+ Assign Task" action; "My Assigned Tasks" on Employee Dashboard.
   - Custom "Other" Work Type Display: When "Other" is chosen with custom details entered, it is displayed as `Other (custom data)` across all views (forms, cards, details, modals) and in both PDF and Excel exports.
   - Client Company Location in Work Details & Cards: Company location is displayed alongside or under the company name in `DutyDetailsScreen`, `MyDutiesScreen`, `AllDutiesScreen`, `EmployeeDetailsScreen`, and dashboard activity cards.
   - Removed Duty/Work Status Workflow: Removed `StatusBadge` and status labels (`approved`, `needs fix`, `rejected`, `submitted`) from duty cards and details, removed status filter chips from the filter modal, and removed the manager feedback card. Leave status workflow remains intact.
   - Automatic Phone Download: Persisted SAF directory URI via `SecureStore` in `exportUtils.js`, allowing downloads to save directly without prompt after initial authorization.
-  - 43/43 backend unit tests passing (7 suites); 0 syntax errors across all mobile screens.
+  - 39/39 backend unit tests passing (6 suites); 0 syntax errors across all mobile screens.
 - In Progress:
   - None.
 - Pending:
