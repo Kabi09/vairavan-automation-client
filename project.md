@@ -78,6 +78,35 @@
 
 ## Change History
 
+### 2026-10-14
+#### Fix Highlight Carousel Overhang, Box Length/Height Uniformity, Card Gaps, and Vertical Centering
+- What was changed:
+  - **Slide Overhang & Next Box Bleeding Fix (`AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`)**:
+    - Changed `SLIDE_WIDTH` calculation from `SCREEN_WIDTH - SPACING.md * 2` (336px) to `SCREEN_WIDTH - SPACING.lg * 2` (328px).
+    - Matched the exact available container width of `scrollContent` (`padding: SPACING.lg` = 16px horizontal on left and right), eliminating the 8px width excess that previously caused the next carousel slide to hang/bleed into the screen edge.
+  - **Slide Gap Separation ("cap one to another")**:
+    - Wrapped each slide item in `<View key={slide.id} style={{ width: SLIDE_WIDTH, paddingHorizontal: 4, justifyContent: 'center' }}>`.
+    - Creates a clean 8px horizontal gap (`4px + 4px`) between adjacent cards in the horizontal carousel so slides are visually separated and do not touch edge-to-edge when swiped.
+    - Added matching `paddingHorizontal: 4` to single-slide highlight wrappers to guarantee identical card width and margins across 1-slide and multi-slide states.
+  - **Uniform Box Length & Height (`minHeight: 94`)**:
+    - Standardized `minHeight: 94` across all highlight card styles: `birthdayHighlightCard`, `personalBirthdayCard`, `teamBirthdayCard`, `leaveHighlightCard`, and `holidayHighlightCard`.
+    - Eliminates vertical card height jumping when sliding between cards with varying quantities of text (e.g. 1-line birthday card vs 2-line leave/holiday card).
+  - **Vertical Content Centering on Cards with Less Content**:
+    - Added `justifyContent: 'center'` to all highlight card containers and to the right-hand text container `<View style={{ flex: 1, marginLeft: SPACING.md, justifyContent: 'center' }}>`.
+    - Added `numberOfLines={2}` to birthday subheadings (`birthdayText`, `personalBirthdaySub`, `teamBirthdaySub`) matching leave and holiday cards.
+    - When one card has 2 lines of text (setting the natural ~94px card height), any adjacent card with only 1 line of text centers its avatar and text vertically within the box.
+  - **Carousel Snapping & Index Tracking**:
+    - Configured `ScrollView` with `snapToInterval={SLIDE_WIDTH}`, `snapToAlignment="center"`, `decelerationRate="fast"`, `bounces={false}`, and added `onMomentumScrollEnd` to guarantee responsive snapping and exact indicator dot synchronization.
+- Files changed:
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Slide container matches viewport width with internal 8px gaps between cards.
+  - All highlight cards maintain fixed minimum height (94px) and vertically centered content.
+- Reason: User requested: "small ui bug there fix-> highlight like-birthday,holiday,leave siding have over the box on next make the same box length if 2 have move content that box size on the another box center content; cap one to another; fix the ui bug".
+- Impact: Smooth carousel scrolling without edge overhang, consistent card heights, clean gaps between slides, and centered content across birthday, leave, and holiday highlight banners on both Admin and Employee dashboards.
+
 ### 2026-10-13
 #### Android Standalone APK Cleartext Traffic Configuration (`app.json`)
 - What was changed:

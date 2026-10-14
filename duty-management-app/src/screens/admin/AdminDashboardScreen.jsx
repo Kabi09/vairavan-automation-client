@@ -27,7 +27,7 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SLIDE_WIDTH = SCREEN_WIDTH - SPACING.md * 2;
+const SLIDE_WIDTH = SCREEN_WIDTH - SPACING.lg * 2;
 
 export const AdminDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -147,9 +147,9 @@ export const AdminDashboardScreen = ({ navigation }) => {
                   </View>
                 </View>
               )}
-              <View style={{ flex: 1, marginLeft: SPACING.md }}>
+              <View style={{ flex: 1, marginLeft: SPACING.md, justifyContent: 'center' }}>
                 <Text style={styles.birthdayTitle}>Today's Birthday Celebration! 🎂</Text>
-                <Text style={styles.birthdayText}>
+                <Text style={styles.birthdayText} numberOfLines={2}>
                   {todayBirthdays
                     .map((b) => `${b.employeeName} (${b.employeeId || b.designation || 'Employee'})`)
                     .join(', ')}
@@ -222,7 +222,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
                   </View>
                 </View>
               )}
-              <View style={{ flex: 1, marginLeft: SPACING.md }}>
+              <View style={{ flex: 1, marginLeft: SPACING.md, justifyContent: 'center' }}>
                 <View style={styles.highlightHeaderRow}>
                   <Text style={styles.leaveHighlightTitle}>Employees On Leave Today 🌴</Text>
                   <Ionicons name="chevron-forward" size={14} color="#2563EB" />
@@ -261,7 +261,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
                   <Text style={{ fontSize: 9 }}>🎉</Text>
                 </View>
               </View>
-              <View style={{ flex: 1, marginLeft: SPACING.md }}>
+              <View style={{ flex: 1, marginLeft: SPACING.md, justifyContent: 'center' }}>
                 <View style={styles.highlightHeaderRow}>
                   <Text style={styles.holidayHighlightTitle}>Today is a Company Holiday! 🎉</Text>
                   <Ionicons name="chevron-forward" size={14} color="#15803D" />
@@ -332,7 +332,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
           <>
             {/* Sliding Highlight Banners (Birthday, On-Leave, Holiday) */}
             {highlightSlides.length === 1 && (
-              <View style={{ marginBottom: SPACING.md }}>
+              <View style={{ marginBottom: SPACING.md, paddingHorizontal: 4 }}>
                 {highlightSlides[0].node}
               </View>
             )}
@@ -342,18 +342,29 @@ export const AdminDashboardScreen = ({ navigation }) => {
                 <ScrollView
                   horizontal
                   pagingEnabled
+                  snapToInterval={SLIDE_WIDTH}
+                  snapToAlignment="center"
+                  decelerationRate="fast"
+                  bounces={false}
                   showsHorizontalScrollIndicator={false}
                   onScroll={(e) => {
                     const offsetX = e.nativeEvent.contentOffset.x;
                     const idx = Math.round(offsetX / SLIDE_WIDTH);
-                    if (idx !== activeHighlightIndex) {
+                    if (idx !== activeHighlightIndex && idx >= 0 && idx < highlightSlides.length) {
+                      setActiveHighlightIndex(idx);
+                    }
+                  }}
+                  onMomentumScrollEnd={(e) => {
+                    const offsetX = e.nativeEvent.contentOffset.x;
+                    const idx = Math.round(offsetX / SLIDE_WIDTH);
+                    if (idx >= 0 && idx < highlightSlides.length) {
                       setActiveHighlightIndex(idx);
                     }
                   }}
                   scrollEventThrottle={16}
                 >
                   {highlightSlides.map((slide) => (
-                    <View key={slide.id} style={{ width: SLIDE_WIDTH }}>
+                    <View key={slide.id} style={{ width: SLIDE_WIDTH, paddingHorizontal: 4, justifyContent: 'center' }}>
                       {slide.node}
                     </View>
                   ))}
@@ -973,6 +984,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: SPACING.md,
     padding: SPACING.md,
+    minHeight: 94,
+    justifyContent: 'center',
   },
   birthdayRow: {
     flexDirection: 'row',
@@ -1082,6 +1095,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: SPACING.md,
     padding: SPACING.md,
+    minHeight: 94,
+    justifyContent: 'center',
   },
   leaveAvatarWrapper: {
     position: 'relative',
@@ -1158,6 +1173,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: SPACING.md,
     padding: SPACING.md,
+    minHeight: 94,
+    justifyContent: 'center',
   },
   holidayIconWrap: {
     width: 44,
