@@ -101,4 +101,48 @@ describe('Company Management Tests', () => {
     assert.equal(check.isDeleted, true);
     assert.equal(check.status, 'inactive');
   });
+
+  it('Admin can create Office and Client company and filter by companyType', async () => {
+    // 1. Create Office
+    const officeRes = await request(app)
+      .post('/api/companies')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        companyName: 'Vairavan Automation Head Office',
+        location: 'Coimbatore HQ',
+        companyPhoneNumber: '+919876543210',
+        companyType: 'office',
+      });
+    assert.equal(officeRes.status, 201);
+    assert.equal(officeRes.body.data.company.companyType, 'office');
+
+    // 2. Create Client Company
+    const clientRes = await request(app)
+      .post('/api/companies')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        companyName: 'Sri Krishna Textiles',
+        location: 'Tirupur',
+        companyPhoneNumber: '+919876543211',
+        companyType: 'client',
+      });
+    assert.equal(clientRes.status, 201);
+    assert.equal(clientRes.body.data.company.companyType, 'client');
+
+    // 3. Filter by companyType=office
+    const listOfficeRes = await request(app)
+      .get('/api/companies?companyType=office')
+      .set('Authorization', `Bearer ${adminToken}`);
+    assert.equal(listOfficeRes.status, 200);
+    assert.equal(listOfficeRes.body.data.companies.length, 1);
+    assert.equal(listOfficeRes.body.data.companies[0].companyType, 'office');
+
+    // 4. Filter by companyType=client
+    const listClientRes = await request(app)
+      .get('/api/companies?companyType=client')
+      .set('Authorization', `Bearer ${adminToken}`);
+    assert.equal(listClientRes.status, 200);
+    assert.equal(listClientRes.body.data.companies.length, 1);
+    assert.equal(listClientRes.body.data.companies[0].companyType, 'client');
+  });
 });

@@ -20,6 +20,10 @@ export const validateCreateCompany = [
     .withMessage('Company phone number is required')
     .matches(/^(?:\+91)?[0-9]{10}$/)
     .withMessage('Company phone number must be exactly 10 digits'),
+  body('companyType')
+    .optional()
+    .isIn(['office', 'client'])
+    .withMessage('Company type must be either office or client'),
   body('status')
     .optional()
     .isIn(['active', 'inactive'])
@@ -49,6 +53,10 @@ export const validateUpdateCompany = [
     .trim()
     .matches(/^(?:\+91)?[0-9]{10}$/)
     .withMessage('Company phone number must be exactly 10 digits'),
+  body('companyType')
+    .optional()
+    .isIn(['office', 'client'])
+    .withMessage('Company type must be either office or client'),
   body('status')
     .optional()
     .isIn(['active', 'inactive'])

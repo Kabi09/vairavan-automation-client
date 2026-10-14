@@ -139,7 +139,31 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
               {company?.location}
             </Text>
           </View>
-          <StatusBadge status={company?.status} />
+          <View style={styles.badgeCol}>
+            <StatusBadge status={company?.status} />
+            <View
+              style={[
+                styles.typeBadgePill,
+                company?.companyType === 'office'
+                  ? styles.typeBadgePillOffice
+                  : styles.typeBadgePillClient,
+              ]}
+            >
+              <Ionicons
+                name={company?.companyType === 'office' ? 'business' : 'storefront'}
+                size={11}
+                color={company?.companyType === 'office' ? '#1E40AF' : '#047857'}
+              />
+              <Text
+                style={[
+                  styles.typeBadgePillText,
+                  { color: company?.companyType === 'office' ? '#1E40AF' : '#047857' },
+                ]}
+              >
+                {company?.companyType === 'office' ? 'Office' : 'Client'}
+              </Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.profileDetailsRow}>
@@ -176,7 +200,7 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
       <Card style={styles.toolbarCard}>
         <View style={styles.toolbarTitleRow}>
           <Text style={styles.toolbarTitle}>Filter & Export Records</Text>
-          {(startDate || endDate) && (
+          {Boolean(startDate || endDate) ? (
             <TouchableOpacity
               onPress={() => {
                 setStartDate('');
@@ -185,7 +209,7 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
             >
               <Text style={styles.clearDateLink}>Reset (Show All)</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
 
         {/* Date Filter Quick Presets */}
@@ -842,6 +866,31 @@ const styles = StyleSheet.create({
     marginRight: 6,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  badgeCol: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  typeBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.full,
+    gap: 4,
+    borderWidth: 1,
+  },
+  typeBadgePillOffice: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  typeBadgePillClient: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  typeBadgePillText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
 

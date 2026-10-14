@@ -20,6 +20,15 @@ const companySchema = new mongoose.Schema(
       required: [true, 'Company phone number is required'],
       trim: true,
     },
+    companyType: {
+      type: String,
+      enum: {
+        values: ['office', 'client'],
+        message: '{VALUE} is not a valid company type',
+      },
+      default: 'client',
+      index: true,
+    },
     status: {
       type: String,
       enum: {

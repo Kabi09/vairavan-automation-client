@@ -82,6 +82,72 @@
 ## Change History
 
 ### 2026-10-14
+#### Proof Photos 3 Max Limit, Required Fields Submit Gate, & Office vs Client Company Selection Flow
+- What was changed:
+  - **Duty Report Proof Photos Maximum Limit (3 Photos)**:
+    - Reduced maximum allowed proof photos in `DutyFormScreen.jsx` from 5 to 3:
+      - Header label: `Proof Photos (${photos.length}/3)`
+      - Camera/gallery selection limit check: `if (photos.length >= 3) Alert.alert(...)`
+      - Gallery multi-selection slice: `slice(0, 3)`
+      - Add slot rendering condition: `{photos.length < 3 && ...}`
+  - **Required Fields Submit Button Clickability Gate**:
+    - Introduced `isFormComplete` validation state checking:
+      - `dutyDate` (selected)
+      - `selectedCompanyId` (selected)
+      - `customerName` (non-empty)
+      - `customerPhone` (non-empty and valid 10-digit format)
+      - `machineName` (non-empty)
+      - `workType` (selected; if `'Other'`, `customWorkDetails` non-empty)
+      - `inTime` & `outTime` (valid `HH:mm` format and `inTime < outTime`)
+      - `workDescription` (non-empty)
+    - Disabled `<PrimaryButton>` submit button (`disabled={!isFormComplete || loading}`) with visual disabled styling (`submitBtnDisabled`).
+    - Added hint text beneath submit button informing user to complete all required fields above to enable submission.
+  - **Company Classification (Office vs Client Company) in Backend**:
+    - **Model (`Company.js`)**: Added `companyType: { type: String, enum: ['office', 'client'], default: 'client', index: true }`.
+    - **Validators (`companyValidator.js`)**: Added `companyType` validation (`isIn(['office', 'client'])`) to `validateCreateCompany` and `validateUpdateCompany`.
+    - **Controller (`companyController.js`)**:
+      - `createCompany` & `updateCompany`: Accepts, validates, and persists `companyType`.
+      - `getCompanies`: Added `req.query.companyType` filtering and default sort by `{ companyType: -1, companyName: 1 }` to list Offices first.
+    - **Automated Tests (`backend/tests/company.test.js`)**: Added integration test for creating Office and Client companies and querying with `companyType` filter (41/41 backend tests passing).
+  - **Admin Company Form Screen (`CompanyFormScreen.jsx`)**:
+    - Added side/pill selector toggle: `[🏢 Office]` vs `[🏭 Client Company]`.
+    - Form labels and placeholders dynamically adjust to "Office / Branch Name" vs "Company Name".
+    - Persists `companyType` in payload and pre-populates existing type when editing.
+  - **Admin Company List Screen (`CompanyListScreen.jsx`)**:
+    - Added category filter tabs: `All (${total})`, `Offices (${officeCount})`, `Clients (${clientCount})`.
+    - Company cards render `[🏢 Office]` vs `[🏭 Client]` badge pill with distinct color styles.
+    - Export buttons respect the active type tab and filtered dataset.
+  - **Company Details Screen (`CompanyDetailsScreen.jsx`)**:
+    - Profile header renders badge pill displaying `Office` vs `Client Company`.
+    - Converted conditional reset button to strict boolean ternary `{Boolean(...) ? ... : null}`.
+  - **Duty Form Company Selection Flow (`DutyFormScreen.jsx`)**:
+    - Added top location selector pills: `[🏢 Office]` and `[🏭 Client Company]`.
+    - Initial state defaults to `Office` and auto-selects the first available office company.
+    - When user taps `[🏭 Client Company]`, mode switches to client and immediately opens the searchable `DropdownPickerModal` listing client companies.
+    - `DropdownPickerModal` filters options according to active classification (`Office` vs `Client`).
+  - **PDF & Excel Exports (`exportUtils.js`)**:
+    - Updated `exportCompaniesToPDF` to include `Type` column with styled pills (`OFFICE` vs `CLIENT`).
+    - Updated `exportCompaniesToExcel` to include `Type` (`Office` vs `Client Company`) column.
+- Files changed:
+  - `backend/src/models/Company.js`
+  - `backend/src/validators/companyValidator.js`
+  - `backend/src/controllers/companyController.js`
+  - `backend/tests/company.test.js`
+  - `duty-management-app/src/screens/admin/CompanyFormScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyListScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `project.md`
+- Logic changed:
+  - Proof photos capped at 3 maximum instead of 5.
+  - Submit button is completely non-clickable and styled disabled until every required field is filled.
+  - Add work company selection starts on Office by default; clicking Client Company automatically pops up the client directory picker.
+  - Companies support distinct classification as `office` (branch/HQ) or `client` (customer factory/site).
+- Reason: User requested: "add work ->phots proof change the allow 3 maximum; all detail requireld field fill the submit button clickable other wise not clickable ; admin company add => simple modification - side select office,company one form tha but different office,client company; add work -> (client company or office) company select first default office irrukanum then click list out the client company; fix; also verify export,details,etc..;".
+- Impact: Streamlined work reporting with strict form validation, improved organization of offices vs client sites across directory, exports, and duty submission flows.
+
+### 2026-10-14
 #### Text Strings Rendering Error Fix & Header Message Actions & Detailed Recipient Target (Employee or All)
 - What was changed:
   - **Fixed React Native Error: `Text strings must be rendered within a <Text> component`**:
@@ -1743,7 +1809,11 @@
   - Client Company Location in Work Details & Cards: Company location is displayed alongside or under the company name in `DutyDetailsScreen`, `MyDutiesScreen`, `AllDutiesScreen`, `EmployeeDetailsScreen`, and dashboard activity cards.
   - Removed Duty/Work Status Workflow: Removed `StatusBadge` and status labels (`approved`, `needs fix`, `rejected`, `submitted`) from duty cards and details, removed status filter chips from the filter modal, and removed the manager feedback card. Leave status workflow remains intact.
   - Automatic Phone Download: Persisted SAF directory URI via `SecureStore` in `exportUtils.js`, allowing downloads to save directly without prompt after initial authorization.
-  - 40/40 backend unit tests passing (6 suites); 0 syntax errors across all 65 mobile files.
+  - Proof Photos Limit & Submission Gate: Duty report proof photos capped at maximum 3 photos; submission button is strictly disabled and unclickable until all required fields (date, company, contact name, valid 10-digit phone, machine name, work type/custom details, in/out timings with order validation, work description) are filled.
+  - Company Classification Flow: Company model, validator, and controller support `office` vs `client`. Admin company form allows toggling between Office and Client. Company list provides quick tabs (All, Offices, Clients) and colored type badges. Company details display type badge.
+  - Add Work Company Picker: Duty form location defaults to Office and auto-selects the first office; selecting Client Company automatically triggers the client company directory list modal.
+  - Export Verification: PDF and Excel exports include the `Type` / classification column for all companies.
+  - 41/41 backend unit tests passing (6 suites); 0 syntax errors and 0 raw text issues across all mobile files.
 - In Progress:
   - None.
 - Pending:
@@ -1755,6 +1825,13 @@
 - Notes: Mobile frontend connects to live API at `https://vairavan-automation-client-iony.vercel.app/api`.
 
 ## Technical Decisions
+- Decision: Pre-select Default Office in Add Work and auto-launch Client modal on toggle.
+  Reason: Field technicians predominantly report at the main office unless dispatched to a customer client site. Auto-opening the client selection modal on switching reduces clicks for field employees.
+  Date: 2026-10-14
+
+- Decision: Disable submit button until required fields pass all format and length constraints.
+  Reason: Prevents invalid work report submissions, reduces server round-trips, and provides immediate visual feedback to employees when required information is missing.
+  Date: 2026-10-14
 - Decision: Persist Android StorageAccessFramework directory URI in `expo-secure-store`.
   Reason: Android SAF requires user permission to write files to public folders like Downloads. Persisting the granted URI enables Chrome-like automatic downloads without prompting folder selection on every export.
   Date: 2026-10-13

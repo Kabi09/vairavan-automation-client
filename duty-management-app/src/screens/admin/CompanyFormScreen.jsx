@@ -8,8 +8,10 @@ import {
   StyleSheet,
   Switch,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import companyApi from '../../api/companyApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
@@ -27,6 +29,7 @@ export const CompanyFormScreen = ({ navigation, route }) => {
   const [companyName, setCompanyName] = useState(existingCompany?.companyName || '');
   const [location, setLocation] = useState(existingCompany?.location || '');
   const [phone, setPhone] = useState(existingCompany?.companyPhoneNumber || '');
+  const [companyType, setCompanyType] = useState(existingCompany?.companyType || 'client');
   const [isActive, setIsActive] = useState(existingCompany ? existingCompany.status === 'active' : true);
 
   const [loading, setLoading] = useState(false);
@@ -61,6 +64,7 @@ export const CompanyFormScreen = ({ navigation, route }) => {
       companyName: companyName.trim(),
       location: location.trim(),
       companyPhoneNumber: phone.trim(),
+      companyType,
       status: isActive ? 'active' : 'inactive',
     };
 
@@ -102,9 +106,63 @@ export const CompanyFormScreen = ({ navigation, route }) => {
           <ErrorMessage message={error} />
 
           <Card style={styles.formCard}>
+            {/* Classification: Office vs Client Company */}
+            <Text style={styles.fieldLabel}>Classification *</Text>
+            <View style={styles.typeSelectorRow}>
+              <TouchableOpacity
+                style={[
+                  styles.typePill,
+                  companyType === 'office' && styles.typePillActive,
+                ]}
+                onPress={() => setCompanyType('office')}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="business"
+                  size={18}
+                  color={companyType === 'office' ? '#FFFFFF' : COLORS.primary}
+                />
+                <Text
+                  style={[
+                    styles.typePillText,
+                    companyType === 'office' && styles.typePillTextActive,
+                  ]}
+                >
+                  Office
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.typePill,
+                  companyType === 'client' && styles.typePillActive,
+                ]}
+                onPress={() => setCompanyType('client')}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="storefront"
+                  size={18}
+                  color={companyType === 'client' ? '#FFFFFF' : COLORS.primary}
+                />
+                <Text
+                  style={[
+                    styles.typePillText,
+                    companyType === 'client' && styles.typePillTextActive,
+                  ]}
+                >
+                  Client Company
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <TextInputField
-              label="Company Name"
-              placeholder="e.g. Apex Spinning Mills"
+              label={companyType === 'office' ? 'Office / Branch Name' : 'Company Name'}
+              placeholder={
+                companyType === 'office'
+                  ? 'e.g. Vairavan Automation Head Office'
+                  : 'e.g. Apex Spinning Mills'
+              }
               value={companyName}
               onChangeText={(text) => {
                 setCompanyName(text);
@@ -190,6 +248,42 @@ const styles = StyleSheet.create({
   },
   formCard: {
     marginBottom: SPACING.xl,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  typePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm + 2,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    borderColor: COLORS.primarySubtle,
+    backgroundColor: COLORS.surfaceAlt,
+    gap: 6,
+  },
+  typePillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  typePillText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  typePillTextActive: {
+    color: '#FFFFFF',
   },
   switchRow: {
     flexDirection: 'row',

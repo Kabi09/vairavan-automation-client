@@ -1265,6 +1265,10 @@ export const exportCompaniesToPDF = async ({
     const rowsHtml = companies
       .map((c, index) => {
         const name = escapeHtml(c.companyName || 'N/A');
+        const isOffice = c.companyType === 'office';
+        const typeLabel = isOffice ? 'OFFICE' : 'CLIENT';
+        const typeBg = isOffice ? '#dbeafe' : '#d1fae5';
+        const typeColor = isOffice ? '#1e40af' : '#047857';
         const loc = escapeHtml(c.location || 'N/A');
         const phone = escapeHtml(c.companyPhoneNumber || 'N/A');
         const status = (c.status || 'active').toUpperCase();
@@ -1274,6 +1278,11 @@ export const exportCompaniesToPDF = async ({
           <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
             <td style="padding: 8px 6px; text-align: center;">${index + 1}</td>
             <td style="padding: 8px 6px;"><strong>${name}</strong></td>
+            <td style="padding: 8px 6px; text-align: center;">
+              <span style="display: inline-block; padding: 2px 6px; border-radius: 6px; font-weight: 700; font-size: 9.5px; color: ${typeColor}; background: ${typeBg};">
+                ${typeLabel}
+              </span>
+            </td>
             <td style="padding: 8px 6px;">${loc}</td>
             <td style="padding: 8px 6px;">${phone}</td>
             <td style="padding: 8px 6px; text-align: center;">
@@ -1387,10 +1396,11 @@ export const exportCompaniesToPDF = async ({
         <table class="records-table">
           <thead>
             <tr>
-              <th style="width: 6%; text-align: center;">#</th>
-              <th style="width: 38%;">Company Name</th>
-              <th style="width: 28%;">Location / Site</th>
-              <th style="width: 18%;">Contact Phone</th>
+              <th style="width: 5%; text-align: center;">#</th>
+              <th style="width: 33%;">Company Name</th>
+              <th style="width: 12%; text-align: center;">Type</th>
+              <th style="width: 26%;">Location / Site</th>
+              <th style="width: 14%;">Contact Phone</th>
               <th style="width: 10%; text-align: center;">Status</th>
             </tr>
           </thead>
@@ -1441,6 +1451,7 @@ export const exportCompaniesToExcel = async ({
     const headers = [
       'Sl No',
       'Company Name',
+      'Type',
       'Location',
       'Phone Number',
       'Status',
@@ -1451,6 +1462,7 @@ export const exportCompaniesToExcel = async ({
       return [
         index + 1,
         escapeCsv(c.companyName || ''),
+        escapeCsv(c.companyType === 'office' ? 'Office' : 'Client Company'),
         escapeCsv(c.location || ''),
         escapeCsv(c.companyPhoneNumber || ''),
         escapeCsv(c.status || 'active'),

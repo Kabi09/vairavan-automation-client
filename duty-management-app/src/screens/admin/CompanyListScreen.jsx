@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ export const CompanyListScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all'); // 'all' | 'office' | 'client'
   const [error, setError] = useState('');
 
   // Deactivate modal state
@@ -77,64 +78,109 @@ export const CompanyListScreen = ({ navigation }) => {
     }
   };
 
+  const filteredCompanies = useMemo(() => {
+    return companies.filter((c) => {
+      if (typeFilter === 'office') return c.companyType === 'office';
+      if (typeFilter === 'client') return c.companyType !== 'office';
+      return true;
+    });
+  }, [companies, typeFilter]);
+
+  const officeCount = companies.filter((c) => c.companyType === 'office').length;
+  const clientCount = companies.filter((c) => c.companyType !== 'office').length;
+
   const handleExportPDF = () => {
+    const subtitle =
+      typeFilter === 'office'
+        ? 'Offices & Branches Directory'
+        : typeFilter === 'client'
+        ? 'Client Companies Directory'
+        : 'Company & Office Directory';
+
     exportCompaniesToPDF({
-      title: 'Client Companies Directory',
-      subtitle: 'Registered Factory & Client Sites',
-      companies,
-      filterInfo: search ? `Filter: "${search}"` : 'All Client Accounts',
+      title: 'Companies & Offices Directory',
+      subtitle,
+      companies: filteredCompanies,
+      filterInfo: search ? `Filter: "${search}"` : `Type: ${typeFilter.toUpperCase()}`,
     });
   };
 
   const handleExportExcel = () => {
     exportCompaniesToExcel({
-      filename: 'Client_Companies',
-      companies,
+      filename: `Companies_${typeFilter}`,
+      companies: filteredCompanies,
     });
   };
 
-  const renderCompanyItem = ({ item }) => (
-    <Card
-      style={styles.companyCard}
-      onPress={() => navigation.navigate('CompanyDetails', { company: item })}
-    >
-      <View style={styles.cardHeader}>
-        <View style={styles.nameContainer}>
-          <Text style={styles.companyName}>{item.companyName}</Text>
-          <Text style={styles.locationText}>
-            <Ionicons name="location-outline" size={14} color={COLORS.textSecondary} />{' '}
-            {item.location}
-          </Text>
+  const renderCompanyItem = ({ item }) => {
+    const isOffice = item.companyType === 'office';
+    return (
+      <Card
+        style={styles.companyCard}
+        onPress={() => navigation.navigate('CompanyDetails', { company: item })}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.nameContainer}>
+            <View style={styles.nameRow}>
+              <Text style={styles.companyName}>{item.companyName}</Text>
+            </View>
+            <Text style={styles.locationText}>
+              <Ionicons name="location-outline" size={14} color={COLORS.textSecondary} />{' '}
+              {item.location}
+            </Text>
+          </View>
+          <View style={styles.badgeCol}>
+            <StatusBadge status={item.status} />
+            <View
+              style={[
+                styles.typeBadgePill,
+                isOffice ? styles.typeBadgePillOffice : styles.typeBadgePillClient,
+              ]}
+            >
+              <Ionicons
+                name={isOffice ? 'business' : 'storefront'}
+                size={11}
+                color={isOffice ? '#1E40AF' : '#047857'}
+              />
+              <Text
+                style={[
+                  styles.typeBadgePillText,
+                  { color: isOffice ? '#1E40AF' : '#047857' },
+                ]}
+              >
+                {isOffice ? 'Office' : 'Client'}
+              </Text>
+            </View>
+          </View>
         </View>
-        <StatusBadge status={item.status} />
-      </View>
 
-      <View style={styles.cardFooter}>
-        <Text style={styles.phoneText}>
-          <Ionicons name="call-outline" size={14} color={COLORS.textSecondary} />{' '}
-          {item.companyPhoneNumber}
-        </Text>
+        <View style={styles.cardFooter}>
+          <Text style={styles.phoneText}>
+            <Ionicons name="call-outline" size={14} color={COLORS.textSecondary} />{' '}
+            {item.companyPhoneNumber}
+          </Text>
 
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.iconAction}
-            onPress={() => navigation.navigate('CompanyForm', { company: item })}
-          >
-            <Ionicons name="create-outline" size={20} color={COLORS.primary} />
-          </TouchableOpacity>
-
-          {item.status === 'active' && (
+          <View style={styles.actionRow}>
             <TouchableOpacity
               style={styles.iconAction}
-              onPress={() => setCompanyToDeactivate(item)}
+              onPress={() => navigation.navigate('CompanyForm', { company: item })}
             >
-              <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+              <Ionicons name="create-outline" size={20} color={COLORS.primary} />
             </TouchableOpacity>
-          )}
+
+            {Boolean(item.status === 'active') ? (
+              <TouchableOpacity
+                style={styles.iconAction}
+                onPress={() => setCompanyToDeactivate(item)}
+              >
+                <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
-      </View>
-    </Card>
-  );
+      </Card>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -182,13 +228,73 @@ export const CompanyListScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Type Filter Tabs: All, Offices, Client Companies */}
+        <View style={styles.filterTabsRow}>
+          <TouchableOpacity
+            style={[styles.filterTab, typeFilter === 'all' && styles.filterTabActive]}
+            onPress={() => setTypeFilter('all')}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.filterTabText,
+                typeFilter === 'all' && styles.filterTabTextActive,
+              ]}
+            >
+              All ({companies.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterTab, typeFilter === 'office' && styles.filterTabActive]}
+            onPress={() => setTypeFilter('office')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="business"
+              size={13}
+              color={typeFilter === 'office' ? '#FFFFFF' : '#1E40AF'}
+            />
+            <Text
+              style={[
+                styles.filterTabText,
+                typeFilter === 'office' && styles.filterTabTextActive,
+                typeFilter !== 'office' && { color: '#1E40AF' },
+              ]}
+            >
+              Offices ({officeCount})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterTab, typeFilter === 'client' && styles.filterTabActive]}
+            onPress={() => setTypeFilter('client')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="storefront"
+              size={13}
+              color={typeFilter === 'client' ? '#FFFFFF' : '#047857'}
+            />
+            <Text
+              style={[
+                styles.filterTabText,
+                typeFilter === 'client' && styles.filterTabTextActive,
+                typeFilter !== 'client' && { color: '#047857' },
+              ]}
+            >
+              Clients ({clientCount})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <ErrorMessage message={error} onRetry={() => fetchCompanies(search)} />
 
         {loading && !refreshing ? (
           <LoadingIndicator message="Loading companies..." />
         ) : (
           <FlatList
-            data={companies}
+            data={filteredCompanies}
             keyExtractor={(item) => item._id}
             renderItem={renderCompanyItem}
             contentContainerStyle={styles.listContent}
@@ -328,6 +434,62 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  badgeCol: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  typeBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.full,
+    gap: 4,
+    borderWidth: 1,
+  },
+  typeBadgePillOffice: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  typeBadgePillClient: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  typeBadgePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  filterTabsRow: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  filterTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: SPACING.xs,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 4,
+  },
+  filterTabActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  filterTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });
 

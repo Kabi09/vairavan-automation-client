@@ -10,7 +10,13 @@ import asyncHandler from '../utils/asyncHandler.js';
  * @access  Private/Admin
  */
 export const createCompany = asyncHandler(async (req, res) => {
-  const { companyName, location, companyPhoneNumber, status = 'active' } = req.body;
+  const {
+    companyName,
+    location,
+    companyPhoneNumber,
+    status = 'active',
+    companyType = 'client',
+  } = req.body;
 
   // Prevent duplicate company with same name (case-insensitive)
   const existing = await Company.findOne({
@@ -26,6 +32,7 @@ export const createCompany = asyncHandler(async (req, res) => {
     companyName: companyName.trim(),
     location: location.trim(),
     companyPhoneNumber: companyPhoneNumber.trim(),
+    companyType: companyType === 'office' ? 'office' : 'client',
     status,
     createdBy: req.user._id,
   });
@@ -43,7 +50,7 @@ export const getCompanies = asyncHandler(async (req, res) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
   const skip = (page - 1) * limit;
 
-  const { search, status } = req.query;
+  const { search, status, companyType } = req.query;
 
   const filter = { isDeleted: false };
 
@@ -52,6 +59,10 @@ export const getCompanies = asyncHandler(async (req, res) => {
     filter.status = 'active';
   } else if (status) {
     filter.status = status;
+  }
+
+  if (companyType) {
+    filter.companyType = companyType;
   }
 
   if (search) {
@@ -65,7 +76,7 @@ export const getCompanies = asyncHandler(async (req, res) => {
 
   const [companies, total] = await Promise.all([
     Company.find(filter)
-      .sort({ companyName: 1 })
+      .sort({ companyType: -1, companyName: 1 })
       .skip(skip)
       .limit(limit)
       .populate('createdBy', 'employeeName employeeId email'),
@@ -112,7 +123,7 @@ export const getCompanyById = asyncHandler(async (req, res) => {
  */
 export const updateCompany = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { companyName, location, companyPhoneNumber, status } = req.body;
+  const { companyName, location, companyPhoneNumber, status, companyType } = req.body;
 
   const company = await Company.findOne({ _id: id, isDeleted: false });
   if (!company) {
@@ -135,6 +146,9 @@ export const updateCompany = asyncHandler(async (req, res) => {
   if (location) company.location = location.trim();
   if (companyPhoneNumber) company.companyPhoneNumber = companyPhoneNumber.trim();
   if (status) company.status = status;
+  if (companyType && ['office', 'client'].includes(companyType)) {
+    company.companyType = companyType;
+  }
 
   await company.save();
 

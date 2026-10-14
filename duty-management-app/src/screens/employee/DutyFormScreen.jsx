@@ -49,6 +49,12 @@ export const DutyFormScreen = ({ navigation, route }) => {
     return getTodayDateString();
   });
   const [companies, setCompanies] = useState([]);
+  const [companyCategory, setCompanyCategory] = useState(() => {
+    if (dutyToEdit?.company?.companyType) {
+      return dutyToEdit.company.companyType;
+    }
+    return 'office'; // default Office
+  });
   const [selectedCompanyId, setSelectedCompanyId] = useState(() => {
     return dutyToEdit?.company?._id || dutyToEdit?.company || '';
   });
@@ -158,7 +164,22 @@ export const DutyFormScreen = ({ navigation, route }) => {
             const activeComps = compRes.data.companies;
             setCompanies(activeComps);
             if (!selectedCompanyId && activeComps.length > 0) {
-              setSelectedCompanyId(activeComps[0]._id);
+              const defaultOffice = activeComps.find((c) => c.companyType === 'office');
+              if (defaultOffice) {
+                setSelectedCompanyId(defaultOffice._id);
+                setCompanyCategory('office');
+                if (defaultOffice.companyPhoneNumber && !customerPhone) {
+                  setCustomerPhone(defaultOffice.companyPhoneNumber);
+                }
+              } else {
+                setSelectedCompanyId(activeComps[0]._id);
+                setCompanyCategory(activeComps[0].companyType || 'client');
+              }
+            } else if (selectedCompanyId && activeComps.length > 0) {
+              const currentComp = activeComps.find((c) => c._id === selectedCompanyId);
+              if (currentComp?.companyType) {
+                setCompanyCategory(currentComp.companyType);
+              }
             }
           }
         } catch (err) {
@@ -234,10 +255,10 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setPreviewModalVisible(true);
   };
 
-  // Image capture / selection
+  // Image capture / selection (Allow max 3 proof photos)
   const handlePickPhoto = async () => {
-    if (photos.length >= 5) {
-      Alert.alert('Limit Reached', 'You can attach up to 5 proof photos per visit.');
+    if (photos.length >= 3) {
+      Alert.alert('Limit Reached', 'You can attach up to 3 proof photos per visit.');
       return;
     }
 
@@ -274,7 +295,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
           });
           if (!result.canceled && result.assets) {
             const newUris = result.assets.map((a) => a.uri);
-            setPhotos((prev) => [...prev, ...newUris].slice(0, 5));
+            setPhotos((prev) => [...prev, ...newUris].slice(0, 3));
           }
         },
       },
@@ -310,6 +331,26 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
+
+  // Required fields completion check: all required fields must be filled to enable submission
+  const isFormComplete = Boolean(
+    dutyDate &&
+    selectedCompanyId &&
+    customerName.trim() &&
+    customerPhone.trim().length === 10 &&
+    isValidPhone(customerPhone) &&
+    machineName.trim() &&
+    (workType !== 'Other' || customWorkDetails.trim()) &&
+    isValidTimeFormat(inTime) &&
+    isValidTimeFormat(outTime) &&
+    isTimeOrderValid(inTime, outTime) &&
+    workDescription.trim()
+  );
+
+  const displayedCompanies = companies.filter((c) => {
+    if (companyCategory === 'office') return c.companyType === 'office';
+    return c.companyType !== 'office';
+  });
 
   const handleSubmit = async () => {
     if (!validate()) return;
@@ -464,17 +505,93 @@ export const DutyFormScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             </View>
 
+            {/* Category Pill Selector: Office vs Client Company */}
+            <Text style={styles.fieldLabel}>Work Location / Entity *</Text>
+            <View style={styles.typeSelectorRow}>
+              <TouchableOpacity
+                style={[
+                  styles.typePill,
+                  companyCategory === 'office' && styles.typePillActive,
+                ]}
+                onPress={() => {
+                  setCompanyCategory('office');
+                  const officeComp = companies.find((c) => c.companyType === 'office');
+                  if (officeComp) {
+                    setSelectedCompanyId(officeComp._id);
+                    if (fieldErrors.company) {
+                      setFieldErrors((prev) => ({ ...prev, company: null }));
+                    }
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="business"
+                  size={16}
+                  color={companyCategory === 'office' ? '#FFFFFF' : COLORS.primary}
+                />
+                <Text
+                  style={[
+                    styles.typePillText,
+                    companyCategory === 'office' && styles.typePillTextActive,
+                  ]}
+                >
+                  Office
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.typePill,
+                  companyCategory === 'client' && styles.typePillActive,
+                ]}
+                onPress={() => {
+                  setCompanyCategory('client');
+                  const currentComp = companies.find((c) => c._id === selectedCompanyId);
+                  if (!currentComp || currentComp.companyType === 'office') {
+                    const firstClient = companies.find((c) => c.companyType !== 'office');
+                    if (firstClient) {
+                      setSelectedCompanyId(firstClient._id);
+                    } else {
+                      setSelectedCompanyId('');
+                    }
+                  }
+                  // Immediately open client companies list modal as requested
+                  setCompanyDropdownVisible(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="storefront"
+                  size={16}
+                  color={companyCategory === 'client' ? '#FFFFFF' : COLORS.primary}
+                />
+                <Text
+                  style={[
+                    styles.typePillText,
+                    companyCategory === 'client' && styles.typePillTextActive,
+                  ]}
+                >
+                  Client Company
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Company Selection via Searchable Dropdown */}
             <View style={styles.companyHeaderRow}>
-              <Text style={styles.fieldLabel}>Client Company *</Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('CompanyForm')}
-                style={styles.addCompanyBtn}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
-                <Text style={styles.addCompanyBtnText}>Add Company</Text>
-              </TouchableOpacity>
+              <Text style={styles.fieldLabel}>
+                {companyCategory === 'office' ? 'Selected Office *' : 'Client Company *'}
+              </Text>
+              {Boolean(companyCategory === 'client') ? (
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('CompanyForm')}
+                  style={styles.addCompanyBtn}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
+                  <Text style={styles.addCompanyBtnText}>Add Company</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
 
             <TouchableOpacity
@@ -487,7 +604,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
             >
               <View style={styles.companyDropdownLeft}>
                 <Ionicons
-                  name="business"
+                  name={companyCategory === 'office' ? 'business' : 'storefront'}
                   size={18}
                   color={selectedCompanyId ? COLORS.primary : COLORS.textMuted}
                 />
@@ -500,7 +617,9 @@ export const DutyFormScreen = ({ navigation, route }) => {
                     numberOfLines={1}
                   >
                     {companies.find((c) => c._id === selectedCompanyId)?.companyName ||
-                      'Select Client Company...'}
+                      (companyCategory === 'office'
+                        ? 'Select Office / Branch...'
+                        : 'Select Client Company...')}
                   </Text>
                   {companies.find((c) => c._id === selectedCompanyId)?.location ? (
                     <Text style={styles.companyDropdownSub} numberOfLines={1}>
@@ -738,7 +857,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
 
             {/* Photos */}
             <View style={styles.photosHeader}>
-              <Text style={styles.fieldLabel}>Proof Photos ({photos.length}/5)</Text>
+              <Text style={styles.fieldLabel}>Proof Photos ({photos.length}/3)</Text>
               <TouchableOpacity onPress={handlePickPhoto}>
                 <Text style={styles.addPhotoLink}>+ Attach Photo</Text>
               </TouchableOpacity>
@@ -765,7 +884,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
                 </View>
               ))}
 
-              {photos.length < 5 && (
+              {photos.length < 3 && (
                 <TouchableOpacity style={styles.addPhotoSlot} onPress={handlePickPhoto}>
                   <Ionicons name="camera-outline" size={28} color={COLORS.textMuted} />
                   <Text style={styles.addPhotoSlotText}>Add</Text>
@@ -778,8 +897,17 @@ export const DutyFormScreen = ({ navigation, route }) => {
             title={isEditing ? 'Save Changes' : 'Submit Work Report'}
             onPress={handleSubmit}
             loading={loading}
-            style={styles.submitBtn}
+            disabled={!isFormComplete || loading}
+            style={[
+              styles.submitBtn,
+              !isFormComplete && styles.submitBtnDisabled,
+            ]}
           />
+          {!isFormComplete ? (
+            <Text style={styles.submitHintText}>
+              * Fill all required fields above to enable submission
+            </Text>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -826,7 +954,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
       <DropdownPickerModal
         visible={companyDropdownVisible}
         onClose={() => setCompanyDropdownVisible(false)}
-        title="Select Client Company"
+        title={companyCategory === 'office' ? 'Select Office / Branch' : 'Select Client Company'}
         searchPlaceholder="Search company by name or location..."
         selectedValue={selectedCompanyId}
         showAllOption={false}
@@ -839,12 +967,12 @@ export const DutyFormScreen = ({ navigation, route }) => {
             setCustomerPhone(item.companyPhoneNumber);
           }
         }}
-        items={companies.map((c) => ({
+        items={displayedCompanies.map((c) => ({
           label: c.companyName,
           value: c._id,
           id: c._id,
           companyPhoneNumber: c.companyPhoneNumber,
-          subtitle: `${c.location || 'Client Site'}${c.companyPhoneNumber ? ' • ' + c.companyPhoneNumber : ''}`,
+          subtitle: `${c.location || 'Location'}${c.companyPhoneNumber ? ' • ' + c.companyPhoneNumber : ''}`,
         }))}
       />
     </SafeAreaView>
@@ -1205,6 +1333,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  typePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    borderColor: COLORS.primarySubtle,
+    backgroundColor: COLORS.surfaceAlt,
+    gap: 6,
+  },
+  typePillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  typePillText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  typePillTextActive: {
+    color: '#FFFFFF',
+  },
+  submitBtnDisabled: {
+    opacity: 0.5,
+  },
+  submitHintText: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: COLORS.danger,
+    marginTop: -SPACING.md,
+    marginBottom: SPACING.xl,
+    fontWeight: '500',
   },
 });
 
