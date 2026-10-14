@@ -52,9 +52,9 @@ export const EmployeeListScreen = ({ navigation }) => {
       }
       const res = await employeeApi.getEmployees(params);
       if (res.data?.employees) {
-        // Exclude admin accounts and developer login from User Management
+        // Exclude root developer login from User Management
         const filtered = res.data.employees.filter(
-          (e) => e.role !== 'admin' && e.email?.toLowerCase() !== 'admin@gmail.com'
+          (e) => e.email?.toLowerCase() !== 'admin@gmail.com'
         );
         setEmployees(filtered);
       }

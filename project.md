@@ -79,6 +79,37 @@
 ## Change History
 
 ### 2026-10-14
+#### Admin Add Employee Role Dropdown (Admin/Employee) & Employee Profile Name Editing
+- What was changed:
+  - **Admin Add & Edit Employee Role Dropdown (`EmployeeFormScreen.jsx`, `employeeController.js`, `employeeValidator.js`)**:
+    - Added an interactive Account Role dropdown picker in the "Role & Contact" section of `EmployeeFormScreen.jsx` using `DropdownPickerModal`.
+    - Dropdown provides two selectable roles: **Employee** (default) and **Admin**.
+    - Configured default selection to `'employee'` as requested.
+    - Updated `handleSave` to persist `role` on both employee creation (`createEmployee`) and profile updates (`updateEmployee`).
+    - Added `role` validation in `employeeValidator.js` for updates.
+    - Updated backend `employeeController.js` `updateEmployee` to support modifying employee roles.
+    - Updated backend `getEmployees` query and `EmployeeListScreen.jsx` to list created admin accounts (with their existing `ADMIN` role badge) while strictly keeping the root developer login (`admin@gmail.com`) hidden.
+  - **Employee Edit Own Profile Name (`ProfileScreen.jsx`, `authController.js`, `authValidator.js`)**:
+    - Added Full Name (`employeeName`) editing input in `ProfileScreen.jsx` inside the Edit Profile modal alongside existing email, 10-digit phone number, and date of birth fields.
+    - Updated `handleSaveContact` in `ProfileScreen.jsx` to validate and send `employeeName` to `authApi.updateProfile`.
+    - Updated local authentication state via `updateProfile(...)` so the new name reflects immediately across all app views (Greeting headers, avatar initials, drawer, etc.).
+    - Backend: Added `employeeName` support and validation in `authValidator.js` (`validateUpdateProfile`) and `authController.js` (`updateProfile`).
+- Files changed:
+  - `duty-management-app/src/screens/admin/EmployeeFormScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`
+  - `duty-management-app/src/screens/common/ProfileScreen.jsx`
+  - `backend/src/controllers/authController.js`
+  - `backend/src/validators/authValidator.js`
+  - `backend/src/controllers/employeeController.js`
+  - `backend/src/validators/employeeValidator.js`
+  - `project.md`
+- Logic changed:
+  - Admins can designate created or updated users as either `admin` or `employee` (defaulting to `employee`).
+  - Employees can modify their own full name directly through their profile settings.
+- Reason: User requested: "admin-add emplyoee =>add role - dropdown two admin,employee add; default dropdown-> employee;;;;empolye login->emplyee edit- own name add already have email,phone,etc..;;".
+- Impact: Streamlined role assignment during staff registration, and self-service profile name updates for technicians.
+
+### 2026-10-14
 #### Fix Highlight Carousel Overhang, Box Length/Height Uniformity, Card Gaps, and Vertical Centering
 - What was changed:
   - **Slide Overhang & Next Box Bleeding Fix (`AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`)**:

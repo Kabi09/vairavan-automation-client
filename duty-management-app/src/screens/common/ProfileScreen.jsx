@@ -39,8 +39,9 @@ export const ProfileScreen = ({ navigation }) => {
   // Avatar upload state
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  // Edit contact info state (Phone, Email, and Date of Birth)
+  // Edit profile info state (Name, Phone, Email, and Date of Birth)
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editDob, setEditDob] = useState('');
@@ -99,6 +100,7 @@ export const ProfileScreen = ({ navigation }) => {
   };
 
   const openEditModal = () => {
+    setEditName(user?.employeeName || '');
     setEditPhone(user?.phoneNumber || '');
     setEditEmail(user?.email || '');
     setEditDob(user?.dateOfBirth ? formatISODateOnly(user.dateOfBirth) : '');
@@ -107,9 +109,14 @@ export const ProfileScreen = ({ navigation }) => {
   };
 
   const handleSaveContact = async () => {
+    const cleanName = editName.trim();
     const cleanEmail = editEmail.trim().toLowerCase();
     const cleanPhone = editPhone.trim().replace(/\D/g, '').slice(-10);
 
+    if (!cleanName) {
+      setEditError('Full name is required');
+      return;
+    }
     if (!cleanEmail) {
       setEditError('Email address is required');
       return;
@@ -127,6 +134,7 @@ export const ProfileScreen = ({ navigation }) => {
     setEditError('');
     try {
       const res = await authApi.updateProfile({
+        employeeName: cleanName,
         email: cleanEmail,
         phoneNumber: cleanPhone,
         dateOfBirth: editDob || null,
@@ -137,6 +145,7 @@ export const ProfileScreen = ({ navigation }) => {
       } else {
         updateProfile({
           ...user,
+          employeeName: cleanName,
           email: cleanEmail,
           phoneNumber: cleanPhone,
           dateOfBirth: editDob || null,
@@ -146,7 +155,7 @@ export const ProfileScreen = ({ navigation }) => {
       setEditModalVisible(false);
       Alert.alert('Profile Updated', 'Your profile details have been saved successfully.');
     } catch (err) {
-      setEditError(extractErrorMessage(err, 'Failed to update contact info'));
+      setEditError(extractErrorMessage(err, 'Failed to update profile info'));
     } finally {
       setSavingProfile(false);
     }
@@ -314,10 +323,18 @@ export const ProfileScreen = ({ navigation }) => {
             </View>
 
             <Text style={styles.modalSubtitle}>
-              Update your email, 10-digit mobile number, and date of birth. Name and credentials remain managed by administration.
+              Update your full name, email, 10-digit mobile number, and date of birth.
             </Text>
 
             {editError ? <ErrorMessage message={editError} style={{ marginBottom: SPACING.md }} /> : null}
+
+            <TextInputField
+              label="Full Name *"
+              placeholder="e.g. Ramesh Kumar"
+              value={editName}
+              onChangeText={setEditName}
+              icon="person-outline"
+            />
 
             <TextInputField
               label="Email Address *"

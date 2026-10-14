@@ -31,6 +31,13 @@ export const validateRefreshToken = [
 ];
 
 export const validateUpdateProfile = [
+  body('employeeName')
+    .optional({ checkFalsy: true })
+    .trim()
+    .notEmpty()
+    .withMessage('Employee name cannot be empty')
+    .isLength({ max: 100 })
+    .withMessage('Employee name cannot exceed 100 characters'),
   body('email')
     .optional({ checkFalsy: true })
     .trim()

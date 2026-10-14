@@ -77,9 +77,6 @@ export const getEmployees = asyncHandler(async (req, res) => {
 
   if (role) {
     filter.role = role;
-  } else {
-    // By default, exclude admins from user/employee management list
-    filter.role = { $ne: 'admin' };
   }
 
   if (search) {
@@ -151,6 +148,7 @@ export const updateEmployee = asyncHandler(async (req, res) => {
     designation,
     joiningDate,
     dateOfBirth,
+    role,
   } = req.body;
 
   const employee = await User.findById(id);
@@ -164,6 +162,9 @@ export const updateEmployee = asyncHandler(async (req, res) => {
   if (designation !== undefined) employee.designation = designation;
   if (joiningDate) employee.joiningDate = joiningDate;
   if (dateOfBirth !== undefined) employee.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+  if (role && ['admin', 'employee', 'staff'].includes(role)) {
+    employee.role = role === 'admin' ? 'admin' : 'employee';
+  }
 
   await employee.save();
 

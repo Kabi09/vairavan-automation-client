@@ -84,6 +84,10 @@ export const validateUpdateEmployee = [
     .optional({ nullable: true, checkFalsy: true })
     .isISO8601()
     .withMessage('Date of birth must be a valid date'),
+  body('role')
+    .optional()
+    .isIn(['admin', 'employee', 'staff'])
+    .withMessage('Role must be admin, employee, or staff'),
 ];
 
 export const validateUpdateEmployeeStatus = [

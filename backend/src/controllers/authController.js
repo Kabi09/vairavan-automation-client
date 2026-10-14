@@ -97,11 +97,15 @@ export const getMe = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const updateProfile = asyncHandler(async (req, res) => {
-  const { phoneNumber, email, avatar, dateOfBirth } = req.body;
+  const { employeeName, phoneNumber, email, avatar, dateOfBirth } = req.body;
 
   const user = await User.findById(req.user._id);
   if (!user) {
     throw ApiError.notFound('User not found');
+  }
+
+  if (employeeName !== undefined && employeeName.trim()) {
+    user.employeeName = employeeName.trim();
   }
 
   // If email is changing, verify uniqueness

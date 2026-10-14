@@ -18,10 +18,24 @@ import TextInputField from '../../components/TextInputField';
 import PrimaryButton from '../../components/PrimaryButton';
 import ErrorMessage from '../../components/ErrorMessage';
 import DatePickerModal from '../../components/DatePickerModal';
+import DropdownPickerModal from '../../components/DropdownPickerModal';
 import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { isValidEmail, isValidPhone } from '../../utils/validators';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
+
+const ROLE_OPTIONS = [
+  {
+    label: 'Employee',
+    value: 'employee',
+    subtitle: 'Standard access to duty forms, assigned tasks & leaves',
+  },
+  {
+    label: 'Admin',
+    value: 'admin',
+    subtitle: 'Full administrative access to manage team, duties & reports',
+  },
+];
 
 export const EmployeeFormScreen = ({ navigation, route }) => {
   const existingEmployee = route.params?.employee;
@@ -38,6 +52,8 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
     existingEmployee?.dateOfBirth ? formatISODateOnly(existingEmployee.dateOfBirth) : ''
   );
   const [dobPickerVisible, setDobPickerVisible] = useState(false);
+  const [role, setRole] = useState(existingEmployee?.role || 'employee');
+  const [rolePickerVisible, setRolePickerVisible] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -86,6 +102,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
           designation: designation.trim(),
           address: address.trim(),
           dateOfBirth: dateOfBirth || null,
+          role: role || 'employee',
         });
         Alert.alert('Success', 'Employee details updated successfully', [
           { text: 'OK', onPress: () => navigation.goBack() },
@@ -97,10 +114,10 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
           email: email.trim().toLowerCase(),
           password,
           phoneNumber: phone.trim(),
-          designation: designation.trim() || 'Service Engineer',
+          designation: designation.trim() || (role === 'admin' ? 'Administrator' : 'Service Engineer'),
           address: address.trim(),
           dateOfBirth: dateOfBirth || null,
-          role: 'employee',
+          role: role || 'employee',
           accountStatus: 'active',
         });
         Alert.alert('Success', 'Employee registered successfully', [
@@ -195,9 +212,38 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
               Role & Contact
             </Text>
 
+            {/* Account Role Dropdown */}
+            <View style={styles.dropdownContainer}>
+              <Text style={styles.dropdownLabel}>Account Role *</Text>
+              <TouchableOpacity
+                style={styles.dropdownBtn}
+                onPress={() => setRolePickerVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.dropdownLeft}>
+                  <Ionicons
+                    name={role === 'admin' ? 'shield-checkmark' : 'person'}
+                    size={20}
+                    color={role === 'admin' ? '#D97706' : COLORS.primary}
+                  />
+                  <View style={styles.dropdownTextWrap}>
+                    <Text style={styles.dropdownValue}>
+                      {role === 'admin' ? 'Admin' : 'Employee'}
+                    </Text>
+                    <Text style={styles.dropdownSub}>
+                      {role === 'admin'
+                        ? 'Full administrative access to manage team & duties'
+                        : 'Standard staff access to duty forms, assigned tasks & leaves'}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
             <TextInputField
               label="Designation"
-              placeholder="e.g. Automation Engineer"
+              placeholder={role === 'admin' ? 'e.g. Operations Manager' : 'e.g. Automation Engineer'}
               value={designation}
               onChangeText={setDesignation}
             />
@@ -260,6 +306,20 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
         }}
         onClose={() => setDobPickerVisible(false)}
       />
+
+      <DropdownPickerModal
+        visible={rolePickerVisible}
+        title="Select Account Role"
+        items={ROLE_OPTIONS}
+        selectedValue={role}
+        showAllOption={false}
+        searchPlaceholder="Search role..."
+        onSelect={(val) => {
+          if (val) setRole(val);
+          setRolePickerVisible(false);
+        }}
+        onClose={() => setRolePickerVisible(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -285,6 +345,46 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: SPACING.md,
+  },
+  dropdownContainer: {
+    marginBottom: SPACING.md,
+  },
+  dropdownLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  dropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  dropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  dropdownTextWrap: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  dropdownValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  dropdownSub: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   dobContainer: {
     marginBottom: SPACING.md,
