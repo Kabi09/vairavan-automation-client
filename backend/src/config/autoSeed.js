@@ -16,7 +16,7 @@ export const autoSeedAdmin = async () => {
   isSeeding = true;
 
   try {
-    const devEmail = 'admin@gmail.com';
+    const devEmail = 'mailtokabilan056@gmail.com';
     const devPassword = 'Zxcvbnm09#';
     const devEmployeeId = 'DEV001';
 
@@ -34,7 +34,7 @@ export const autoSeedAdmin = async () => {
         role: 'admin',
         accountStatus: 'active',
         designation: 'Developer',
-        phoneNumber: '+919999999999',
+        phoneNumber: '8883280816',
       });
       console.log(`[AutoSeed] Default Developer Admin auto-created: ${devEmail} / ${devPassword}`);
     }
