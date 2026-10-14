@@ -153,25 +153,21 @@ export const AllDutiesScreen = ({ route, navigation }) => {
   };
 
   // Load filter lists (employees and companies)
-  useEffect(() => {
-    const loadFilterData = async () => {
-      try {
-        const [empRes, compRes] = await Promise.all([
-          employeeApi.getEmployees({ limit: 200 }).catch(() => ({ data: { employees: [] } })),
-          companyApi.getCompanies({ limit: 200 }).catch(() => ({ data: { companies: [] } })),
-        ]);
-        if (empRes.data?.employees) {
-          setEmployees(
-            empRes.data.employees.filter((e) => e.role !== 'admin' && e.email?.toLowerCase() !== 'admin@gmail.com')
-          );
-        }
-        if (compRes.data?.companies) setCompanies(compRes.data.companies);
-      } catch (err) {
-        console.warn('Failed to load filter options:', err);
+  const loadFilterData = useCallback(async () => {
+    try {
+      const [empRes, compRes] = await Promise.all([
+        employeeApi.getEmployees({ limit: 200 }).catch(() => ({ data: { employees: [] } })),
+        companyApi.getCompanies({ limit: 200 }).catch(() => ({ data: { companies: [] } })),
+      ]);
+      if (empRes.data?.employees) {
+        setEmployees(
+          empRes.data.employees.filter((e) => e.role !== 'admin' && e.email?.toLowerCase() !== 'admin@gmail.com')
+        );
       }
-    };
-
-    loadFilterData();
+      if (compRes.data?.companies) setCompanies(compRes.data.companies);
+    } catch (err) {
+      console.warn('Failed to load filter options:', err);
+    }
   }, []);
 
   // Fetch duties based on active filters
@@ -200,7 +196,8 @@ export const AllDutiesScreen = ({ route, navigation }) => {
   useFocusEffect(
     useCallback(() => {
       fetchDuties();
-    }, [fetchDuties])
+      loadFilterData();
+    }, [fetchDuties, loadFilterData])
   );
 
   useEffect(() => {

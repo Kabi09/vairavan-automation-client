@@ -163,22 +163,25 @@ export const DutyFormScreen = ({ navigation, route }) => {
           if (compRes.data?.companies) {
             const activeComps = compRes.data.companies;
             setCompanies(activeComps);
-            if (!selectedCompanyId && activeComps.length > 0) {
-              const defaultOffice = activeComps.find((c) => c.companyType === 'office');
+            if (!selectedCompanyId && !dutyToEdit && companyCategory === 'office' && activeComps.length > 0) {
+              const defaultOffice = activeComps.find((c) => {
+                const t = String(c.companyType || '').trim().toLowerCase();
+                const n = String(c.companyName || '').trim().toLowerCase();
+                return t === 'office' || n.includes('office');
+              });
               if (defaultOffice) {
                 setSelectedCompanyId(defaultOffice._id);
-                setCompanyCategory('office');
                 if (defaultOffice.companyPhoneNumber && !customerPhone) {
                   setCustomerPhone(defaultOffice.companyPhoneNumber);
                 }
-              } else {
-                setSelectedCompanyId(activeComps[0]._id);
-                setCompanyCategory(activeComps[0].companyType || 'client');
               }
             } else if (selectedCompanyId && activeComps.length > 0) {
               const currentComp = activeComps.find((c) => c._id === selectedCompanyId);
-              if (currentComp?.companyType) {
-                setCompanyCategory(currentComp.companyType);
+              if (currentComp) {
+                const isOff =
+                  String(currentComp.companyType || '').trim().toLowerCase() === 'office' ||
+                  String(currentComp.companyName || '').trim().toLowerCase().includes('office');
+                setCompanyCategory(isOff ? 'office' : 'client');
               }
             }
           }
@@ -363,9 +366,16 @@ export const DutyFormScreen = ({ navigation, route }) => {
     workDescription.trim()
   );
 
+  const isOfficeCompany = (c) => {
+    if (!c) return false;
+    const type = String(c.companyType || '').trim().toLowerCase();
+    const name = String(c.companyName || '').trim().toLowerCase();
+    return type === 'office' || name.includes('office');
+  };
+
   const displayedCompanies = companies.filter((c) => {
-    if (companyCategory === 'office') return c.companyType === 'office';
-    return c.companyType !== 'office';
+    if (companyCategory === 'office') return isOfficeCompany(c);
+    return !isOfficeCompany(c);
   });
 
   const handleSubmit = async () => {
@@ -543,11 +553,14 @@ export const DutyFormScreen = ({ navigation, route }) => {
                 ]}
                 onPress={() => {
                   setCompanyCategory('office');
-                  const officeComp = companies.find((c) => c.companyType === 'office');
+                  const officeComp = companies.find((c) => isOfficeCompany(c));
                   if (officeComp) {
                     setSelectedCompanyId(officeComp._id);
                     if (fieldErrors.company) {
                       setFieldErrors((prev) => ({ ...prev, company: null }));
+                    }
+                    if (officeComp.companyPhoneNumber) {
+                      setCustomerPhone(officeComp.companyPhoneNumber);
                     }
                   }
                 }}
@@ -576,15 +589,14 @@ export const DutyFormScreen = ({ navigation, route }) => {
                 onPress={() => {
                   setCompanyCategory('client');
                   const currentComp = companies.find((c) => c._id === selectedCompanyId);
-                  if (!currentComp || currentComp.companyType === 'office') {
-                    const firstClient = companies.find((c) => c.companyType !== 'office');
-                    if (firstClient) {
-                      setSelectedCompanyId(firstClient._id);
-                    } else {
-                      setSelectedCompanyId('');
-                    }
+                  if (!currentComp || isOfficeCompany(currentComp)) {
+                    setSelectedCompanyId('');
+                    setCustomerName('');
+                    setCustomerPhone('');
                   }
-                  // Immediately open client companies list modal as requested
+                  if (fieldErrors.company) {
+                    setFieldErrors((prev) => ({ ...prev, company: null }));
+                  }
                   setCompanyDropdownVisible(true);
                 }}
                 activeOpacity={0.8}
@@ -1001,15 +1013,20 @@ export const DutyFormScreen = ({ navigation, route }) => {
         visible={companyDropdownVisible}
         onClose={() => setCompanyDropdownVisible(false)}
         title={companyCategory === 'office' ? 'Select Office / Branch' : 'Select Client Company'}
-        searchPlaceholder="Search company by name or location..."
+        searchPlaceholder={companyCategory === 'office' ? 'Search office by name or location...' : 'Search client company by name or location...'}
         selectedValue={selectedCompanyId}
         showAllOption={false}
+        actionButtonLabel={companyCategory === 'client' ? '+ Add New Company' : null}
+        onActionButtonPress={companyCategory === 'client' ? () => {
+          setCompanyDropdownVisible(false);
+          navigation.navigate('CompanyForm');
+        } : null}
         onSelect={(val, item) => {
           setSelectedCompanyId(val);
           if (fieldErrors.company) {
             setFieldErrors((prev) => ({ ...prev, company: null }));
           }
-          if (item?.companyPhoneNumber && !customerPhone) {
+          if (item?.companyPhoneNumber && !customerPhone && companyCategory === 'office') {
             setCustomerPhone(item.companyPhoneNumber);
           }
         }}

@@ -31,7 +31,7 @@ export const createCompany = asyncHandler(async (req, res) => {
   const company = await Company.create({
     companyName: companyName.trim(),
     location: location.trim(),
-    companyPhoneNumber: companyPhoneNumber.trim(),
+    companyPhoneNumber: companyPhoneNumber ? companyPhoneNumber.trim() : '',
     companyType: companyType === 'office' ? 'office' : 'client',
     status,
     createdBy: req.user._id,
@@ -144,7 +144,7 @@ export const updateCompany = asyncHandler(async (req, res) => {
   }
 
   if (location) company.location = location.trim();
-  if (companyPhoneNumber) company.companyPhoneNumber = companyPhoneNumber.trim();
+  if (companyPhoneNumber !== undefined) company.companyPhoneNumber = (companyPhoneNumber || '').trim();
   if (status) company.status = status;
   if (companyType && ['office', 'client'].includes(companyType)) {
     company.companyType = companyType;

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import leaveApi from '../../api/leaveApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
@@ -73,9 +74,11 @@ export const MyLeavesScreen = ({ navigation }) => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchMyLeaves();
-  }, [fetchMyLeaves]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyLeaves();
+    }, [fetchMyLeaves])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

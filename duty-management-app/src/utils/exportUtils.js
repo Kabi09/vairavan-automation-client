@@ -296,7 +296,14 @@ export const exportDutiesToPDF = async ({
       timeStyle: 'short',
     });
 
-    const rowsHtml = duties
+    // Sort duties strictly in Ascending order by Work ID (e.g. WORK-1000, WORK-1001, ...)
+    const sortedDuties = [...duties].sort((a, b) => {
+      const idA = a.dutyId || ('WORK-' + String(a._id || '').slice(-6).toUpperCase());
+      const idB = b.dutyId || ('WORK-' + String(b._id || '').slice(-6).toUpperCase());
+      return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    const rowsHtml = sortedDuties
       .map((d, index) => {
         const dutyId = escapeHtml(d.dutyId || ('WORK-' + (d._id || '').slice(-6).toUpperCase()));
         const empName = escapeHtml(d.employee?.employeeName || 'N/A');
@@ -653,7 +660,14 @@ export const exportDutiesToExcel = async ({
       'Created At',
     ];
 
-    const rows = duties.map((d, index) => {
+    // Sort duties strictly in Ascending order by Work ID (e.g. WORK-1000, WORK-1001, ...)
+    const sortedDuties = [...duties].sort((a, b) => {
+      const idA = a.dutyId || ('WORK-' + String(a._id || '').slice(-6).toUpperCase());
+      const idB = b.dutyId || ('WORK-' + String(b._id || '').slice(-6).toUpperCase());
+      return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    const rows = sortedDuties.map((d, index) => {
       const dutyId = d.dutyId || ('WORK-' + (d._id || '').slice(-6).toUpperCase());
       const empId = d.employee?.employeeId || '';
       const empName = d.employee?.employeeName || '';

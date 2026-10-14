@@ -145,4 +145,32 @@ describe('Company Management Tests', () => {
     assert.equal(listClientRes.body.data.companies.length, 1);
     assert.equal(listClientRes.body.data.companies[0].companyType, 'client');
   });
+
+  it('Admin can create a company with optional (empty or omitted) phone number', async () => {
+    // 1. Without phone number
+    const resNoPhone = await request(app)
+      .post('/api/companies')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        companyName: 'Company Without Phone',
+        location: 'Erode',
+      });
+    assert.equal(resNoPhone.status, 201);
+    assert.equal(resNoPhone.body.success, true);
+    assert.equal(resNoPhone.body.data.company.companyPhoneNumber, '');
+
+    // 2. With empty string phone number
+    const resEmptyPhone = await request(app)
+      .post('/api/companies')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        companyName: 'Company With Empty Phone',
+        location: 'Salem',
+        companyPhoneNumber: '',
+      });
+    assert.equal(resEmptyPhone.status, 201);
+    assert.equal(resEmptyPhone.body.success, true);
+    assert.equal(resEmptyPhone.body.data.company.companyPhoneNumber, '');
+  });
 });
+

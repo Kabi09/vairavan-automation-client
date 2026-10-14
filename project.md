@@ -82,6 +82,66 @@
 ## Change History
 
 ### 2026-10-14
+#### Client Company Selection Fix, Optional Company Phone, Ascending Work ID Export, and Project-Wide Fresh Data Sync
+- What was changed:
+  - **Add Work Client Company Selection Flow (`DutyFormScreen.jsx`, `DropdownPickerModal.jsx`)**:
+    - Implemented `isOfficeCompany` helper checking `companyType === 'office'` and `companyName.toLowerCase().includes('office')`.
+    - Client company picker strictly excludes any office company from the dropdown list.
+    - When user taps the "Client Company" pill, it does NOT auto-assign any default company; sets `selectedCompanyId('')` and clears any customer fields filled from office, displaying placeholder `"Select Client Company..."`.
+    - Added `actionButtonLabel` and `onActionButtonPress` props to `DropdownPickerModal.jsx` to render an accessible `+ Add New Company` action button right inside the selection modal and in empty state.
+    - When user taps the client company dropdown, the modal opens with the client companies list and the `+ Add New Company` button.
+  - **Company Phone Number Made Optional (`Company.js`, `companyValidator.js`, `companyController.js`, `CompanyFormScreen.jsx`)**:
+    - Backend model: `companyPhoneNumber` schema requirement removed, defaults to `''`.
+    - Backend validator: `companyPhoneNumber` changed to `.optional({ checkFalsy: true })` in both `validateCreateCompany` and `validateUpdateCompany`, validating 10-digit format only if non-empty.
+    - Backend controller: Safely trims or defaults `companyPhoneNumber` to `''` without crashing on undefined. Added automated test in `backend/tests/company.test.js`.
+    - Frontend form: Removed `*` required asterisk, changed label to `"Company Phone Number (Optional)"`, placeholder to `"10-digit mobile or office number (optional)"`, and validated format only when non-empty.
+  - **Ascending Work ID Sorting in PDF and Excel Exports (`exportUtils.js`)**:
+    - In `exportDutiesToPDF`: Sorted duties strictly ascending by `dutyId` (e.g. `WORK-1000`, `WORK-1001`, `WORK-1002`...) using natural numeric `localeCompare(..., undefined, { numeric: true, sensitivity: 'base' })`.
+    - In `exportDutiesToExcel`: Sorted duties strictly ascending by `dutyId` before generating spreadsheet rows.
+  - **Project-Wide Fresh Data Synchronization (`useFocusEffect` across all screens)**:
+    - Fixed stale data issue where newly created/updated companies, employees, leaves, holidays were not appearing after `navigation.goBack()` until manual pull-to-refresh.
+    - Replaced one-time `useEffect` with `useFocusEffect(useCallback(...))` across:
+      - `CompanyListScreen.jsx`: Automatically fetches fresh companies on screen reveal.
+      - `EmployeeListScreen.jsx`: Automatically fetches fresh employees on screen reveal.
+      - `LeaveRequestsScreen.jsx`: Automatically fetches fresh leave requests and updates employee filter options on focus.
+      - `HolidayManagementScreen.jsx`: Automatically fetches fresh holidays on screen reveal.
+      - `HolidayListScreen.jsx`: Automatically fetches fresh holidays on screen reveal.
+      - `MyLeavesScreen.jsx`: Automatically fetches latest employee leaves on screen reveal.
+      - `AllDutiesScreen.jsx`: Re-fetches filter options (companies & employees) on screen focus.
+      - `MyDutiesScreen.jsx`: Re-fetches company filter options on screen focus.
+      - `CompanyDetailsScreen.jsx`: Refreshes company duty history on focus.
+      - `EmployeeDetailsScreen.jsx`: Refreshes employee duties and leaves on focus.
+      - `DutyDetailsScreen.jsx`: Refreshes duty record details on focus.
+- Files changed:
+  - `backend/src/models/Company.js`
+  - `backend/src/validators/companyValidator.js`
+  - `backend/src/controllers/companyController.js`
+  - `backend/tests/company.test.js`
+  - `duty-management-app/src/components/DropdownPickerModal.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyFormScreen.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/screens/admin/CompanyListScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `duty-management-app/src/screens/admin/HolidayManagementScreen.jsx`
+  - `duty-management-app/src/screens/employee/HolidayListScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyLeavesScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Selecting "Client Company" starts with an unassigned empty selection and opens a clean client company list with "+ Add New Company". Offices are never shown under Client Company.
+  - Company phone number is completely optional across frontend and backend.
+  - Work exports (PDF and Excel) are ordered in natural ascending sequence by Work ID.
+  - All management screens automatically synchronize with the backend upon navigation focus.
+- Reason: User requested: (1) Client company bugfix: office not to show, don't default assign, empty click shows list and add company; (2) Add company phone number optional; (3) Export Excel/PDF in ascending order by workid; (4) Project-wide fix for newly created data not appearing until manual page refresh.
+- Impact: Seamless UX with zero stale data, intuitive company picker, optional phone field, and accurately ordered exports.
+
+### 2026-10-14
 #### Automatic Admin Bootstrapping on New Database Deployments
 - What was changed:
   - **Auto-Seed Service (`backend/src/config/autoSeed.js`)**:

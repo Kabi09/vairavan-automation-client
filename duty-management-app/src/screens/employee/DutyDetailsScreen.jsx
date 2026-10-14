@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import dutyApi from '../../api/dutyApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
@@ -41,34 +42,36 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   const [previewTimestamp, setPreviewTimestamp] = useState('');
   const [previewIsSignature, setPreviewIsSignature] = useState(false);
 
-  useEffect(() => {
-    const fetchDuty = async () => {
-      try {
-        setError('');
-        const res = await dutyApi.getDutyById(dutyId);
-        if (res.data?.duty) {
-          const dutyRecord = res.data.duty;
-          setDuty(dutyRecord);
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchDuty = async () => {
+        try {
+          setError('');
+          const res = await dutyApi.getDutyById(dutyId);
+          if (res.data?.duty) {
+            const dutyRecord = res.data.duty;
+            setDuty(dutyRecord);
 
-          if (dutyRecord.location?.address) {
-            setResolvedAddress(dutyRecord.location.address);
-          } else if (dutyRecord.location?.latitude && dutyRecord.location?.longitude) {
-            reverseGeocodeCoords(dutyRecord.location.latitude, dutyRecord.location.longitude)
-              .then((addr) => {
-                if (addr) setResolvedAddress(addr);
-              })
-              .catch(() => {});
+            if (dutyRecord.location?.address) {
+              setResolvedAddress(dutyRecord.location.address);
+            } else if (dutyRecord.location?.latitude && dutyRecord.location?.longitude) {
+              reverseGeocodeCoords(dutyRecord.location.latitude, dutyRecord.location.longitude)
+                .then((addr) => {
+                  if (addr) setResolvedAddress(addr);
+                })
+                .catch(() => {});
+            }
           }
+        } catch (err) {
+          setError(extractErrorMessage(err, 'Failed to load work report details'));
+        } finally {
+          setLoading(false);
         }
-      } catch (err) {
-        setError(extractErrorMessage(err, 'Failed to load work report details'));
-      } finally {
-        setLoading(false);
-      }
-    };
+      };
 
-    fetchDuty();
-  }, [dutyId]);
+      fetchDuty();
+    }, [dutyId])
+  );
 
   if (loading) {
     return (

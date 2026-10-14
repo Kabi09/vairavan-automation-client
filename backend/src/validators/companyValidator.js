@@ -15,9 +15,8 @@ export const validateCreateCompany = [
     .isLength({ max: 200 })
     .withMessage('Location cannot exceed 200 characters'),
   body('companyPhoneNumber')
+    .optional({ checkFalsy: true })
     .trim()
-    .notEmpty()
-    .withMessage('Company phone number is required')
     .matches(/^(?:\+91)?[0-9]{10}$/)
     .withMessage('Company phone number must be exactly 10 digits'),
   body('companyType')
@@ -49,7 +48,7 @@ export const validateUpdateCompany = [
     .isLength({ max: 200 })
     .withMessage('Location cannot exceed 200 characters'),
   body('companyPhoneNumber')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
     .matches(/^(?:\+91)?[0-9]{10}$/)
     .withMessage('Company phone number must be exactly 10 digits'),

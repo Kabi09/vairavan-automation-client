@@ -17,8 +17,8 @@ const companySchema = new mongoose.Schema(
     },
     companyPhoneNumber: {
       type: String,
-      required: [true, 'Company phone number is required'],
       trim: true,
+      default: '',
     },
     companyType: {
       type: String,

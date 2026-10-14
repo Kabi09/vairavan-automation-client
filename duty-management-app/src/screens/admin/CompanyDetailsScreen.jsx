@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import dutyApi from '../../api/dutyApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
@@ -76,9 +77,11 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
     }
   }, [company?._id, startDate, endDate]);
 
-  useEffect(() => {
-    fetchCompanyDuties();
-  }, [fetchCompanyDuties]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchCompanyDuties();
+    }, [fetchCompanyDuties])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

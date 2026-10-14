@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import dutyApi from '../../api/dutyApi';
 import leaveApi from '../../api/leaveApi';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -118,13 +119,15 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
     }
   }, [employee?._id, startDate, endDate]);
 
-  useEffect(() => {
-    if (activeTab === 'work') {
-      fetchWorkDuties();
-    } else {
-      fetchLeaves();
-    }
-  }, [activeTab, fetchWorkDuties, fetchLeaves]);
+  useFocusEffect(
+    useCallback(() => {
+      if (activeTab === 'work') {
+        fetchWorkDuties();
+      } else {
+        fetchLeaves();
+      }
+    }, [activeTab, fetchWorkDuties, fetchLeaves])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

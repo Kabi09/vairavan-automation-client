@@ -68,18 +68,15 @@ export const MyDutiesScreen = ({ navigation }) => {
   }, [startDate, endDate, selectedCompanyId]);
 
   // Load companies for the filter picker
-  useEffect(() => {
-    const loadCompanies = async () => {
-      try {
-        const compRes = await companyApi.getCompanies({ status: 'active', limit: 200 }).catch(() => ({ data: { companies: [] } }));
-        if (compRes.data?.companies) {
-          setCompanies(compRes.data.companies);
-        }
-      } catch (err) {
-        console.warn('Failed to load companies for filter:', err);
+  const loadCompanies = useCallback(async () => {
+    try {
+      const compRes = await companyApi.getCompanies({ status: 'active', limit: 200 }).catch(() => ({ data: { companies: [] } }));
+      if (compRes.data?.companies) {
+        setCompanies(compRes.data.companies);
       }
-    };
-    loadCompanies();
+    } catch (err) {
+      console.warn('Failed to load companies for filter:', err);
+    }
   }, []);
 
   const fetchDuties = useCallback(async () => {
@@ -106,7 +103,8 @@ export const MyDutiesScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       fetchDuties();
-    }, [fetchDuties])
+      loadCompanies();
+    }, [fetchDuties, loadCompanies])
   );
 
   const onRefresh = () => {

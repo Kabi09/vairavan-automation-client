@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import companyApi from '../../api/companyApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
@@ -54,9 +55,11 @@ export const CompanyListScreen = ({ navigation }) => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchCompanies(search);
-  }, [fetchCompanies, search]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchCompanies(search);
+    }, [fetchCompanies, search])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

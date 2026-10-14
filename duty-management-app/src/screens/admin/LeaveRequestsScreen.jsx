@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import leaveApi from '../../api/leaveApi';
 import employeeApi from '../../api/employeeApi';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -65,20 +66,17 @@ export const LeaveRequestsScreen = () => {
   const [reviewLoading, setReviewLoading] = useState(false);
 
   // Load employee list for dropdown filter
-  useEffect(() => {
-    const loadEmployees = async () => {
-      try {
-        const res = await employeeApi.getEmployees({ limit: 200 });
-        if (res.data?.employees) {
-          setEmployees(
-            res.data.employees.filter((e) => e.role !== 'admin' && e.email?.toLowerCase() !== 'admin@gmail.com')
-          );
-        }
-      } catch (err) {
-        console.warn('Failed to load employee list:', err);
+  const loadEmployees = useCallback(async () => {
+    try {
+      const res = await employeeApi.getEmployees({ limit: 200 });
+      if (res.data?.employees) {
+        setEmployees(
+          res.data.employees.filter((e) => e.role !== 'admin' && e.email?.toLowerCase() !== 'admin@gmail.com')
+        );
       }
-    };
-    loadEmployees();
+    } catch (err) {
+      console.warn('Failed to load employee list:', err);
+    }
   }, []);
 
   const fetchLeaves = useCallback(async () => {
@@ -102,9 +100,12 @@ export const LeaveRequestsScreen = () => {
     }
   }, [activeTab, selectedEmployeeId, startDate, endDate]);
 
-  useEffect(() => {
-    fetchLeaves();
-  }, [fetchLeaves]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchLeaves();
+      loadEmployees();
+    }, [fetchLeaves, loadEmployees])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

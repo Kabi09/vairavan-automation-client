@@ -22,6 +22,8 @@ export const DropdownPickerModal = ({
   allOptionLabel = 'All',
   showAllOption = true,
   searchPlaceholder = 'Search...',
+  actionButtonLabel,
+  onActionButtonPress,
 }) => {
   const [search, setSearch] = useState('');
 
@@ -73,6 +75,21 @@ export const DropdownPickerModal = ({
             onChangeText={setSearch}
             style={styles.searchInput}
           />
+
+          {/* Quick Action Button (e.g. + Add Company) */}
+          {Boolean(actionButtonLabel && onActionButtonPress) ? (
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => {
+                setSearch('');
+                onActionButtonPress();
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle" size={17} color="#FFFFFF" />
+              <Text style={styles.actionBtnText}>{actionButtonLabel}</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {/* Options List */}
           <FlatList
@@ -157,7 +174,21 @@ export const DropdownPickerModal = ({
             }}
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
+                <Ionicons name="search-outline" size={32} color={COLORS.textMuted} />
                 <Text style={styles.emptyText}>No matching options found</Text>
+                {Boolean(actionButtonLabel && onActionButtonPress) ? (
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { marginTop: SPACING.md }]}
+                    onPress={() => {
+                      setSearch('');
+                      onActionButtonPress();
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="add-circle" size={17} color="#FFFFFF" />
+                    <Text style={styles.actionBtnText}>{actionButtonLabel}</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             }
           />
@@ -197,6 +228,22 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     marginBottom: SPACING.xs,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: 9,
+    paddingHorizontal: SPACING.md,
+    gap: 6,
+    marginVertical: SPACING.xs,
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   list: {
     marginTop: SPACING.xs,
@@ -239,6 +286,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 13,
     color: COLORS.textMuted,
+    marginTop: 4,
   },
 });
 
