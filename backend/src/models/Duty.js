@@ -76,6 +76,12 @@ const dutySchema = new mongoose.Schema(
       },
       index: true,
     },
+    customWorkType: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: [200, 'Custom work type cannot exceed 200 characters'],
+    },
     inTime: {
       type: String,
       required: [true, 'In time is required'],

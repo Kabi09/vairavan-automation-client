@@ -2,6 +2,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as SecureStore from 'expo-secure-store';
 import { Alert, Platform } from 'react-native';
+import { formatWorkType } from './dutyUtils';
 
 const LOGO_URL =
   'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
@@ -305,7 +306,7 @@ export const exportDutiesToPDF = async ({
         const dateStr = formatDate(d.dutyDate);
         const inTime = escapeHtml(d.inTime || 'N/A');
         const outTime = escapeHtml(d.outTime || 'N/A');
-        const workType = escapeHtml(d.workType || 'N/A');
+        const workType = escapeHtml(formatWorkType(d));
         const machine = escapeHtml(d.machineName || 'N/A');
         const customer = escapeHtml(d.customerName || 'N/A');
         const customerPhone = escapeHtml(d.customerPhoneNumber || 'N/A');
@@ -651,7 +652,7 @@ export const exportDutiesToExcel = async ({
       const customer = d.customerName || '';
       const customerPhone = d.customerPhoneNumber || '';
       const machine = d.machineName || '';
-      const workType = d.workType || '';
+      const workType = formatWorkType(d);
       const inTime = d.inTime || '';
       const outTime = d.outTime || '';
       const workDesc = d.workDescription || '';

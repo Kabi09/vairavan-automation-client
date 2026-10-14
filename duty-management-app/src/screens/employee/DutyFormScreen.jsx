@@ -56,10 +56,17 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const [customerPhone, setCustomerPhone] = useState(() => dutyToEdit?.customerPhoneNumber || '');
   const [machineName, setMachineName] = useState(() => dutyToEdit?.machineName || '');
   const [workType, setWorkType] = useState(() => dutyToEdit?.workType || 'Maintenance');
-  const [customWorkDetails, setCustomWorkDetails] = useState('');
+  const [customWorkDetails, setCustomWorkDetails] = useState(() => {
+    if (dutyToEdit?.customWorkType) return dutyToEdit.customWorkType;
+    const match = dutyToEdit?.workDescription?.match(/^\[Work:\s*([^\]]+)\]/);
+    return match ? match[1].trim() : '';
+  });
   const [inTime, setInTime] = useState(() => dutyToEdit?.inTime || '09:30');
   const [outTime, setOutTime] = useState(() => dutyToEdit?.outTime || '17:30');
-  const [workDescription, setWorkDescription] = useState(() => dutyToEdit?.workDescription || '');
+  const [workDescription, setWorkDescription] = useState(() => {
+    if (!dutyToEdit?.workDescription) return '';
+    return dutyToEdit.workDescription.replace(/^\[Work:\s*[^\]]+\]\n*/, '');
+  });
 
   // Modals state
   const [datePickerVisible, setDatePickerVisible] = useState(false);

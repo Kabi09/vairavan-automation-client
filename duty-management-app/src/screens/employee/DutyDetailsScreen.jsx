@@ -22,6 +22,7 @@ import ImageViewerModal from '../../components/ImageViewerModal';
 import { formatDate, formatTime } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
+import { formatWorkType } from '../../utils/dutyUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
 export const DutyDetailsScreen = ({ navigation, route }) => {
@@ -138,15 +139,22 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Status & Timing Banner */}
+        {/* Client & Timing Banner */}
         <Card style={styles.headerCard}>
           <View style={styles.headerTop}>
             <Text style={styles.customerName}>{duty.customerName}</Text>
-            <StatusBadge status={duty.status} />
           </View>
           <Text style={styles.companyName}>
-            {duty.company?.companyName || 'Client Location'}
+            {duty.company?.companyName || 'Client Company'}
           </Text>
+          {(duty.company?.location || duty.location?.address) ? (
+            <View style={styles.companyLocationRow}>
+              <Ionicons name="location-outline" size={14} color={COLORS.textSecondary} />
+              <Text style={styles.companyLocationText}>
+                {duty.company?.location || duty.location?.address}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.dateRow}>
             <Ionicons name="calendar-outline" size={15} color={COLORS.primary} />
             <Text style={styles.dateText}>
@@ -155,20 +163,21 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           </View>
         </Card>
 
-        {/* Manager Review Remarks if reviewed */}
-        {duty.adminReview?.remarks ? (
-          <Card style={styles.reviewRemarksCard}>
-            <View style={styles.remarksHeader}>
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color={COLORS.primary} />
-              <Text style={styles.remarksTitle}>Manager Feedback</Text>
-            </View>
-            <Text style={styles.remarksBody}>{duty.adminReview.remarks}</Text>
-          </Card>
-        ) : null}
-
         {/* Technical Details */}
         <Card style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Equipment & Work Type</Text>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Client Company:</Text>
+            <Text style={styles.detailValue}>{duty.company?.companyName || 'N/A'}</Text>
+          </View>
+
+          {(duty.company?.location || duty.location?.address) ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Site Location:</Text>
+              <Text style={styles.detailValue}>{duty.company?.location || duty.location?.address}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Machine:</Text>
@@ -177,7 +186,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Work Type:</Text>
-            <Text style={styles.detailValue}>{duty.workType}</Text>
+            <Text style={styles.detailValue}>{formatWorkType(duty)}</Text>
           </View>
 
           <View style={styles.detailRow}>
@@ -397,6 +406,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  companyLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 3,
+  },
+  companyLocationText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
   dateRow: {
     flexDirection: 'row',

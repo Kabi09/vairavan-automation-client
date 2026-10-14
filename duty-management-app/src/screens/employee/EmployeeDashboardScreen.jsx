@@ -19,11 +19,11 @@ import { useNotifications } from '../../context/NotificationContext';
 import dashboardApi from '../../api/dashboardApi';
 import notificationApi from '../../api/notificationApi';
 import Card from '../../components/Card';
-import StatusBadge from '../../components/StatusBadge';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import { formatDate, formatTime, getGreeting, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
+import { formatWorkType } from '../../utils/dutyUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -508,30 +508,33 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                 </Text>
               </Card>
             ) : (
-              todayDuties.map((duty) => (
-                <Card
-                  key={duty._id}
-                  style={styles.dutyCard}
-                  onPress={() => navigation.navigate('DutyDetails', { dutyId: duty._id })}
-                >
-                  <View style={styles.dutyTop}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={styles.customerText}>{duty.customerName}</Text>
-                      <Text style={styles.dutyIdBadgeText}>
-                        {duty.dutyId || `WORK-${duty._id.slice(-4).toUpperCase()}`}
-                      </Text>
+              todayDuties.map((duty) => {
+                const companyLocation = duty.company?.location || duty.location?.address;
+                return (
+                  <Card
+                    key={duty._id}
+                    style={styles.dutyCard}
+                    onPress={() => navigation.navigate('DutyDetails', { dutyId: duty._id })}
+                  >
+                    <View style={styles.dutyTop}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.customerText}>{duty.customerName}</Text>
+                        <Text style={styles.dutyIdBadgeText}>
+                          {duty.dutyId || `WORK-${duty._id.slice(-4).toUpperCase()}`}
+                        </Text>
+                      </View>
                     </View>
-                    <StatusBadge status={duty.status} />
-                  </View>
-                  <Text style={styles.machineText}>
-                    {duty.company?.companyName} • {duty.machineName}
-                  </Text>
-                  <Text style={styles.timeText}>
-                    <Ionicons name="time-outline" size={13} color={COLORS.textMuted} />{' '}
-                    {formatTime(duty.inTime)} - {formatTime(duty.outTime)} ({duty.workType})
-                  </Text>
-                </Card>
-              ))
+                    <Text style={styles.machineText}>
+                      {duty.company?.companyName}
+                      {companyLocation ? ` (${companyLocation})` : ''} • {duty.machineName}
+                    </Text>
+                    <Text style={styles.timeText}>
+                      <Ionicons name="time-outline" size={13} color={COLORS.textMuted} />{' '}
+                      {formatTime(duty.inTime)} - {formatTime(duty.outTime)} ({formatWorkType(duty)})
+                    </Text>
+                  </Card>
+                );
+              })
             )}
 
             {/* Upcoming Holidays */}

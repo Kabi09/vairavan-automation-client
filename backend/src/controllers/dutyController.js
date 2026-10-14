@@ -39,6 +39,7 @@ export const createDuty = asyncHandler(async (req, res) => {
     customerPhoneNumber,
     machineName,
     workType,
+    customWorkType,
     inTime,
     outTime,
     workDescription,
@@ -85,6 +86,7 @@ export const createDuty = asyncHandler(async (req, res) => {
     customerPhoneNumber,
     machineName,
     workType,
+    customWorkType: customWorkType ? customWorkType.trim() : '',
     inTime,
     outTime,
     workDescription,
@@ -255,6 +257,7 @@ export const updateDuty = asyncHandler(async (req, res) => {
     customerPhoneNumber,
     machineName,
     workType,
+    customWorkType,
     inTime,
     outTime,
     workDescription,
@@ -303,6 +306,7 @@ export const updateDuty = asyncHandler(async (req, res) => {
   if (customerPhoneNumber) duty.customerPhoneNumber = customerPhoneNumber;
   if (machineName) duty.machineName = machineName;
   if (workType) duty.workType = workType;
+  if (customWorkType !== undefined) duty.customWorkType = customWorkType ? customWorkType.trim() : '';
   if (inTime) duty.inTime = inTime;
   if (outTime) duty.outTime = outTime;
   if (workDescription) duty.workDescription = workDescription;

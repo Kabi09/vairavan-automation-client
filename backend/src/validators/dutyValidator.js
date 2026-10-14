@@ -37,6 +37,11 @@ export const validateCreateDuty = [
     .withMessage('Work type is required')
     .isIn(WORK_TYPES)
     .withMessage(`Work type must be one of: ${WORK_TYPES.join(', ')}`),
+  body('customWorkType')
+    .optional()
+    .trim()
+    .isLength({ max: 200 })
+    .withMessage('Custom work type cannot exceed 200 characters'),
   body('inTime')
     .trim()
     .notEmpty()
@@ -113,6 +118,11 @@ export const validateUpdateDuty = [
     .optional()
     .isIn(WORK_TYPES)
     .withMessage(`Work type must be one of: ${WORK_TYPES.join(', ')}`),
+  body('customWorkType')
+    .optional()
+    .trim()
+    .isLength({ max: 200 })
+    .withMessage('Custom work type cannot exceed 200 characters'),
   body('inTime')
     .optional()
     .matches(/^([01]\d|2[0-3]):?([0-5]\d)$/)

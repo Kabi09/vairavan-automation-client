@@ -20,7 +20,6 @@ import employeeApi from '../../api/employeeApi';
 import companyApi from '../../api/companyApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
-import StatusBadge from '../../components/StatusBadge';
 import TextInputField from '../../components/TextInputField';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
@@ -36,6 +35,7 @@ import { formatDate, formatTime, formatISODateOnly, getYesterdayDateString } fro
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
 import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
+import { formatWorkType } from '../../utils/dutyUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const AllDutiesScreen = ({ route, navigation }) => {
@@ -339,6 +339,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
   const renderDutyItem = ({ item }) => {
     const dutyId = item.dutyId || ('WORK-' + (item._id || '').slice(-4).toUpperCase());
+    const companyLocation = item.company?.location || item.location?.address;
 
     return (
       <Card style={styles.dutyCard} onPress={() => setSelectedDuty(item)}>
@@ -351,6 +352,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
             <Text style={styles.companyName}>
               <Ionicons name="business-outline" size={13} color={COLORS.textSecondary} />{' '}
               {item.company?.companyName || 'Client Site'}
+              {companyLocation ? ` • ${companyLocation}` : ''}
             </Text>
           </View>
           <View style={styles.dateBadge}>
@@ -361,7 +363,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
         <Text style={styles.machineRow}>
           <Ionicons name="hardware-chip-outline" size={13} color={COLORS.textSecondary} />{' '}
-          {item.machineName} • <Text style={styles.workTypeLabel}>{item.workType}</Text>
+          {item.machineName} • <Text style={styles.workTypeLabel}>{formatWorkType(item)}</Text>
         </Text>
 
         <Text style={styles.descriptionSnippet} numberOfLines={2}>
@@ -616,7 +618,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
               <View style={styles.detailBlock}>
                 <Text style={styles.blockLabel}>Equipment & Hours</Text>
                 <Text style={styles.blockValue}>
-                  {selectedDuty?.machineName} ({selectedDuty?.workType})
+                  {selectedDuty?.machineName} ({formatWorkType(selectedDuty)})
                 </Text>
                 <Text style={styles.blockSub}>
                   Hours: {formatTime(selectedDuty?.inTime)} to {formatTime(selectedDuty?.outTime)}

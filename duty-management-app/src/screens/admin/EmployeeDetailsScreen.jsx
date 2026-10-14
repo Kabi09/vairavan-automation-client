@@ -36,6 +36,7 @@ import {
   exportLeavesToPDF,
   exportLeavesToExcel,
 } from '../../utils/exportUtils';
+import { formatWorkType } from '../../utils/dutyUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const EmployeeDetailsScreen = ({ route, navigation }) => {
@@ -460,6 +461,7 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
   const renderWorkItem = ({ item }) => {
     const proofPhotos = Array.isArray(item.customerProofPhotos) ? item.customerProofPhotos : [];
     const signatureUrl = item.customerSignature?.url;
+    const companyLocation = item.company?.location || item.location?.address;
 
     return (
       <Card style={styles.itemCard}>
@@ -467,9 +469,10 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
           <View style={{ flex: 1 }}>
             <Text style={styles.workCompanyName}>
               {item.company?.companyName || 'Client Site'}
+              {companyLocation ? ` • ${companyLocation}` : ''}
             </Text>
             <Text style={styles.workSub}>
-              Machine: {item.machineName} ({item.workType})
+              Machine: {item.machineName} ({formatWorkType(item)})
             </Text>
           </View>
           <View style={styles.dateBadge}>

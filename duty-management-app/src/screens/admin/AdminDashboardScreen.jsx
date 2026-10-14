@@ -19,11 +19,11 @@ import { useNotifications } from '../../context/NotificationContext';
 import dashboardApi from '../../api/dashboardApi';
 import notificationApi from '../../api/notificationApi';
 import Card from '../../components/Card';
-import StatusBadge from '../../components/StatusBadge';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import { formatDate, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
+import { formatWorkType } from '../../utils/dutyUtils';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -487,27 +487,37 @@ export const AdminDashboardScreen = ({ navigation }) => {
                 <Text style={styles.emptyText}>No recent works submitted</Text>
               </Card>
             ) : (
-              recentDuties.map((duty) => (
-                <Card
-                  key={duty._id}
-                  style={styles.dutyItemCard}
-                  onPress={() => navigation.navigate('DutyDetails', { dutyId: duty._id })}
-                >
-                  <View style={styles.dutyItemHeader}>
-                    <Text style={styles.dutyCustomer}>{duty.customerName}</Text>
-                    <StatusBadge status={duty.status} />
-                  </View>
-                  <Text style={styles.dutyMachine}>
-                    {duty.machineName} • {duty.workType}
-                  </Text>
-                  <View style={styles.dutyItemFooter}>
-                    <Text style={styles.dutyEmployee}>
-                      {duty.employee?.employeeName || 'Employee'}
+              recentDuties.map((duty) => {
+                const companyLocation = duty.company?.location || duty.location?.address;
+                return (
+                  <Card
+                    key={duty._id}
+                    style={styles.dutyItemCard}
+                    onPress={() => navigation.navigate('DutyDetails', { dutyId: duty._id })}
+                  >
+                    <View style={styles.dutyItemHeader}>
+                      <Text style={styles.dutyCustomer}>{duty.customerName}</Text>
+                      <Text style={styles.dutyDate}>{formatDate(duty.dutyDate)}</Text>
+                    </View>
+                    {duty.company?.companyName ? (
+                      <Text style={styles.dutyCompanyText}>
+                        <Ionicons name="business-outline" size={12} color={COLORS.textSecondary} />{' '}
+                        {duty.company.companyName}
+                        {companyLocation ? ` • ${companyLocation}` : ''}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.dutyMachine}>
+                      <Ionicons name="hardware-chip-outline" size={12} color={COLORS.textSecondary} />{' '}
+                      {duty.machineName} • {formatWorkType(duty)}
                     </Text>
-                    <Text style={styles.dutyDate}>{formatDate(duty.dutyDate)}</Text>
-                  </View>
-                </Card>
-              ))
+                    <View style={styles.dutyItemFooter}>
+                      <Text style={styles.dutyEmployee}>
+                        {duty.employee?.employeeName || 'Employee'}
+                      </Text>
+                    </View>
+                  </Card>
+                );
+              })
             )}
 
             {/* Upcoming Holidays */}
@@ -898,6 +908,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: COLORS.text,
+  },
+  dutyCompanyText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   dutyMachine: {
     fontSize: 13,

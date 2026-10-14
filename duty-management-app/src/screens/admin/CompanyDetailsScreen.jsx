@@ -27,6 +27,7 @@ import ExportLoadingModal from '../../components/ExportLoadingModal';
 import { formatDate, formatISODateOnly, getYesterdayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
+import { formatWorkType } from '../../utils/dutyUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const CompanyDetailsScreen = ({ route, navigation }) => {
@@ -347,7 +348,7 @@ export const CompanyDetailsScreen = ({ route, navigation }) => {
               {item.employee?.employeeName || 'Staff'}
             </Text>
             <Text style={styles.empId}>
-              ID: {item.employee?.employeeId || 'N/A'} • {item.workType || 'Service'}
+              ID: {item.employee?.employeeId || 'N/A'} • {formatWorkType(item)}
             </Text>
           </View>
           <View style={styles.dateBadge}>

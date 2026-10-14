@@ -79,6 +79,45 @@
 ## Change History
 
 ### 2026-10-14
+#### Support Custom "Other" Work Type Display, Company Location in Work Details & Lists, and Remove Duty Statuses from UI
+- What was changed:
+  - **Work Type "Other" Custom Specification (`dutyUtils.js`, `Duty.js`, `dutyValidator.js`, `dutyController.js`, `DutyFormScreen.jsx`, `exportUtils.js`)**:
+    - Backend: Added `customWorkType` (String, trim, max 200 chars) to `Duty` schema, validation rules, and create/update controller handlers.
+    - Helper: Created `duty-management-app/src/utils/dutyUtils.js` with `formatWorkType(dutyOrWorkType, customWorkType, workDescription)` to intelligently format "Other" work types as `Other (custom data)`. Backward-compatible with legacy records using regex `\[Work:\s*([^\]]+)\]` in `workDescription`.
+    - Form: Updated `DutyFormScreen.jsx` to load and edit `customWorkType`, clean legacy regex tags from editable description, and submit `customWorkType` in creation/update payloads.
+    - Exports: Updated `exportUtils.js` (both PDF and Excel exports) to display `Other (custom data)` instead of generic "Other".
+    - Employee & Admin UI: Updated `DutyDetailsScreen.jsx`, `MyDutiesScreen.jsx`, `AllDutiesScreen.jsx`, `AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`, `CompanyDetailsScreen.jsx`, and `EmployeeDetailsScreen.jsx` to render formatted work type.
+  - **Work Details & List Cards Location Display**:
+    - `DutyDetailsScreen.jsx`: Displays company/site location directly under Company Name (`companyLocationRow`), as well as dedicated "Client Company" and "Site Location" rows in Technical Details.
+    - Work List Cards: Appended company/site location (`duty.company?.location || duty.location?.address`) to company name across `MyDutiesScreen.jsx`, `AllDutiesScreen.jsx`, `EmployeeDetailsScreen.jsx`, `AdminDashboardScreen.jsx`, and `EmployeeDashboardScreen.jsx`.
+  - **Remove Duty Status Workflow from UI**:
+    - Removed `StatusBadge` from duty cards in `MyDutiesScreen.jsx`, `DutyDetailsScreen.jsx`, `AdminDashboardScreen.jsx`, and `EmployeeDashboardScreen.jsx`.
+    - Removed Duty Status filter chips and filter criteria from `MyDutiesScreen.jsx` (retaining date presets, date range, and company filters).
+    - Removed Manager Feedback / Review Remarks card from `DutyDetailsScreen.jsx`.
+    - Leave status workflow (`approved`, `rejected`, `pending`) retained untouched.
+- Files changed:
+  - `backend/src/models/Duty.js`
+  - `backend/src/validators/dutyValidator.js`
+  - `backend/src/controllers/dutyController.js`
+  - `duty-management-app/src/utils/dutyUtils.js`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Work type display dynamically evaluates `customWorkType` and renders `Other (Entered Data)` across all client screens and exports.
+  - Duty cards and details show company location alongside company name.
+  - Duty cards no longer display status badges (`approved`, `needs fix`, `rejected`, `submitted`). Filter modal no longer filters by duty status.
+- Reason: User requested: "work type -> other choose input enter some data not show fix like other(that data); export also other(data);;; empolyee-> work type other only show fix;;;; work details- only comapny name only show -> add to location data; fix;; remove the duty/work status- like approved,needs fix,reject;".
+- Impact: Immediate clarity on custom work specifications in UI and exports, complete client site location context, and simplified, friction-free duty logging without status confusion.
+
+### 2026-10-14
 #### Streamline Login Input UI - Static Label, Clean Bottom Layout, and Auto-Changing Icon
 - What was changed:
   - **Static Label & Placeholder (`LoginScreen.jsx`)**:
@@ -1463,12 +1502,15 @@
 
 ## Current Progress
 - Completed:
+  - Custom "Other" Work Type Display: When "Other" is chosen with custom details entered, it is displayed as `Other (custom data)` across all views (forms, cards, details, modals) and in both PDF and Excel exports.
+  - Client Company Location in Work Details & Cards: Company location is displayed alongside or under the company name in `DutyDetailsScreen`, `MyDutiesScreen`, `AllDutiesScreen`, `EmployeeDetailsScreen`, and dashboard activity cards.
+  - Removed Duty/Work Status Workflow: Removed `StatusBadge` and status labels (`approved`, `needs fix`, `rejected`, `submitted`) from duty cards and details, removed status filter chips from the filter modal, and removed the manager feedback card. Leave status workflow remains intact.
   - Automatic Phone Download: Persisted SAF directory URI via `SecureStore` in `exportUtils.js`, allowing downloads to save directly without prompt after initial authorization.
   - Dashboard Highlight Carousel: Horizontal swipeable carousel with indicator dots for Birthdays, On-Leave, and Holidays across Admin and Employee dashboards.
   - Notification Routing & Badge Decrement: Leave creation notifies admins only; leave review notifies employee; holiday creation notifies all employees; tapping notification marks it as read, decreases badge count, and navigates to the relevant detail screen.
   - Nomenclature Alignment: Duty/Duties changed to Work/Works; Staff changed to Employee across navigation, headers, export titles, buttons, and empty states.
   - Sequential 4-Digit Work IDs: Atomic counter generates `WORK-1000`, `WORK-1001`... with full database migration backfill completed.
-  - 34/34 backend unit tests passing; 0 syntax errors across all mobile screens.
+  - 39/39 backend unit tests passing; 0 syntax errors across all mobile screens.
 - In Progress:
   - None.
 - Pending:

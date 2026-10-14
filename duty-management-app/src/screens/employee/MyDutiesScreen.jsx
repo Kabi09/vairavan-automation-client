@@ -16,7 +16,6 @@ import dutyApi from '../../api/dutyApi';
 import companyApi from '../../api/companyApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
-import StatusBadge from '../../components/StatusBadge';
 import TextInputField from '../../components/TextInputField';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
@@ -25,15 +24,8 @@ import DatePickerModal from '../../components/DatePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
 import { formatDate, formatTime, getTodayDateString, getYesterdayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
+import { formatWorkType } from '../../utils/dutyUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
-
-const DUTY_STATUS_OPTIONS = [
-  { label: 'All', value: '' },
-  { label: 'Submitted', value: 'submitted' },
-  { label: 'Approved', value: 'approved' },
-  { label: 'Needs Fix', value: 'correction_requested' },
-  { label: 'Rejected', value: 'rejected' },
-];
 
 export const MyDutiesScreen = ({ navigation }) => {
   const [duties, setDuties] = useState([]);
@@ -47,14 +39,12 @@ export const MyDutiesScreen = ({ navigation }) => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
 
   // Filter popup modal & draft filter state
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [draftStartDate, setDraftStartDate] = useState('');
   const [draftEndDate, setDraftEndDate] = useState('');
   const [draftCompanyId, setDraftCompanyId] = useState('');
-  const [draftStatus, setDraftStatus] = useState('');
 
   // Pickers visibility
   const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
@@ -67,16 +57,15 @@ export const MyDutiesScreen = ({ navigation }) => {
 
   // Whether any filter criteria are active
   const hasActiveFilters = Boolean(
-    startDate || endDate || selectedCompanyId || selectedStatus
+    startDate || endDate || selectedCompanyId
   );
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (startDate || endDate) count += 1;
     if (selectedCompanyId) count += 1;
-    if (selectedStatus) count += 1;
     return count;
-  }, [startDate, endDate, selectedCompanyId, selectedStatus]);
+  }, [startDate, endDate, selectedCompanyId]);
 
   // Load companies for the filter picker
   useEffect(() => {
@@ -99,7 +88,6 @@ export const MyDutiesScreen = ({ navigation }) => {
       const params = { limit: 500 };
       if (search.trim()) params.search = search.trim();
       if (selectedCompanyId) params.companyId = selectedCompanyId;
-      if (selectedStatus) params.status = selectedStatus;
       if (startDate.trim()) params.startDate = startDate.trim();
       if (endDate.trim()) params.endDate = endDate.trim();
 
@@ -113,7 +101,7 @@ export const MyDutiesScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [search, selectedCompanyId, selectedStatus, startDate, endDate]);
+  }, [search, selectedCompanyId, startDate, endDate]);
 
   useFocusEffect(
     useCallback(() => {
@@ -131,7 +119,6 @@ export const MyDutiesScreen = ({ navigation }) => {
     setDraftStartDate(startDate);
     setDraftEndDate(endDate);
     setDraftCompanyId(selectedCompanyId);
-    setDraftStatus(selectedStatus);
     setFilterModalVisible(true);
   };
 
@@ -139,7 +126,6 @@ export const MyDutiesScreen = ({ navigation }) => {
     setStartDate(draftStartDate);
     setEndDate(draftEndDate);
     setSelectedCompanyId(draftCompanyId);
-    setSelectedStatus(draftStatus);
     setFilterModalVisible(false);
   };
 
@@ -147,18 +133,15 @@ export const MyDutiesScreen = ({ navigation }) => {
     setDraftStartDate('');
     setDraftEndDate('');
     setDraftCompanyId('');
-    setDraftStatus('');
   };
 
   const clearFilters = () => {
     setStartDate('');
     setEndDate('');
     setSelectedCompanyId('');
-    setSelectedStatus('');
     setDraftStartDate('');
     setDraftEndDate('');
     setDraftCompanyId('');
-    setDraftStatus('');
   };
 
   // Real-time client-side filter for instant responsiveness
@@ -168,10 +151,6 @@ export const MyDutiesScreen = ({ navigation }) => {
       if (selectedCompanyId) {
         const cId = d.company?._id || d.company;
         if (cId !== selectedCompanyId) return false;
-      }
-      // Status match
-      if (selectedStatus && d.status !== selectedStatus) {
-        return false;
       }
       // Date bounds match
       if (startDate) {
@@ -206,10 +185,11 @@ export const MyDutiesScreen = ({ navigation }) => {
         desc.includes(q)
       );
     });
-  }, [duties, selectedCompanyId, selectedStatus, startDate, endDate, search]);
+  }, [duties, selectedCompanyId, startDate, endDate, search]);
 
   const renderDutyItem = ({ item }) => {
     const dutyId = item.dutyId || ('WORK-' + (item._id || '').slice(-4).toUpperCase());
+    const companyLocation = item.company?.location || item.location?.address;
 
     return (
       <Card
@@ -220,19 +200,19 @@ export const MyDutiesScreen = ({ navigation }) => {
           <View style={styles.headerInfo}>
             <View style={styles.idRow}>
               <Text style={styles.dutyIdBadge}>{dutyId}</Text>
-              <StatusBadge status={item.status} />
             </View>
             <Text style={styles.customerName}>{item.customerName}</Text>
             <Text style={styles.companyName}>
               <Ionicons name="business-outline" size={13} color={COLORS.textSecondary} />{' '}
               {item.company?.companyName || 'Client Site'}
+              {companyLocation ? ` • ${companyLocation}` : ''}
             </Text>
           </View>
         </View>
 
         <Text style={styles.machineText}>
           <Ionicons name="hardware-chip-outline" size={13} color={COLORS.textSecondary} />{' '}
-          {item.machineName} ({item.workType})
+          {item.machineName} ({formatWorkType(item)})
         </Text>
 
         <Text style={styles.descriptionSnippet} numberOfLines={2}>
@@ -353,16 +333,7 @@ export const MyDutiesScreen = ({ navigation }) => {
                 </View>
               ) : null}
 
-              {selectedStatus ? (
-                <View style={styles.activeFilterPill}>
-                  <Ionicons name="flag" size={12} color={COLORS.primary} />
-                  <Text style={styles.activeFilterPillText}>
-                    {selectedStatus === 'correction_requested'
-                      ? 'Needs Fix'
-                      : selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}
-                  </Text>
-                </View>
-              ) : null}
+
 
               <TouchableOpacity onPress={clearFilters} style={styles.clearActiveFiltersBtn}>
                 <Ionicons name="close-circle" size={14} color={COLORS.danger} />
@@ -419,7 +390,7 @@ export const MyDutiesScreen = ({ navigation }) => {
                   search
                     ? `No works match "${search}". Try searching another name, phone, or company.`
                     : hasActiveFilters
-                    ? 'Try adjusting your date range, company, or status filter.'
+                    ? 'Try adjusting your date range or company filter.'
                     : 'Log your service visits by tapping "New" above.'
                 }
                 actionTitle={
@@ -632,32 +603,7 @@ export const MyDutiesScreen = ({ navigation }) => {
                 />
               </TouchableOpacity>
 
-              {/* Duty Status Filter Chips */}
-              <Text style={[styles.filterSectionTitle, { marginTop: SPACING.xs }]}>
-                Duty Status
-              </Text>
-              <View style={styles.statusChipsWrap}>
-                {DUTY_STATUS_OPTIONS.map((opt) => {
-                  const isSelected = draftStatus === opt.value;
-                  return (
-                    <TouchableOpacity
-                      key={opt.value || 'all'}
-                      style={[styles.statusChip, isSelected && styles.statusChipActive]}
-                      onPress={() => setDraftStatus(opt.value)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.statusChipText,
-                          isSelected && styles.statusChipTextActive,
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+
             </ScrollView>
 
             {/* Modal Actions Footer */}
