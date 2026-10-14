@@ -64,14 +64,15 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
     if (!name.trim()) {
       errors.name = 'Employee name is required';
     }
+    if (!email.trim()) {
+      errors.email = 'Email address is required';
+    } else if (!isValidEmail(email)) {
+      errors.email = 'Please provide a valid email address';
+    }
+
     if (!isEditing) {
       if (!employeeId.trim()) {
         errors.employeeId = 'Employee ID is required (e.g. EMP002)';
-      }
-      if (!email.trim()) {
-        errors.email = 'Email address is required';
-      } else if (!isValidEmail(email)) {
-        errors.email = 'Please provide a valid email address';
       }
       if (!password) {
         errors.password = 'Initial password is required';
@@ -98,6 +99,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
       if (isEditing) {
         await employeeApi.updateEmployee(existingEmployee._id, {
           employeeName: name.trim(),
+          email: email.trim().toLowerCase(),
           phoneNumber: phone.trim(),
           designation: designation.trim(),
           address: address.trim(),
@@ -125,7 +127,15 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
         ]);
       }
     } catch (err) {
-      setError(extractErrorMessage(err, 'Failed to save employee profile'));
+      const msg = extractErrorMessage(err, 'Failed to save employee profile');
+      setError(msg);
+      if (msg.toLowerCase().includes('phone')) {
+        setFieldErrors((prev) => ({ ...prev, phone: msg }));
+      } else if (msg.toLowerCase().includes('email')) {
+        setFieldErrors((prev) => ({ ...prev, email: msg }));
+      } else if (msg.toLowerCase().includes('employee id')) {
+        setFieldErrors((prev) => ({ ...prev, employeeId: msg }));
+      }
     } finally {
       setLoading(false);
     }
@@ -164,7 +174,21 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
               required
             />
 
-            {!isEditing && (
+            {isEditing ? (
+              <TextInputField
+                label="Email Address"
+                placeholder="e.g. ramesh@vairavan.com"
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: null }));
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                error={fieldErrors.email}
+                required
+              />
+            ) : (
               <>
                 <TextInputField
                   label="Employee ID"

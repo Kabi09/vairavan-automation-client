@@ -65,6 +65,12 @@ export const validateUpdateEmployee = [
     .withMessage('Employee name cannot be empty')
     .isLength({ max: 100 })
     .withMessage('Employee name cannot exceed 100 characters'),
+  body('email')
+    .optional({ checkFalsy: true })
+    .trim()
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail(),
   body('phoneNumber')
     .optional({ checkFalsy: true })
     .trim()

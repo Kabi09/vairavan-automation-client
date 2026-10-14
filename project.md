@@ -79,6 +79,47 @@
 ## Change History
 
 ### 2026-10-14
+#### Email or 10-Digit Mobile Login with Smart Input Detection & Strict Uniqueness Checks for Phone & Email
+- What was changed:
+  - **Smart Input Detection & Mobile Mode on Login Screen (`LoginScreen.jsx`, `TextInputField.jsx`)**:
+    - Dual identifier input supports both Email and 10-digit Mobile Number.
+    - Added smart detection logic in `handleIdentifierChange`: inspects the leading 1-5 characters; if digits, treats input as a phone number, limits characters strictly to numbers, and caps input length at 10 digits (`maxLength={10}`).
+    - If the input contains letters, symbols (or `@`), seamlessly switches to email mode without character length constraints.
+    - Dynamic UI cues:
+      - Icon dynamically toggles between `call-outline` (phone mode), `mail-outline` (email mode), and `person-outline` (empty).
+      - Helper badge shows live digit count progress: `Mobile login mode: X/10 digits`.
+      - Input placeholder and label adapt dynamically between phone and email modes.
+    - Form validation enforces exact 10 digits when in numeric mode, or valid email format when in text mode.
+  - **Backend Dual Authentication Support (`authController.js`, `authValidator.js`)**:
+    - Updated `validateLogin` in `authValidator.js` to accept either a valid email address or 10-digit mobile number (with optional `+91` prefix).
+    - Updated `login` controller in `authController.js` to find users by clean 10-digit phone number (checking standard, `+91`, and formatted variations) or by email address.
+  - **Duplicate Phone & Email Uniqueness Checks (`employeeController.js`, `employeeValidator.js`, `authController.js`, `EmployeeFormScreen.jsx`)**:
+    - Added duplicate phone number validation in `createEmployee`: returns 409 Conflict if another user has the phone number.
+    - Added duplicate phone number and email validation in `updateEmployee`: prevents collisions when modifying existing employee contact details.
+    - Added duplicate phone number validation in `updateProfile`: prevents duplicate phone numbers on self-service profile updates.
+    - Enhanced `EmployeeFormScreen.jsx`:
+      - Allows editing `email` in both create and edit modes.
+      - Automatically catches 409 Conflict errors and highlights the conflicting field directly (`fieldErrors.phone` or `fieldErrors.email`) with user-friendly error banners.
+  - **Test Suite Updates (`auth.test.js`)**:
+    - Added automated unit tests verifying 10-digit phone login, `+91` phone login, duplicate phone rejection on employee creation (409), duplicate phone rejection on employee update (409), and duplicate phone rejection on self profile update (409).
+- Files changed:
+  - `duty-management-app/src/components/TextInputField.jsx`
+  - `duty-management-app/src/screens/auth/LoginScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeFormScreen.jsx`
+  - `backend/src/controllers/authController.js`
+  - `backend/src/controllers/employeeController.js`
+  - `backend/src/validators/authValidator.js`
+  - `backend/src/validators/employeeValidator.js`
+  - `backend/tests/auth.test.js`
+  - `project.md`
+- Logic changed:
+  - Users can authenticate with either email or 10-digit phone number.
+  - The login input automatically locks to 10 numbers if the first characters are digits, and allows full email if non-digits.
+  - Phone numbers and emails are strictly unique across all accounts in create and update flows.
+- Reason: User requested: "change the login ->email or phone number and password ; also phone ,email unique check add employee also; fix;; one simple login - check first 5 char is digit only allow 10 character like number; check first 5 char is not is like a mail; userfriendly ; fix;".
+- Impact: Seamless, error-proof login experience for mobile workers who prefer logging in with phone number instead of email, and complete data integrity preventing duplicate contact details.
+
+### 2026-10-14
 #### Admin Add Employee Role Dropdown (Admin/Employee) & Employee Profile Name Editing
 - What was changed:
   - **Admin Add & Edit Employee Role Dropdown (`EmployeeFormScreen.jsx`, `employeeController.js`, `employeeValidator.js`)**:

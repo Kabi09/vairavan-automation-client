@@ -2,12 +2,21 @@ import { body } from 'express-validator';
 
 export const validateLogin = [
   body('email')
-    .trim()
+    .customSanitizer((val, { req }) => {
+      const input = (val || req.body.identifier || req.body.phoneNumber || '').toString().trim();
+      return input;
+    })
     .notEmpty()
-    .withMessage('Email is required')
-    .isEmail()
-    .withMessage('Please provide a valid email address')
-    .normalizeEmail(),
+    .withMessage('Email address or 10-digit mobile number is required')
+    .custom((value) => {
+      const cleanPhone = value.replace(/[\s-]/g, '').replace(/^\+91/, '');
+      const isPhone = /^[0-9]{10}$/.test(cleanPhone);
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+      if (!isPhone && !isEmail) {
+        throw new Error('Please provide a valid email address or 10-digit mobile number');
+      }
+      return true;
+    }),
   body('password')
     .notEmpty()
     .withMessage('Password is required'),

@@ -24,6 +24,8 @@ export const TextInputField = ({
   autoCapitalize = 'none',
   style,
   inputStyle,
+  icon,
+  maxLength,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -48,6 +50,14 @@ export const TextInputField = ({
           multiline && { height: Math.max(90, numberOfLines * 24), alignItems: 'flex-start' },
         ]}
       >
+        {icon && (
+          <Ionicons
+            name={icon}
+            size={18}
+            color={error ? COLORS.danger : isFocused ? COLORS.primary : COLORS.textMuted}
+            style={{ marginRight: SPACING.sm }}
+          />
+        )}
         <TextInput
           style={[
             styles.input,
@@ -63,6 +73,7 @@ export const TextInputField = ({
           multiline={multiline}
           numberOfLines={numberOfLines}
           editable={editable}
+          maxLength={maxLength}
           autoCapitalize={autoCapitalize}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}

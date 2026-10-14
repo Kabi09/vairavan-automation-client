@@ -22,25 +22,73 @@ import { APP_CONFIG } from '../../constants/config';
 export const LoginScreen = () => {
   const { login } = useAuth();
 
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [isPhoneMode, setIsPhoneMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [emailError, setEmailError] = useState('');
+  const [identifierError, setIdentifierError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+
+  const handleIdentifierChange = (text) => {
+    if (errorMessage) setErrorMessage('');
+    if (identifierError) setIdentifierError('');
+
+    if (!text) {
+      setIdentifier('');
+      setIsPhoneMode(false);
+      return;
+    }
+
+    // Support pasted or typed numbers with +91 prefix
+    let testText = text;
+    if (text.startsWith('+91')) {
+      const remaining = text.replace(/^\+91[\s-]*/, '');
+      if (remaining.length > 0 && /^\d+$/.test(remaining.slice(0, Math.min(remaining.length, 5)))) {
+        testText = remaining;
+      }
+    }
+
+    // Check first 5 characters (or up to text length if < 5)
+    // If the leading characters are digits, treat as 10-digit mobile number
+    // If not, allow email entry without the 10-character limit
+    const sample = testText.slice(0, Math.min(testText.length, 5));
+    const isDigits = /^\d+$/.test(sample);
+
+    if (isDigits) {
+      const cleaned = testText.replace(/[^0-9]/g, '').slice(0, 10);
+      setIdentifier(cleaned);
+      setIsPhoneMode(true);
+    } else {
+      setIdentifier(text);
+      setIsPhoneMode(false);
+    }
+  };
 
   const validate = () => {
     let valid = true;
-    setEmailError('');
+    setIdentifierError('');
     setPasswordError('');
     setErrorMessage('');
 
-    if (!email.trim()) {
-      setEmailError('Email address is required');
+    const cleanInput = identifier.trim();
+
+    if (!cleanInput) {
+      setIdentifierError('Email address or mobile number is required');
       valid = false;
-    } else if (!isValidEmail(email)) {
-      setEmailError('Please enter a valid email address');
-      valid = false;
+    } else {
+      const isDigits = /^\d+$/.test(cleanInput);
+      if (isDigits) {
+        if (cleanInput.length !== 10) {
+          setIdentifierError('Mobile number must be exactly 10 digits');
+          valid = false;
+        }
+      } else {
+        if (!isValidEmail(cleanInput)) {
+          setIdentifierError('Please enter a valid email address');
+          valid = false;
+        }
+      }
     }
 
     if (!password) {
@@ -60,7 +108,8 @@ export const LoginScreen = () => {
     setLoading(true);
     setErrorMessage('');
 
-    const result = await login(email.trim(), password);
+    const cleanInput = identifier.trim();
+    const result = await login(cleanInput, password);
     setLoading(false);
 
     if (!result.success) {
@@ -96,24 +145,32 @@ export const LoginScreen = () => {
           <View style={styles.card}>
             <Text style={styles.welcomeTitle}>Sign In</Text>
             <Text style={styles.welcomeSubtitle}>
-              Enter your credentials to access your account
+              Enter your email or phone number to access your account
             </Text>
 
             <ErrorMessage message={errorMessage} />
 
             <TextInputField
-              label="Email Address"
-              placeholder="e.g. employee@vairavan.com"
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                if (emailError) setEmailError('');
-              }}
-              keyboardType="email-address"
+              label={isPhoneMode ? 'Mobile Number (10 Digits)' : 'Email or Mobile Number'}
+              placeholder={isPhoneMode ? 'Enter 10-digit mobile number' : 'e.g. 9876543210 or name@vairavan.com'}
+              value={identifier}
+              onChangeText={handleIdentifierChange}
+              keyboardType={isPhoneMode ? 'number-pad' : 'email-address'}
               autoCapitalize="none"
-              error={emailError}
+              icon={isPhoneMode ? 'call-outline' : identifier ? 'mail-outline' : 'person-outline'}
+              maxLength={isPhoneMode ? 10 : undefined}
+              error={identifierError}
               required
             />
+
+            {isPhoneMode && (
+              <View style={styles.phoneModeRow}>
+                <Ionicons name="phone-portrait-outline" size={13} color={COLORS.primary} />
+                <Text style={styles.phoneModeText}>
+                  Mobile login mode: {identifier.length}/10 digits
+                </Text>
+              </View>
+            )}
 
             <TextInputField
               label="Password"
@@ -124,6 +181,7 @@ export const LoginScreen = () => {
                 if (passwordError) setPasswordError('');
               }}
               secureTextEntry
+              icon="lock-closed-outline"
               error={passwordError}
               required
             />
@@ -213,6 +271,19 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
     marginBottom: SPACING.lg,
+  },
+  phoneModeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: -8,
+    marginBottom: SPACING.md,
+    paddingHorizontal: 4,
+  },
+  phoneModeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   loginButton: {
     marginTop: SPACING.md,

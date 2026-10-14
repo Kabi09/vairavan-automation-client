@@ -29,6 +29,27 @@ export const createEmployee = asyncHandler(async (req, res) => {
     throw ApiError.conflict('An employee with this email already exists');
   }
 
+  // Check duplicate phone number
+  if (phoneNumber && phoneNumber.trim()) {
+    const rawPhone = phoneNumber.trim();
+    const cleanPhone = rawPhone.replace(/[\s-]/g, '').replace(/^\+91/, '').slice(-10);
+    const phoneFilter = cleanPhone.length === 10
+      ? {
+          $or: [
+            { phoneNumber: cleanPhone },
+            { phoneNumber: `+91${cleanPhone}` },
+            { phoneNumber: `+91 ${cleanPhone}` },
+            { phoneNumber: rawPhone },
+          ],
+        }
+      : { phoneNumber: rawPhone };
+
+    const existingPhone = await User.findOne(phoneFilter);
+    if (existingPhone) {
+      throw ApiError.conflict('An employee with this phone number already exists');
+    }
+  }
+
   // Check duplicate employee ID
   const existingId = await User.findOne({ employeeId: employeeId.toUpperCase().trim() });
   if (existingId) {
@@ -40,7 +61,7 @@ export const createEmployee = asyncHandler(async (req, res) => {
     employeeId: employeeId.toUpperCase().trim(),
     email: email.toLowerCase().trim(),
     password,
-    phoneNumber,
+    phoneNumber: phoneNumber ? phoneNumber.trim() : '',
     address,
     designation,
     joiningDate: joiningDate || Date.now(),
@@ -143,6 +164,7 @@ export const updateEmployee = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const {
     employeeName,
+    email,
     phoneNumber,
     address,
     designation,
@@ -157,7 +179,49 @@ export const updateEmployee = asyncHandler(async (req, res) => {
   }
 
   if (employeeName) employee.employeeName = employeeName;
-  if (phoneNumber !== undefined) employee.phoneNumber = phoneNumber;
+
+  // Check duplicate email if changed
+  if (email && email.trim()) {
+    const normalizedEmail = email.toLowerCase().trim();
+    if (normalizedEmail !== employee.email) {
+      const existingEmail = await User.findOne({
+        email: normalizedEmail,
+        _id: { $ne: id },
+      });
+      if (existingEmail) {
+        throw ApiError.conflict('An employee with this email already exists');
+      }
+      employee.email = normalizedEmail;
+    }
+  }
+
+  // Check duplicate phone number if changed
+  if (phoneNumber !== undefined) {
+    const rawPhone = phoneNumber.trim();
+    if (rawPhone && rawPhone !== (employee.phoneNumber || '').trim()) {
+      const cleanPhone = rawPhone.replace(/[\s-]/g, '').replace(/^\+91/, '').slice(-10);
+      const phoneFilter = cleanPhone.length === 10
+        ? {
+            _id: { $ne: id },
+            $or: [
+              { phoneNumber: cleanPhone },
+              { phoneNumber: `+91${cleanPhone}` },
+              { phoneNumber: `+91 ${cleanPhone}` },
+              { phoneNumber: rawPhone },
+            ],
+          }
+        : { _id: { $ne: id }, phoneNumber: rawPhone };
+
+      const existingPhone = await User.findOne(phoneFilter);
+      if (existingPhone) {
+        throw ApiError.conflict('An employee with this phone number already exists');
+      }
+      employee.phoneNumber = rawPhone;
+    } else if (!rawPhone) {
+      employee.phoneNumber = '';
+    }
+  }
+
   if (address !== undefined) employee.address = address;
   if (designation !== undefined) employee.designation = designation;
   if (joiningDate) employee.joiningDate = joiningDate;

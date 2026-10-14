@@ -31,10 +31,45 @@ const generateTokens = (user) => {
  * @access  Public
  */
 export const login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { password } = req.body;
+  const rawIdentifier = (req.body.email || req.body.identifier || req.body.phoneNumber || '').toString().trim();
 
-  // Find user and explicitly include password field
-  const user = await User.findOne({ email }).select('+password');
+  if (!rawIdentifier) {
+    throw ApiError.badRequest('Email or mobile number is required');
+  }
+
+  const cleanPhone = rawIdentifier.replace(/[\s-]/g, '').replace(/^\+91/, '').slice(-10);
+  const is10Digit = /^[0-9]{10}$/.test(cleanPhone);
+
+  let user = null;
+
+  if (is10Digit) {
+    // Search by 10-digit phone variations or numeric email
+    user = await User.findOne({
+      $or: [
+        { phoneNumber: cleanPhone },
+        { phoneNumber: `+91${cleanPhone}` },
+        { phoneNumber: `+91 ${cleanPhone}` },
+        { phoneNumber: rawIdentifier },
+        { email: rawIdentifier.toLowerCase() },
+      ],
+    }).select('+password');
+  } else {
+    // Search by email address
+    user = await User.findOne({
+      email: rawIdentifier.toLowerCase(),
+    }).select('+password');
+
+    // Fallback: search by phone verbatim in case phone was stored as text
+    if (!user) {
+      user = await User.findOne({
+        $or: [
+          { phoneNumber: rawIdentifier },
+          { phoneNumber: cleanPhone },
+        ],
+      }).select('+password');
+    }
+  }
 
   if (!user) {
     throw ApiError.unauthorized('Invalid email or password');
@@ -115,13 +150,36 @@ export const updateProfile = asyncHandler(async (req, res) => {
       _id: { $ne: user._id },
     });
     if (existing) {
-      throw ApiError.badRequest('Email address is already in use by another account');
+      throw ApiError.conflict('Email address is already in use by another account');
     }
     user.email = email.toLowerCase().trim();
   }
 
+  // If phone number is changing, verify uniqueness
   if (phoneNumber !== undefined) {
-    user.phoneNumber = phoneNumber.trim();
+    const rawPhone = phoneNumber.trim();
+    if (rawPhone && rawPhone !== (user.phoneNumber || '').trim()) {
+      const cleanPhone = rawPhone.replace(/[\s-]/g, '').replace(/^\+91/, '').slice(-10);
+      const phoneFilter = cleanPhone.length === 10
+        ? {
+            _id: { $ne: user._id },
+            $or: [
+              { phoneNumber: cleanPhone },
+              { phoneNumber: `+91${cleanPhone}` },
+              { phoneNumber: `+91 ${cleanPhone}` },
+              { phoneNumber: rawPhone },
+            ],
+          }
+        : { _id: { $ne: user._id }, phoneNumber: rawPhone };
+
+      const existingPhone = await User.findOne(phoneFilter);
+      if (existingPhone) {
+        throw ApiError.conflict('Phone number is already in use by another account');
+      }
+      user.phoneNumber = rawPhone;
+    } else if (!rawPhone) {
+      user.phoneNumber = '';
+    }
   }
 
   if (avatar !== undefined) {
