@@ -82,6 +82,26 @@
 ## Change History
 
 ### 2026-10-14
+#### Automatic Admin Bootstrapping on New Database Deployments
+- What was changed:
+  - **Auto-Seed Service (`backend/src/config/autoSeed.js`)**:
+    - Created `autoSeedAdmin()` function that runs on database connection.
+    - Automatically checks if `admin@gmail.com` exists. If not found (e.g. empty new database), it creates the Developer Admin (`admin@gmail.com` / `Zxcvbnm09#`) with role `'admin'` and status `'active'`.
+    - Also verifies and creates the environment Super Admin (`admin@vairavan.com` / `AdminPassword123!`) if missing.
+    - Idempotent: does not overwrite existing users or passwords on subsequent connections.
+    - Non-intrusive: strictly skipped when `process.env.NODE_ENV === 'test'` so test databases remain isolated.
+  - **Database Connection Integration (`backend/src/config/db.js`)**:
+    - Invoked `await autoSeedAdmin()` right after `isConnectingPromise` resolves, ensuring automatic admin provisioning across both standalone Node server deployments and Vercel serverless functions on cold-start.
+- Files changed:
+  - `backend/src/config/autoSeed.js`
+  - `backend/src/config/db.js`
+  - `project.md`
+- Logic changed:
+  - Deploying a new database no longer requires running manual CLI seed scripts (`npm run seed:dev-admin`). The server automatically creates the developer admin account upon first connection.
+- Reason: User requested: "automatic ah neww deployee panna poth default add aagatha developer admin? ... ok automattica aggura maari pannu".
+- Impact: Zero setup friction when deploying to new databases or spinning up staging clusters; login works immediately with `admin@gmail.com` / `Zxcvbnm09#`.
+
+### 2026-10-14
 #### Office Duty Contact Fields Removal and Export Defaults (Customer Name: Office, Phone: Office Phone Number)
 - What was changed:
   - **Duty Form Screen (`DutyFormScreen.jsx`)**:

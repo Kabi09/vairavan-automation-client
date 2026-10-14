@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { autoSeedAdmin } from './autoSeed.js';
 
 let isConnectingPromise = null;
 
@@ -30,6 +31,7 @@ export const connectDB = async (customUri = null) => {
 
     const conn = await isConnectingPromise;
     console.log(`[MongoDB] Connected: ${conn.connection.host}/${conn.connection.name}`);
+    await autoSeedAdmin();
     return conn;
   } catch (error) {
     console.error(`[MongoDB] Connection error: ${error.message}`);
