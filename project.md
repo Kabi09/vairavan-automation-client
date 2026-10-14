@@ -82,6 +82,24 @@
 ## Change History
 
 ### 2026-10-14
+#### App Name Rebranding to VairaWorks and Firebase Configuration Update
+- What was changed:
+  - **App Name Updated to "VairaWorks"**:
+    - Changed `name` to `"VairaWorks"` and `slug` to `"viraworks"` in `duty-management-app/app.json`.
+    - Updated iOS and Android permission descriptions to refer to `"VairaWorks"`.
+    - Updated `APP_CONFIG.APP_NAME` in `duty-management-app/src/constants/config.js` to `'VairaWorks'`.
+  - **Firebase `google-services.json` Updated**:
+    - Replaced `duty-management-app/google-services.json` and `backend/secrets/google-services.json` with the new Firebase project configuration (`project_id`: `"vairaworks"`, `project_number`: `"53319507585"`, `package_name`: `"com.vairavan.dutymanagement"`, `api_key`: `"AIzaSyC8mxlV7VHY54Y1Eyykd4K88gO-f0-8LHg"`).
+- Files changed:
+  - `duty-management-app/google-services.json`
+  - `backend/secrets/google-services.json`
+  - `duty-management-app/app.json`
+  - `duty-management-app/src/constants/config.js`
+  - `project.md`
+- Reason: User requested: "use the google-services.json ... also app name change - VairaWorks; fix".
+- Impact: App branding officially renamed to VairaWorks, and Firebase Android client credentials aligned with the `vairaworks` project.
+
+### 2026-10-14
 #### Notification Icon Silhouette, 1MB FCM Threshold, and Rich Notification Image Fix
 - What was changed:
   - **Monochrome White Silhouette Notification Icon (`notification-icon.png`)**:

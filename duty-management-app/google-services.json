@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "170235924054",
-    "project_id": "fir-25fea",
-    "storage_bucket": "fir-25fea.firebasestorage.app"
+    "project_number": "53319507585",
+    "project_id": "vairaworks",
+    "storage_bucket": "vairaworks.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:170235924054:android:5505f5932dcf31b664f5f7",
+        "mobilesdk_app_id": "1:53319507585:android:9b8c705a41947a8755b780",
         "android_client_info": {
           "package_name": "com.vairavan.dutymanagement"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAUJePHEQ1OfaWZLzB9fls5I1tkW4KilFY"
+          "current_key": "AIzaSyC8mxlV7VHY54Y1Eyykd4K88gO-f0-8LHg"
         }
       ],
       "services": {

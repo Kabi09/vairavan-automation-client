@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Duty Management",
-    "slug": "duty-management-app",
+    "name": "VairaWorks",
+    "slug": "viraworks",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,9 +17,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.vairavan.dutymanagement",
       "infoPlist": {
-        "NSCameraUsageDescription": "Duty Management requires camera access to capture customer site proof photos.",
-        "NSPhotoLibraryUsageDescription": "Duty Management requires photo library access to upload site visit photos.",
-        "NSLocationWhenInUseUsageDescription": "Duty Management requires location access to record GPS coordinates at the customer service location."
+        "NSCameraUsageDescription": "VairaWorks requires camera access to capture customer site proof photos.",
+        "NSPhotoLibraryUsageDescription": "VairaWorks requires photo library access to upload site visit photos.",
+        "NSLocationWhenInUseUsageDescription": "VairaWorks requires location access to record GPS coordinates at the customer service location."
       }
     },
     "android": {
@@ -47,14 +47,14 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Duty Management requires location access to record GPS coordinates at the customer service location."
+          "locationWhenInUsePermission": "VairaWorks requires location access to record GPS coordinates at the customer service location."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Duty Management requires access to photos to upload site visit photos.",
-          "cameraPermission": "Duty Management requires camera access to capture site visit photos."
+          "photosPermission": "VairaWorks requires access to photos to upload site visit photos.",
+          "cameraPermission": "VairaWorks requires camera access to capture site visit photos."
         }
       ],
       "expo-font",
