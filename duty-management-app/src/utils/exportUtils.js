@@ -376,6 +376,11 @@ export const exportDutiesToPDF = async ({
           d.company?.companyType === 'office' ||
           (compName && compName.toLowerCase().includes('office'));
 
+        const effectiveCustomer = isOffice ? 'Office' : (customer || 'N/A');
+        const effectiveCustomerPhone = isOffice
+          ? (d.company?.companyPhoneNumber || customerPhone || 'N/A')
+          : (customerPhone || 'N/A');
+
         return `
           <div class="duty-card">
             <div class="card-header">
@@ -391,7 +396,8 @@ export const exportDutiesToPDF = async ({
                   <strong>Work ID:</strong> ${dutyId}<br/>
                   <strong>Employee:</strong> ${empName} (${empId})<br/>
                   <strong>${isOffice ? 'Office:' : 'Client Company:'}</strong> ${compName || (isOffice ? 'Office' : 'Client Company')} ${compLoc ? `• ${compLoc}` : ''}<br/>
-                  <strong>${isOffice ? 'Contact In-Charge:' : 'Customer Contact:'}</strong> ${customer} (${customerPhone})<br/>
+                  <strong>Customer Name:</strong> ${effectiveCustomer}<br/>
+                  <strong>Phone Number:</strong> ${effectiveCustomerPhone}<br/>
                   <strong>Machine / Asset:</strong> ${machine}
                 </td>
                 <td style="width: 50%;">
@@ -632,8 +638,8 @@ export const exportDutiesToExcel = async ({
       'Location / Entity Type',
       'Company / Office Name',
       'Company Location',
-      'Contact Person',
-      'Contact Phone Number',
+      'Customer Name',
+      'Phone Number',
       'Machine Name',
       'Work Type',
       'In Time',
@@ -692,6 +698,11 @@ export const exportDutiesToExcel = async ({
         d.company?.companyType === 'office' ||
         (compName && compName.toLowerCase().includes('office'));
 
+      const effectiveCustomer = isOffice ? 'Office' : customer;
+      const effectiveCustomerPhone = isOffice
+        ? (d.company?.companyPhoneNumber || customerPhone || '')
+        : customerPhone;
+
       return [
         index + 1,
         escapeCsv(dutyId),
@@ -702,8 +713,8 @@ export const exportDutiesToExcel = async ({
         escapeCsv(isOffice ? 'Office' : 'Client Company'),
         escapeCsv(compName || (isOffice ? 'Office' : 'Client Company')),
         escapeCsv(compLoc),
-        escapeCsv(customer),
-        escapeCsv(customerPhone),
+        escapeCsv(effectiveCustomer),
+        escapeCsv(effectiveCustomerPhone),
         escapeCsv(machine),
         escapeCsv(workType),
         escapeCsv(inTime),

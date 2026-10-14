@@ -15,17 +15,20 @@ export const validateCreateDuty = [
     .isMongoId()
     .withMessage('Invalid company ID format'),
   body('customerName')
+    .optional({ checkFalsy: true })
     .trim()
-    .notEmpty()
-    .withMessage('Customer name is required')
     .isLength({ max: 100 })
     .withMessage('Customer name cannot exceed 100 characters'),
   body('customerPhoneNumber')
+    .optional({ checkFalsy: true })
     .trim()
-    .notEmpty()
-    .withMessage('Customer phone number is required')
-    .matches(/^(?:\+91)?[0-9]{10}$/)
-    .withMessage('Customer phone number must be exactly 10 digits'),
+    .custom((val) => {
+      if (!val) return true;
+      if (!/^(?:\+91)?[0-9]{10}$/.test(val)) {
+        throw new Error('Customer phone number must be exactly 10 digits');
+      }
+      return true;
+    }),
   body('machineName')
     .trim()
     .notEmpty()
@@ -99,16 +102,19 @@ export const validateUpdateDuty = [
     .isMongoId()
     .withMessage('Invalid company ID format'),
   body('customerName')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
-    .notEmpty()
-    .withMessage('Customer name cannot be empty')
     .isLength({ max: 100 }),
   body('customerPhoneNumber')
-    .optional()
+    .optional({ checkFalsy: true })
     .trim()
-    .matches(/^(?:\+91)?[0-9]{10}$/)
-    .withMessage('Customer phone number must be exactly 10 digits'),
+    .custom((val) => {
+      if (!val) return true;
+      if (!/^(?:\+91)?[0-9]{10}$/.test(val)) {
+        throw new Error('Customer phone number must be exactly 10 digits');
+      }
+      return true;
+    }),
   body('machineName')
     .optional()
     .trim()

@@ -493,14 +493,14 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
               {item.inTime} - {item.outTime}
             </Text>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              {isItemOffice ? 'Contact In-Charge:' : 'Customer Contact:'}
-            </Text>
-            <Text style={styles.detailValue}>
-              {item.customerName} ({item.customerPhoneNumber})
-            </Text>
-          </View>
+          {!isItemOffice && item.customerName ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Customer Contact:</Text>
+              <Text style={styles.detailValue}>
+                {item.customerName} ({item.customerPhoneNumber || 'N/A'})
+              </Text>
+            </View>
+          ) : null}
           {item.location?.latitude ? (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>GPS Coordinates:</Text>

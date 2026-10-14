@@ -52,13 +52,13 @@ const dutySchema = new mongoose.Schema(
     },
     customerName: {
       type: String,
-      required: [true, 'Customer name is required'],
+      default: 'Office',
       trim: true,
       maxlength: [100, 'Customer name cannot exceed 100 characters'],
     },
     customerPhoneNumber: {
       type: String,
-      required: [true, 'Customer phone number is required'],
+      default: '',
       trim: true,
     },
     machineName: {

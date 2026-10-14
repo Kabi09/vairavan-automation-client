@@ -82,6 +82,50 @@
 ## Change History
 
 ### 2026-10-14
+#### Office Duty Contact Fields Removal and Export Defaults (Customer Name: Office, Phone: Office Phone Number)
+- What was changed:
+  - **Duty Form Screen (`DutyFormScreen.jsx`)**:
+    - Removed `Customer Contact Name` and `Customer Phone Number` inputs completely when work location is `Office` (`companyCategory === 'office'`); inputs are now only displayed and required for `Client Company`.
+    - Updated `validate()` so that contact name and phone number validation is strictly skipped for office duties.
+    - Updated `isFormComplete` submit gate so that completion does not require customer contact fields when `companyCategory === 'office'`.
+    - In `handleSubmit`, automatically sets `customerName: 'Office'` and `customerPhoneNumber: officePhone` (from selected office's `companyPhoneNumber`) when submitting office duties.
+    - Updated lightbox preview subtitle to display the Office name instead of contact name for office duties.
+  - **Duty Details Screen (`DutyDetailsScreen.jsx`)**:
+    - Removed `In-Charge: <name>` from top banner when `isOffice` is true; displays pure Office name and location.
+    - Removed `Contact In-Charge:` and `Contact Phone:` rows entirely from the Equipment & Work Type card when `isOffice` is true.
+    - Updated lightbox preview subtitles to display Office name instead of customer contact.
+  - **Admin All Duties Sheet & Cards (`AllDutiesScreen.jsx`)**:
+    - List cards: When `isItemOffice` is true, displays the Office name in place of customer contact name, accompanied by office location.
+    - Detail sheet modal: For office duties, header block is labeled `"Office Location"`, and the contact in-charge row is completely omitted.
+  - **My Duties Screen (`MyDutiesScreen.jsx`)**:
+    - List cards: When `isItemOffice` is true, displays the Office name in place of customer contact name, accompanied by office location.
+  - **Admin Employee Details Screen (`EmployeeDetailsScreen.jsx`)**:
+    - List cards: Omits the Customer Contact row completely when `isItemOffice` is true.
+  - **PDF & Excel Exports (`exportUtils.js`)**:
+    - PDF export: For office duties, customer name defaults to `'Office'` and phone defaults to the office's registered phone number (`companyPhoneNumber`).
+    - Excel export: Customer Name column defaults to `'Office'` and Phone Number column defaults to the office's registered phone number for office duties; client company duties retain customer contact name and customer phone number.
+  - **Backend Model, Validator & Controller (`Duty.js`, `dutyValidator.js`, `dutyController.js`)**:
+    - `Duty.js`: `customerName` defaults to `'Office'` and `customerPhoneNumber` defaults to `''` instead of hard schema requirements.
+    - `dutyValidator.js`: `customerName` and `customerPhoneNumber` are optional in `validateCreateDuty` and `validateUpdateDuty`.
+    - `dutyController.js`: `createDuty` and `updateDuty` automatically default `customerName` to `'Office'` and `customerPhoneNumber` to `company.companyPhoneNumber` when the associated company is classified as `'office'`.
+- Files changed:
+  - `backend/src/models/Duty.js`
+  - `backend/src/validators/dutyValidator.js`
+  - `backend/src/controllers/dutyController.js`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `project.md`
+- Logic changed:
+  - Office duties do not prompt employees for or display any contact/in-charge name or phone number anywhere in forms, cards, or detail sheets.
+  - Export reports automatically populate customer name as "Office" and phone as the office company phone number for all office duty records.
+- Reason: User requested: "work-office - dont want contact/in-charge and contact number;; export -> customer name -office,phone-office number;; fix".
+- Impact: Streamlined office duty workflow with zero redundant contact fields, clean detail views, and accurate PDF/Excel exports.
+
+### 2026-10-14
 #### Office vs Client Dynamic Labeling in Duty Details, Forms, Lists, and Reports
 - What was changed:
   - **Duty Details View Dynamic Office Support (`DutyDetailsScreen.jsx`)**:

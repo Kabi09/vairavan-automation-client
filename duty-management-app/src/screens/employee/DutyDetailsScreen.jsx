@@ -121,9 +121,9 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
     setPreviewImageUri(url);
     setPreviewTitle(`Proof Photo #${index + 1}`);
     setPreviewSubtitle(
-      duty.customerName
-        ? (isOffice ? `Contact: ${duty.customerName}` : `Client: ${duty.customerName}`)
-        : (isOffice ? 'Office Duty Verification' : 'Service Verification')
+      isOffice
+        ? (duty.company?.companyName || 'Office Duty')
+        : (duty.customerName ? `Client: ${duty.customerName}` : 'Service Verification')
     );
     setPreviewTimestamp(formatDate(duty.dutyDate) || '');
     setPreviewIsSignature(false);
@@ -134,9 +134,9 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
     setPreviewImageUri(url);
     setPreviewTitle(title);
     setPreviewSubtitle(
-      duty.customerName
-        ? (isOffice ? `Contact: ${duty.customerName}` : `Client: ${duty.customerName}`)
-        : (isOffice ? 'Office Duty Verification' : 'Service Verification')
+      isOffice
+        ? (duty.company?.companyName || 'Office Duty')
+        : (duty.customerName ? `Client: ${duty.customerName}` : 'Service Verification')
     );
     setPreviewTimestamp(signatureTimestamp);
     setPreviewIsSignature(true);
@@ -159,11 +159,11 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
               {isOffice ? (duty.company?.companyName || 'Office') : duty.customerName}
             </Text>
           </View>
-          <Text style={styles.companyName}>
-            {isOffice
-              ? `In-Charge: ${duty.customerName || 'Office Staff'}`
-              : (duty.company?.companyName || 'Client Company')}
-          </Text>
+          {!isOffice ? (
+            <Text style={styles.companyName}>
+              {duty.company?.companyName || 'Client Company'}
+            </Text>
+          ) : null}
           {(duty.company?.location || duty.location?.address) ? (
             <View style={styles.companyLocationRow}>
               <Ionicons name="location-outline" size={14} color={COLORS.textSecondary} />
@@ -208,14 +208,12 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
             <Text style={styles.detailValue}>{formatWorkType(duty)}</Text>
           </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>{isOffice ? 'Contact In-Charge:' : 'Contact Phone:'}</Text>
-            <Text style={styles.detailValue}>
-              {isOffice
-                ? `${duty.customerName} (${duty.customerPhoneNumber})`
-                : duty.customerPhoneNumber}
-            </Text>
-          </View>
+          {!isOffice ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Contact Phone:</Text>
+              <Text style={styles.detailValue}>{duty.customerPhoneNumber || 'N/A'}</Text>
+            </View>
+          ) : null}
         </Card>
 
         {/* Work Description */}

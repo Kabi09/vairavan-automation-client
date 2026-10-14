@@ -240,9 +240,9 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setPreviewImageUri(uri);
     setPreviewTitle(`Proof Photo #${index + 1}`);
     setPreviewSubtitle(
-      customerName
-        ? (companyCategory === 'office' ? `Contact: ${customerName}` : `Client: ${customerName}`)
-        : (companyCategory === 'office' ? 'Office Duty' : 'Service Verification')
+      companyCategory === 'office'
+        ? (companies.find((c) => c._id === selectedCompanyId)?.companyName || 'Office Duty')
+        : (customerName ? `Client: ${customerName}` : 'Service Verification')
     );
     setPreviewTimestamp(dutyDate || '');
     setPreviewIsSignature(false);
@@ -254,9 +254,9 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setPreviewImageUri(signatureData?.dataUri || signatureData?.url || '');
     setPreviewTitle(companyCategory === 'office' ? 'Office Sign-Off' : 'Customer Signature');
     setPreviewSubtitle(
-      customerName
-        ? (companyCategory === 'office' ? `Contact: ${customerName}` : `Client: ${customerName}`)
-        : (companyCategory === 'office' ? 'Office Duty' : 'Service Verification')
+      companyCategory === 'office'
+        ? (companies.find((c) => c._id === selectedCompanyId)?.companyName || 'Office Duty')
+        : (customerName ? `Client: ${customerName}` : 'Service Verification')
     );
     setPreviewTimestamp(signatureData?.timestamp || '');
     setPreviewIsSignature(true);
@@ -321,13 +321,15 @@ export const DutyFormScreen = ({ navigation, route }) => {
     if (!selectedCompanyId) {
       errors.company = companyCategory === 'office' ? 'Please select an office' : 'Please select a client company';
     }
-    if (!customerName.trim()) {
-      errors.customerName = companyCategory === 'office' ? 'Contact in-charge name is required' : 'Customer contact name is required';
-    }
-    if (!customerPhone.trim()) {
-      errors.customerPhone = companyCategory === 'office' ? 'Contact phone is required' : 'Customer phone is required';
-    } else if (!isValidPhone(customerPhone)) {
-      errors.customerPhone = 'Contact phone must be exactly 10 digits';
+    if (companyCategory === 'client') {
+      if (!customerName.trim()) {
+        errors.customerName = 'Customer contact name is required';
+      }
+      if (!customerPhone.trim()) {
+        errors.customerPhone = 'Customer phone is required';
+      } else if (!isValidPhone(customerPhone)) {
+        errors.customerPhone = 'Customer phone must be exactly 10 digits';
+      }
     }
     if (!machineName.trim()) errors.machineName = 'Machine name is required';
     if (workType === 'Other' && !customWorkDetails.trim()) {
@@ -348,9 +350,11 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const isFormComplete = Boolean(
     dutyDate &&
     selectedCompanyId &&
-    customerName.trim() &&
-    customerPhone.trim().length === 10 &&
-    isValidPhone(customerPhone) &&
+    (companyCategory === 'office' || (
+      customerName.trim() &&
+      customerPhone.trim().length === 10 &&
+      isValidPhone(customerPhone)
+    )) &&
     machineName.trim() &&
     (workType !== 'Other' || customWorkDetails.trim()) &&
     isValidTimeFormat(inTime) &&
@@ -429,11 +433,17 @@ export const DutyFormScreen = ({ navigation, route }) => {
           ? `[Work: ${customWorkDetails.trim()}]\n${workDescription.trim()}`
           : workDescription.trim();
 
+      const selectedCompany = companies.find((c) => c._id === selectedCompanyId);
+      const isOffice = companyCategory === 'office';
+      const officePhone = selectedCompany?.companyPhoneNumber
+        ? selectedCompany.companyPhoneNumber.replace(/\D/g, '').slice(0, 10)
+        : '';
+
       const payload = {
         dutyDate,
         companyId: selectedCompanyId,
-        customerName: customerName.trim(),
-        customerPhoneNumber: customerPhone.trim(),
+        customerName: isOffice ? 'Office' : customerName.trim(),
+        customerPhoneNumber: isOffice ? officePhone : customerPhone.trim(),
         machineName: machineName.trim(),
         workType,
         customWorkType: workType === 'Other' ? customWorkDetails.trim() : '',
@@ -652,31 +662,36 @@ export const DutyFormScreen = ({ navigation, route }) => {
               <Text style={styles.errorText}>{fieldErrors.company}</Text>
             ) : null}
 
-            <TextInputField
-              label={companyCategory === 'office' ? 'Contact / In-Charge Name' : 'Customer Contact Name'}
-              placeholder={companyCategory === 'office' ? 'e.g. Senthil Kumar (Office In-Charge)' : 'e.g. Senthil Kumar (Factory Mgr)'}
-              value={customerName}
-              onChangeText={setCustomerName}
-              error={fieldErrors.customerName}
-              required
-            />
+            {/* Contact details: only shown for Client Company */}
+            {companyCategory === 'client' ? (
+              <>
+                <TextInputField
+                  label="Customer Contact Name"
+                  placeholder="e.g. Senthil Kumar (Factory Mgr)"
+                  value={customerName}
+                  onChangeText={setCustomerName}
+                  error={fieldErrors.customerName}
+                  required
+                />
 
-            <TextInputField
-              label={companyCategory === 'office' ? 'Contact Phone Number (10 Digits)' : 'Customer Phone Number (10 Digits)'}
-              placeholder="10-digit mobile number"
-              value={customerPhone}
-              onChangeText={(t) => {
-                const cleaned = t.replace(/\D/g, '').slice(0, 10);
-                setCustomerPhone(cleaned);
-                if (fieldErrors.customerPhone) {
-                  setFieldErrors((prev) => ({ ...prev, customerPhone: null }));
-                }
-              }}
-              keyboardType="number-pad"
-              maxLength={10}
-              error={fieldErrors.customerPhone}
-              required
-            />
+                <TextInputField
+                  label="Customer Phone Number (10 Digits)"
+                  placeholder="10-digit mobile number"
+                  value={customerPhone}
+                  onChangeText={(t) => {
+                    const cleaned = t.replace(/\D/g, '').slice(0, 10);
+                    setCustomerPhone(cleaned);
+                    if (fieldErrors.customerPhone) {
+                      setFieldErrors((prev) => ({ ...prev, customerPhone: null }));
+                    }
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  error={fieldErrors.customerPhone}
+                  required
+                />
+              </>
+            ) : null}
 
             <TextInputField
               label="Machine Name / Model"

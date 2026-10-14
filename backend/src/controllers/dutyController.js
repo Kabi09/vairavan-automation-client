@@ -78,12 +78,18 @@ export const createDuty = asyncHandler(async (req, res) => {
       }
     : { url: '', publicId: '', key: '', signedAt: null };
 
+  const isOffice = company.companyType === 'office';
+  const finalCustomerName = isOffice ? 'Office' : (customerName || 'N/A').trim();
+  const finalCustomerPhoneNumber = isOffice
+    ? (company.companyPhoneNumber || customerPhoneNumber || '')
+    : (customerPhoneNumber || '').trim();
+
   const dutyData = {
     employee: req.user._id, // Authenticated user ID (never client-supplied)
     dutyDate,
     company: companyId,
-    customerName,
-    customerPhoneNumber,
+    customerName: finalCustomerName,
+    customerPhoneNumber: finalCustomerPhoneNumber,
     machineName,
     workType,
     customWorkType: customWorkType ? customWorkType.trim() : '',
@@ -301,9 +307,17 @@ export const updateDuty = asyncHandler(async (req, res) => {
     duty.company = companyId;
   }
 
-  if (dutyDate) duty.dutyDate = dutyDate;
-  if (customerName) duty.customerName = customerName;
-  if (customerPhoneNumber) duty.customerPhoneNumber = customerPhoneNumber;
+  const activeCompany = await Company.findById(duty.company);
+  const isOffice = activeCompany?.companyType === 'office';
+  if (isOffice) {
+    duty.customerName = 'Office';
+    if (activeCompany?.companyPhoneNumber) {
+      duty.customerPhoneNumber = activeCompany.companyPhoneNumber;
+    }
+  } else {
+    if (customerName) duty.customerName = customerName;
+    if (customerPhoneNumber) duty.customerPhoneNumber = customerPhoneNumber;
+  }
   if (machineName) duty.machineName = machineName;
   if (workType) duty.workType = workType;
   if (customWorkType !== undefined) duty.customWorkType = customWorkType ? customWorkType.trim() : '';

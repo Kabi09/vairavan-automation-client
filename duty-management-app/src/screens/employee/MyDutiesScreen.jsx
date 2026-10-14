@@ -201,22 +201,37 @@ export const MyDutiesScreen = ({ navigation }) => {
             <View style={styles.idRow}>
               <Text style={styles.dutyIdBadge}>{dutyId}</Text>
             </View>
-            <Text style={styles.customerName}>{item.customerName}</Text>
             {(() => {
               const isItemOffice =
                 item.company?.companyType === 'office' ||
                 (typeof item.company?.companyName === 'string' &&
                   item.company.companyName.toLowerCase().includes('office'));
               return (
-                <Text style={styles.companyName}>
-                  <Ionicons
-                    name={isItemOffice ? 'business' : 'storefront-outline'}
-                    size={13}
-                    color={COLORS.textSecondary}
-                  />{' '}
-                  {item.company?.companyName || (isItemOffice ? 'Office' : 'Company')}
-                  {companyLocation ? ` • ${companyLocation}` : ''}
-                </Text>
+                <>
+                  <Text style={styles.customerName}>
+                    {isItemOffice ? (item.company?.companyName || 'Office') : item.customerName}
+                  </Text>
+                  {!isItemOffice ? (
+                    <Text style={styles.companyName}>
+                      <Ionicons
+                        name="storefront-outline"
+                        size={13}
+                        color={COLORS.textSecondary}
+                      />{' '}
+                      {item.company?.companyName || 'Company'}
+                      {companyLocation ? ` • ${companyLocation}` : ''}
+                    </Text>
+                  ) : companyLocation ? (
+                    <Text style={styles.companyName}>
+                      <Ionicons
+                        name="business"
+                        size={13}
+                        color={COLORS.textSecondary}
+                      />{' '}
+                      {companyLocation}
+                    </Text>
+                  ) : null}
+                </>
               );
             })()}
           </View>

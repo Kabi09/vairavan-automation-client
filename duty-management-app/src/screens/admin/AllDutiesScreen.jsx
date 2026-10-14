@@ -114,9 +114,9 @@ export const AllDutiesScreen = ({ route, navigation }) => {
     setPreviewImageUri(url);
     setPreviewTitle(`Proof Photo #${index + 1}`);
     setPreviewSubtitle(
-      selectedDuty?.customerName
-        ? (isSelectedDutyOffice ? `Contact: ${selectedDuty.customerName}` : `Client: ${selectedDuty.customerName}`)
-        : (isSelectedDutyOffice ? 'Office Duty' : 'Service Verification')
+      isSelectedDutyOffice
+        ? (selectedDuty?.company?.companyName || 'Office Duty')
+        : (selectedDuty?.customerName ? `Client: ${selectedDuty.customerName}` : 'Service Verification')
     );
     setPreviewTimestamp(selectedDuty?.dutyDate ? formatDate(selectedDuty.dutyDate) : '');
     setPreviewIsSignature(false);
@@ -143,9 +143,9 @@ export const AllDutiesScreen = ({ route, navigation }) => {
     setPreviewImageUri(url);
     setPreviewTitle(title);
     setPreviewSubtitle(
-      selectedDuty?.customerName
-        ? (isSelectedDutyOffice ? `Contact: ${selectedDuty.customerName}` : `Client: ${selectedDuty.customerName}`)
-        : (isSelectedDutyOffice ? 'Office Duty' : 'Service Verification')
+      isSelectedDutyOffice
+        ? (selectedDuty?.company?.companyName || 'Office Duty')
+        : (selectedDuty?.customerName ? `Client: ${selectedDuty.customerName}` : 'Service Verification')
     );
     setPreviewTimestamp(sigTime);
     setPreviewIsSignature(true);
@@ -365,16 +365,29 @@ export const AllDutiesScreen = ({ route, navigation }) => {
             <View style={styles.idRow}>
               <Text style={styles.dutyIdBadge}>{dutyId}</Text>
             </View>
-            <Text style={styles.customerName}>{item.customerName}</Text>
-            <Text style={styles.companyName}>
-              <Ionicons
-                name={isItemOffice ? 'business' : 'storefront-outline'}
-                size={13}
-                color={COLORS.textSecondary}
-              />{' '}
-              {item.company?.companyName || (isItemOffice ? 'Office' : 'Company')}
-              {companyLocation ? ` • ${companyLocation}` : ''}
+            <Text style={styles.customerName}>
+              {isItemOffice ? (item.company?.companyName || 'Office') : item.customerName}
             </Text>
+            {!isItemOffice ? (
+              <Text style={styles.companyName}>
+                <Ionicons
+                  name="storefront-outline"
+                  size={13}
+                  color={COLORS.textSecondary}
+                />{' '}
+                {item.company?.companyName || 'Company'}
+                {companyLocation ? ` • ${companyLocation}` : ''}
+              </Text>
+            ) : companyLocation ? (
+              <Text style={styles.companyName}>
+                <Ionicons
+                  name="business"
+                  size={13}
+                  color={COLORS.textSecondary}
+                />{' '}
+                {companyLocation}
+              </Text>
+            ) : null}
           </View>
           <View style={styles.dateBadge}>
             <Ionicons name="calendar-outline" size={12} color={COLORS.primary} />
@@ -627,15 +640,17 @@ export const AllDutiesScreen = ({ route, navigation }) => {
               {/* Company & Customer */}
               <View style={styles.detailBlock}>
                 <Text style={styles.blockLabel}>
-                  {isSelectedDutyOffice ? 'Office & Contact' : 'Client Company & Contact'}
+                  {isSelectedDutyOffice ? 'Office Location' : 'Client Company & Contact'}
                 </Text>
                 <Text style={styles.blockValue}>
                   {selectedDuty?.company?.companyName || (isSelectedDutyOffice ? 'Office' : 'Client Company')}
                   {selectedDuty?.company?.location ? ` (${selectedDuty?.company?.location})` : ''}
                 </Text>
-                <Text style={styles.blockSub}>
-                  {isSelectedDutyOffice ? 'Contact In-Charge:' : 'Contact:'} {selectedDuty?.customerName} ({selectedDuty?.customerPhoneNumber})
-                </Text>
+                {!isSelectedDutyOffice && selectedDuty?.customerName ? (
+                  <Text style={styles.blockSub}>
+                    Contact: {selectedDuty?.customerName} ({selectedDuty?.customerPhoneNumber || 'N/A'})
+                  </Text>
+                ) : null}
               </View>
 
               {/* Machine & Working Hours */}
