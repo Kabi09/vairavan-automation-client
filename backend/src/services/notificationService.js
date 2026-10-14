@@ -35,11 +35,14 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
   let totalDelivered = 0;
   let totalFailed = 0;
 
+  const CLOUDINARY_LOGO_URL =
+    'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
+
   const logoImageUrl =
     notificationPayload.imageUrl ||
-    (process.env.R2_PUBLIC_URL
+    (process.env.R2_PUBLIC_URL && !process.env.R2_PUBLIC_URL.includes('yourbucketid')
       ? `${process.env.R2_PUBLIC_URL.replace(/\/+$/, '')}/vairavan_app/app_logo.png`
-      : 'https://pub-yourbucketid.r2.dev/vairavan_app/app_logo.png');
+      : CLOUDINARY_LOGO_URL);
 
   // 1. Deliver native FCM tokens via Firebase Admin SDK
   if (fcmTokens.length > 0) {
@@ -66,6 +69,8 @@ export const sendMulticastNotification = async (tokens, notificationPayload, dat
               defaultSound: true,
               defaultVibrateTimings: true,
               imageUrl: logoImageUrl,
+              icon: 'notification_icon',
+              color: '#0F52BA',
             },
           },
         };

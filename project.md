@@ -82,6 +82,23 @@
 ## Change History
 
 ### 2026-10-14
+#### Notification Icon Silhouette and Large Image Delivery Fix
+- What was changed:
+  - **Monochrome White Silhouette Notification Icon (`notification-icon.png`)**:
+    - Identified that `assets/notification-icon.png` was essentially an empty/corrupted PNG (9,214 transparent pixels out of 9,216), which caused Android to render a blank/hollow square box inside the notification circular badge.
+    - Generated a crisp 96x96 pure white (`#FFFFFF`) silhouette emblem on a transparent background following Android's official notification icon specifications.
+    - Paired with `app.json`'s `color: "#0F52BA"`, Android now renders a clean, vibrant blue circular badge with the white Vairavan emblem centered inside (identical to how Swiggy renders its circular badge).
+  - **Backend FCM Notification Payload (`notificationService.js`)**:
+    - Replaced dead fallback URL (`https://pub-yourbucketid.r2.dev/...`) with the live Cloudinary Vairavan Automation logo (`https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png`).
+    - Added `icon: 'notification_icon'` and `color: '#0F52BA'` to `android.notification` in FCM payload, enabling Android to properly resolve the small icon resource and display the large thumbnail image.
+- Files changed:
+  - `duty-management-app/assets/notification-icon.png`
+  - `backend/src/services/notificationService.js`
+  - `project.md`
+- Reason: User requested: "notification - img icon not show why any reason what can i do notifican add icon imge ; like swigg icon show" with screenshot of blank square in notification shade.
+- Impact: Proper branding on Android notification badges, matching professional apps like Swiggy, and valid rich image delivery.
+
+### 2026-10-14
 #### Client Company Phone Number Autofill to Customer Phone Field
 - What was changed:
   - **Duty Form Screen (`DutyFormScreen.jsx`)**:
