@@ -15,6 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import TextInputField from '../../components/TextInputField';
 import PrimaryButton from '../../components/PrimaryButton';
 import ErrorMessage from '../../components/ErrorMessage';
+import BrandingFooter from '../../components/BrandingFooter';
 import { isValidEmail } from '../../utils/validators';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { APP_CONFIG } from '../../constants/config';
@@ -192,6 +193,8 @@ export const LoginScreen = () => {
               Authorized personnel only. Contact Admin for account creation.
             </Text>
           </View>
+
+          <BrandingFooter style={styles.brandingFooter} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -279,6 +282,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
     textAlign: 'center',
+  },
+  brandingFooter: {
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
   },
 });
 

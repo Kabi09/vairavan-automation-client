@@ -23,6 +23,7 @@ import TextInputField from '../../components/TextInputField';
 import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
 import ErrorMessage from '../../components/ErrorMessage';
+import BrandingFooter from '../../components/BrandingFooter';
 import ConfirmationDialog from '../../components/ConfirmationDialog';
 import DatePickerModal from '../../components/DatePickerModal';
 import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
@@ -301,6 +302,9 @@ export const ProfileScreen = ({ navigation }) => {
           onPress={() => setLogoutModalVisible(true)}
           style={styles.logoutButton}
         />
+
+        {/* Branding Footer */}
+        <BrandingFooter style={styles.brandingFooter} />
       </ScrollView>
 
       {/* Edit Contact Modal */}
@@ -628,6 +632,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginTop: SPACING.md,
     marginBottom: SPACING.sm,
+  },
+  brandingFooter: {
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xl,
   },
 });
 

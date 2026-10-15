@@ -78,8 +78,45 @@
 - `AdminSendMessageModal`: Admin broadcast and targeted message dispatch modal with two simple fields (Message box and Multi-select employee picker with "All Employees" toggle).
 - `EmployeeMessagesModal`: Employee modal displaying the list of received management notices and announcements with unread indicators and 1-tap full detail viewing.
 - `MessageDetailsModal`: Full message view modal displaying sender, timestamp, broadcast/direct tag, and complete notice content.
+- `BrandingFooter`: Reusable minimal branding attribution footer ("Developed by Ameyy Digital Services") with a clickable link to `https://www.ameyy.in/` supporting web and mobile opening in a new tab/browser.
 
 ## Change History
+
+### 2026-10-15
+#### Branding Footer Addition & Expansion (Developed by Ameyy Digital Services)
+- What was changed:
+  - **External Link Icon**: Updated `BrandingFooter` component (`duty-management-app/src/components/BrandingFooter.jsx`) with a small 11px external link icon (`Ionicons` `open-outline`) styled adjacent to "Ameyy Digital Services".
+  - **Expanded Screen Integration**:
+    - **Main / Auth**: Added `BrandingFooter` to `LoginScreen.jsx` beneath the security note.
+    - **Dashboards**: Added `BrandingFooter` to `AdminDashboardScreen.jsx` and `EmployeeDashboardScreen.jsx` at the bottom of the main scroll container.
+    - **Leaves**: Added `BrandingFooter` to `LeaveRequestsScreen.jsx` (Admin FlatList `ListFooterComponent`), `MyLeavesScreen.jsx` (Employee FlatList `ListFooterComponent`), and `LeaveRequestScreen.jsx` (Employee leave application form).
+    - **Profile**: Added `BrandingFooter` to `ProfileScreen.jsx` (common profile for Admin and Employee) right below the Sign Out button.
+  - **PDF Reports Branding**: Added `BRANDING_PDF_FOOTER_HTML` to `exportUtils.js` displaying "Developed by [Ameyy Digital Services](https://www.ameyy.in/)" with an inline vector external link icon across all generated PDF documents:
+    - Work Reports (`exportDutiesToPDF`)
+    - Leave Documentation (`exportLeavesToPDF`)
+    - Employee Directory (`exportEmployeesToPDF`)
+    - Company / Client Directory (`exportCompaniesToPDF`)
+  - **Link Functionality**: Configured multi-platform link opening: on Web it uses `window.open` with `target="_blank"` and `rel="noopener noreferrer"`; on iOS and Android native platforms it invokes `Linking.openURL` to launch in the external device browser.
+  - **Design & Theme Consistency**: Designed with minimal, clean typography and styling matching the app design system tokens (`COLORS.textMuted` for description text and `COLORS.primary` with underline for the brand link).
+- Files changed:
+  - `duty-management-app/src/components/BrandingFooter.jsx`
+  - `duty-management-app/src/screens/auth/LoginScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyLeavesScreen.jsx`
+  - `duty-management-app/src/screens/employee/LeaveRequestScreen.jsx`
+  - `duty-management-app/src/screens/common/ProfileScreen.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `project.md`
+- Logic changed:
+  - None.
+- Reason: User requested: "add very small icon; also add footer brand- admin,employee - dashbord,leave.profile; also export pdf ;"
+- Impact: Seamless, professional branding attribution across all core mobile app screens (login, dashboards, leave management, profile) and official exported PDF documents.
+
+
+
+
 
 ### 2026-10-14
 #### App Name Rebranding to VairaWorks and Firebase Configuration Update
@@ -2052,6 +2089,7 @@
   - Add Work Company Picker: Duty form location defaults to Office and auto-selects the first office; selecting Client Company automatically triggers the client company directory list modal.
   - Dynamic Office vs Client Duty Details & Views: When an Office is selected (`companyType === 'office'`), all duty views (`DutyDetailsScreen`, `AllDutiesScreen`, `MyDutiesScreen`, `EmployeeDetailsScreen`, `DutyFormScreen`) dynamically remove "Client Company", "Customer Contact", "Customer Signature", and "Service Verification", replacing them with "Office", "Contact In-Charge", "Office Sign-Off", and "Office Proof Photos". "Company" is only mentioned when it is an actual client company.
   - Export Verification: PDF and Excel exports include the `Type` / classification column for all companies and distinguish Office vs Client Company for duty reports.
+  - Branding Footer: Added reusable `BrandingFooter` ("Developed by Ameyy Digital Services" with small external link icon) across Login (`LoginScreen.jsx`), Dashboards (`AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`), Leaves (`LeaveRequestsScreen.jsx`, `MyLeavesScreen.jsx`, `LeaveRequestScreen.jsx`), Profile (`ProfileScreen.jsx`), and PDF exports (`exportUtils.js`) with cross-platform new-tab web and mobile link handling to `https://www.ameyy.in/`.
   - 41/41 backend unit tests passing (6 suites); 0 syntax errors and 0 raw text issues across all mobile files.
 - In Progress:
   - None.

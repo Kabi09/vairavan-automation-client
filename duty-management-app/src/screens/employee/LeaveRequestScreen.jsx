@@ -17,6 +17,7 @@ import Card from '../../components/Card';
 import TextInputField from '../../components/TextInputField';
 import PrimaryButton from '../../components/PrimaryButton';
 import ErrorMessage from '../../components/ErrorMessage';
+import BrandingFooter from '../../components/BrandingFooter';
 import DatePickerModal from '../../components/DatePickerModal';
 import { formatISODateOnly, isDateRangeValid } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
@@ -172,6 +173,8 @@ export const LeaveRequestScreen = ({ navigation }) => {
             loading={loading}
             style={styles.submitBtn}
           />
+
+          <BrandingFooter style={styles.brandingFooter} />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -224,7 +227,10 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   submitBtn: {
-    marginBottom: SPACING.xxl,
+    marginBottom: SPACING.lg,
+  },
+  brandingFooter: {
+    marginBottom: SPACING.xl,
   },
   fieldContainer: {
     marginBottom: SPACING.md,

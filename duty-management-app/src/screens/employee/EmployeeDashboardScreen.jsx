@@ -22,6 +22,7 @@ import Card from '../../components/Card';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmployeeMessagesModal from '../../components/EmployeeMessagesModal';
+import BrandingFooter from '../../components/BrandingFooter';
 import { formatDate, formatTime, getGreeting, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
@@ -643,6 +644,8 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                 </Card>
               ))
             )}
+            {/* Branding Footer */}
+            <BrandingFooter style={styles.brandingFooter} />
           </>
         )}
       </ScrollView>
@@ -1551,6 +1554,10 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 3.5,
     backgroundColor: COLORS.primary,
+  },
+  brandingFooter: {
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.md,
   },
 });
 

@@ -23,6 +23,7 @@ import SecondaryButton from '../../components/SecondaryButton';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
+import BrandingFooter from '../../components/BrandingFooter';
 import DatePickerModal from '../../components/DatePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
 import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
@@ -352,6 +353,7 @@ export const LeaveRequestsScreen = () => {
                 description={`No ${activeTab || ''} leave applications to display.`}
               />
             }
+            ListFooterComponent={<BrandingFooter style={styles.brandingFooter} />}
           />
         )}
       </View>
@@ -695,6 +697,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  brandingFooter: {
+    marginVertical: SPACING.md,
   },
 });
 

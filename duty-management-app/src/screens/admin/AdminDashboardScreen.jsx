@@ -22,6 +22,7 @@ import Card from '../../components/Card';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import AdminSendMessageModal from '../../components/AdminSendMessageModal';
+import BrandingFooter from '../../components/BrandingFooter';
 import { formatDate, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
@@ -639,6 +640,8 @@ export const AdminDashboardScreen = ({ navigation }) => {
                 </Card>
               ))
             )}
+            {/* Branding Footer */}
+            <BrandingFooter style={styles.brandingFooter} />
           </>
         )}
       </ScrollView>
@@ -1607,6 +1610,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11.5,
     fontWeight: '700',
+  },
+  brandingFooter: {
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.md,
   },
 });
 

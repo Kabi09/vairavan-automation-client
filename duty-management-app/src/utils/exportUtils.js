@@ -9,6 +9,12 @@ const LOGO_URL =
 
 const SAVED_DOWNLOAD_DIR_KEY = 'saved_download_directory_uri';
 
+const BRANDING_PDF_FOOTER_HTML = `
+  <div style="margin-top: 6px; font-size: 10px; color: #64748b; text-align: center;">
+    Developed by <a href="https://www.ameyy.in/" target="_blank" style="color: #1e40af; font-weight: 600; text-decoration: underline; text-decoration-color: #1e40af;">Ameyy Digital Services</a> <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: 0px; margin-left: 1px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+  </div>
+`;
+
 /**
  * Format date nicely for display
  */
@@ -598,6 +604,7 @@ export const exportDutiesToPDF = async ({
 
         <div class="footer-note">
           Official Work Report Record • Vairavan Automation Client System
+          ${BRANDING_PDF_FOOTER_HTML}
         </div>
       </body>
       </html>
@@ -933,6 +940,7 @@ export const exportLeavesToPDF = async ({
 
         <div class="footer-note">
           Official Employee Leave Documentation • Vairavan Automation System
+          ${BRANDING_PDF_FOOTER_HTML}
         </div>
       </body>
       </html>
@@ -1200,6 +1208,7 @@ export const exportEmployeesToPDF = async ({
 
         <div class="footer-note">
           Official Employee Directory • Vairavan Automation System
+          ${BRANDING_PDF_FOOTER_HTML}
         </div>
       </body>
       </html>
@@ -1446,6 +1455,7 @@ export const exportCompaniesToPDF = async ({
 
         <div class="footer-note">
           Official Client Directory • Vairavan Automation System
+          ${BRANDING_PDF_FOOTER_HTML}
         </div>
       </body>
       </html>
