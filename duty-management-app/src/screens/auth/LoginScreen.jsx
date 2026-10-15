@@ -190,7 +190,7 @@ export const LoginScreen = () => {
           <View style={styles.footer}>
             <Ionicons name="shield-checkmark-outline" size={16} color={COLORS.textMuted} />
             <Text style={styles.footerText}>
-              Authorized personnel only. Contact Admin for account creation.
+              Authorized person only. Contact Admin for account creation.
             </Text>
           </View>
 

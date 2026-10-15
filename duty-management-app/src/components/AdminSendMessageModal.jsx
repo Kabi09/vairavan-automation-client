@@ -169,7 +169,7 @@ export const AdminSendMessageModal = ({ visible, onClose, onMessageSent }) => {
               </View>
               <View>
                 <Text style={styles.modalTitle}>Send Message</Text>
-                <Text style={styles.modalSubTitle}>Broadcast or targeted staff notice</Text>
+                <Text style={styles.modalSubTitle}>Broadcast or targeted Employee notice</Text>
               </View>
             </View>
             <TouchableOpacity

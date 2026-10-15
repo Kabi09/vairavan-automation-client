@@ -16,7 +16,7 @@ export const RootNavigator = () => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <LoadingIndicator message="Starting Duty Manager..." />
+        <LoadingIndicator message="Starting Work Manager..." />
       </View>
     );
   }
