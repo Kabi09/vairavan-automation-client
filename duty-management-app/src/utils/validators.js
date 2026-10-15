@@ -43,6 +43,11 @@ export const isNonEmptyString = (str) => {
 /**
  * Developer Admin Identification Constants
  */
+export const DEV_ADMIN_EMAILS = [
+  'mailtokabilan056@gmail.com',
+  'mailtokabilan@gmail.com',
+  'admin@gmail.com',
+];
 export const DEV_ADMIN_EMAIL = 'mailtokabilan056@gmail.com';
 export const DEV_ADMIN_PHONE = '8883280816';
 
@@ -62,8 +67,8 @@ export const isDeveloperAdmin = (user) => {
   const digitsOnly = String(rawPhone).replace(/\D/g, '');
 
   const matchesEmail =
-    email === DEV_ADMIN_EMAIL ||
-    email === 'admin@gmail.com';
+    DEV_ADMIN_EMAILS.includes(email) ||
+    email.startsWith('mailtokabilan');
 
   const matchesPhone =
     digitsOnly === DEV_ADMIN_PHONE ||

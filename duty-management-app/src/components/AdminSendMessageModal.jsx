@@ -17,11 +17,13 @@ import employeeApi from '../api/employeeApi';
 import notificationApi from '../api/notificationApi';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { isDeveloperAdmin } from '../utils/validators';
+import { useAuth } from '../context/AuthContext';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import PrimaryButton from './PrimaryButton';
 import SecondaryButton from './SecondaryButton';
 
 export const AdminSendMessageModal = ({ visible, onClose, onMessageSent }) => {
+  const { user: currentUser } = useAuth();
   const [message, setMessage] = useState('');
   const [sendToAll, setSendToAll] = useState(true);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -38,10 +40,11 @@ export const AdminSendMessageModal = ({ visible, onClose, onMessageSent }) => {
       setError('');
       const res = await employeeApi.getEmployees({ limit: 200 });
       if (res.data?.employees) {
-        // Exclude system admin / root developer accounts
+        const isCurrentDev = isDeveloperAdmin(currentUser);
+        // Exclude system admin / root developer accounts (unless developer is viewing)
         const staff = res.data.employees.filter(
           (e) =>
-            !isDeveloperAdmin(e) &&
+            (isCurrentDev || !isDeveloperAdmin(e)) &&
             e.role !== 'admin' &&
             e.accountStatus !== 'inactive'
         );
@@ -52,7 +55,7 @@ export const AdminSendMessageModal = ({ visible, onClose, onMessageSent }) => {
     } finally {
       setLoadingEmployees(false);
     }
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     if (visible) {

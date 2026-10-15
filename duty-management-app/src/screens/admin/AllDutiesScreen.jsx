@@ -37,9 +37,11 @@ import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils'
 import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
 import { isDeveloperAdmin } from '../../utils/validators';
+import { useAuth } from '../../context/AuthContext';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const AllDutiesScreen = ({ route, navigation }) => {
+  const { user: currentUser } = useAuth();
   const today = formatISODateOnly();
   const yesterday = getYesterdayDateString();
   const initialFilterToday = Boolean(route?.params?.filterToday);
@@ -161,15 +163,16 @@ export const AllDutiesScreen = ({ route, navigation }) => {
         companyApi.getCompanies({ limit: 200 }).catch(() => ({ data: { companies: [] } })),
       ]);
       if (empRes.data?.employees) {
+        const isCurrentDev = isDeveloperAdmin(currentUser);
         setEmployees(
-          empRes.data.employees.filter((e) => e.role !== 'admin' && !isDeveloperAdmin(e))
+          empRes.data.employees.filter((e) => e.role !== 'admin' && (isCurrentDev || !isDeveloperAdmin(e)))
         );
       }
       if (compRes.data?.companies) setCompanies(compRes.data.companies);
     } catch (err) {
       console.warn('Failed to load filter options:', err);
     }
-  }, []);
+  }, [currentUser]);
 
   // Fetch duties based on active filters
   const fetchDuties = useCallback(async () => {

@@ -26,9 +26,11 @@ import ConfirmationDialog from '../../components/ConfirmationDialog';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportEmployeesToPDF, exportEmployeesToExcel } from '../../utils/exportUtils';
 import { isDeveloperAdmin } from '../../utils/validators';
+import { useAuth } from '../../context/AuthContext';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const EmployeeListScreen = ({ navigation }) => {
+  const { user: currentUser } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,8 +56,12 @@ export const EmployeeListScreen = ({ navigation }) => {
       }
       const res = await employeeApi.getEmployees(params);
       if (res.data?.employees) {
-        // Exclude Developer Admin from User Management while keeping normal admins visible
-        const filtered = res.data.employees.filter((e) => !isDeveloperAdmin(e));
+        // Developer admin sees all employees and admins.
+        // Normal admin sees all employees and admins EXCEPT developer admin.
+        const isCurrentDev = isDeveloperAdmin(currentUser);
+        const filtered = isCurrentDev
+          ? res.data.employees
+          : res.data.employees.filter((e) => !isDeveloperAdmin(e));
         setEmployees(filtered);
       }
     } catch (err) {

@@ -83,21 +83,15 @@
 ## Change History
 
 ### 2026-10-15
-#### Frontend Developer Admin Filtering & User Selection
+#### Frontend Developer Admin Filtering & User Selection (Role-Based Visibility)
 - What was changed:
   - **Developer Admin Identification Helper (`validators.js`)**:
-    - Defined `isDeveloperAdmin(user)` alongside constants `DEV_ADMIN_EMAIL = 'mailtokabilan056@gmail.com'` and `DEV_ADMIN_PHONE = '8883280816'`.
-    - Evaluates user data and role: checks if `email === 'mailtokabilan056@gmail.com'` or `admin@gmail.com`, or clean digits match or end with `8883280816`, while preserving normal admin accounts (`role === 'admin'`) and regular employees.
-  - **Admin User Management List & Search (`EmployeeListScreen.jsx`)**:
-    - Replaced hardcoded `admin@gmail.com` filter with `!isDeveloperAdmin(e)`.
-    - The Developer Admin is hidden from the main account directory, live search bar, and PDF/Excel exports.
-    - Normal Admin users (`role === 'admin'`) remain fully visible with their `ADMIN` tag and remain searchable, editable, and exportable.
-  - **Leave Management Staff Dropdown Filter (`LeaveRequestsScreen.jsx`)**:
-    - Updated `loadEmployees` to exclude Developer Admin (`!isDeveloperAdmin(e)`).
-  - **Work Management Staff Dropdown Filter (`AllDutiesScreen.jsx`)**:
-    - Updated `loadFilterData` to exclude Developer Admin (`!isDeveloperAdmin(e)`).
-  - **Admin Send Message Modal Recipient Selection (`AdminSendMessageModal.jsx`)**:
-    - Updated `fetchEmployeesList` to exclude Developer Admin (`!isDeveloperAdmin(e)`).
+    - Defined `isDeveloperAdmin(user)` and `DEV_ADMIN_EMAILS = ['mailtokabilan056@gmail.com', 'mailtokabilan@gmail.com', 'admin@gmail.com']`, `DEV_ADMIN_PHONE = '8883280816'`.
+    - Matches emails starting with `mailtokabilan` or matching `DEV_ADMIN_EMAILS`, and phone numbers ending with `8883280816`.
+  - **Role-Based Visibility Integration (`EmployeeListScreen.jsx`, `LeaveRequestsScreen.jsx`, `AllDutiesScreen.jsx`, `AdminSendMessageModal.jsx`)**:
+    - Connected `useAuth()` to evaluate the current logged-in user (`currentUser`).
+    - **Developer Admin Logged In**: Displays ALL employees and ALL admins across directories, user lists, and selection options.
+    - **Normal Admin Logged In**: Displays all employees and normal admins, but strictly hides the Developer Admin account (`mailtokabilan056@gmail.com` / `mailtokabilan@gmail.com` / `8883280816`).
 - Files changed:
   - `duty-management-app/src/utils/validators.js`
   - `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`
@@ -106,9 +100,10 @@
   - `duty-management-app/src/components/AdminSendMessageModal.jsx`
   - `project.md`
 - Logic changed:
-  - Previously, frontend filtering only excluded `admin@gmail.com`, leaving the active Developer Admin (`mailtokabilan056@gmail.com` / `8883280816`) visible in the user management list. Now `isDeveloperAdmin` universally filters out the Developer Admin across all user lists, search queries, and dropdown selections, while normal Admins remain visible.
-- Reason: User requested: "understanding the project.md;;; then Fix the frontend admin filtering and user selection functionality with minimal changes... Developer Admin email: mailtokabilan056@gmail.com, Developer Admin phone: 8883280816... Hide Developer Admin... Normal Admin users must remain visible and work as expected... Frontend filtering only."
-- Impact: Developer Admin is strictly hidden across all frontend user management and selection interfaces; normal Admin users and other eligible employees continue to function as expected.
+  - When a normal admin is logged in: sees all employees and normal admins; Developer Admin is hidden.
+  - When the Developer Admin is logged in: sees all employees and admins without exclusion.
+- Reason: User requested: "one small correction admin - see the all emploee and admin; without thisperon only not show (mailtokabilan@gmail.com/8883280816);;devloper- show all employee,admins; fix;".
+- Impact: Seamless role-based administration view where Developer Admin has complete administrative visibility, while normal admins manage the team without seeing the root developer profile.
 
 ### 2026-10-15
 #### Branding Footer Addition & Expansion (Developed by Ameyy Digital Services)

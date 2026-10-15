@@ -30,6 +30,7 @@ import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportLeavesToPDF, exportLeavesToExcel } from '../../utils/exportUtils';
 import { isDeveloperAdmin } from '../../utils/validators';
+import { useAuth } from '../../context/AuthContext';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 const TABS = [
@@ -40,6 +41,7 @@ const TABS = [
 ];
 
 export const LeaveRequestsScreen = () => {
+  const { user: currentUser } = useAuth();
   const today = formatISODateOnly();
 
   const [leaves, setLeaves] = useState([]);
@@ -72,14 +74,15 @@ export const LeaveRequestsScreen = () => {
     try {
       const res = await employeeApi.getEmployees({ limit: 200 });
       if (res.data?.employees) {
+        const isCurrentDev = isDeveloperAdmin(currentUser);
         setEmployees(
-          res.data.employees.filter((e) => e.role !== 'admin' && !isDeveloperAdmin(e))
+          res.data.employees.filter((e) => e.role !== 'admin' && (isCurrentDev || !isDeveloperAdmin(e)))
         );
       }
     } catch (err) {
       console.warn('Failed to load employee list:', err);
     }
-  }, []);
+  }, [currentUser]);
 
   const fetchLeaves = useCallback(async () => {
     try {
