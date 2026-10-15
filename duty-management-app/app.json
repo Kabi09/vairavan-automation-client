@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "VairaWorks",
-    "slug": "viraworks",
+    "slug": "vaira-works",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,7 +24,7 @@
     },
     "android": {
       "package": "com.vairavan.dutymanagement",
-       "usesCleartextTraffic": true,
+      "usesCleartextTraffic": true,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
@@ -54,7 +54,7 @@
         "expo-image-picker",
         {
           "photosPermission": "VairaWorks requires access to photos to upload site visit photos.",
-          "cameraPermission": "VairaWorks requires camera access to capture site visit photos."
+          "cameraPermission": "VairaWorks requires camera access to capture customer site proof photos."
         }
       ],
       "expo-font",
@@ -70,8 +70,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "ff8c1225-7ed8-47ee-ab46-9196bd0e21b8"
+        "projectId": "cc7cd292-efdf-48fa-abdb-0d08717fe04d"
       }
-    }
+    },
+    "owner": "ameyymanages-team"
   }
 }
