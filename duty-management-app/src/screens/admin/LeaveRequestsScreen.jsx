@@ -29,6 +29,7 @@ import DropdownPickerModal from '../../components/DropdownPickerModal';
 import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportLeavesToPDF, exportLeavesToExcel } from '../../utils/exportUtils';
+import { isDeveloperAdmin } from '../../utils/validators';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 const TABS = [
@@ -72,7 +73,7 @@ export const LeaveRequestsScreen = () => {
       const res = await employeeApi.getEmployees({ limit: 200 });
       if (res.data?.employees) {
         setEmployees(
-          res.data.employees.filter((e) => e.role !== 'admin' && e.email?.toLowerCase() !== 'admin@gmail.com')
+          res.data.employees.filter((e) => e.role !== 'admin' && !isDeveloperAdmin(e))
         );
       }
     } catch (err) {

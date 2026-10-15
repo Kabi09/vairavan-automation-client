@@ -83,6 +83,34 @@
 ## Change History
 
 ### 2026-10-15
+#### Frontend Developer Admin Filtering & User Selection
+- What was changed:
+  - **Developer Admin Identification Helper (`validators.js`)**:
+    - Defined `isDeveloperAdmin(user)` alongside constants `DEV_ADMIN_EMAIL = 'mailtokabilan056@gmail.com'` and `DEV_ADMIN_PHONE = '8883280816'`.
+    - Evaluates user data and role: checks if `email === 'mailtokabilan056@gmail.com'` or `admin@gmail.com`, or clean digits match or end with `8883280816`, while preserving normal admin accounts (`role === 'admin'`) and regular employees.
+  - **Admin User Management List & Search (`EmployeeListScreen.jsx`)**:
+    - Replaced hardcoded `admin@gmail.com` filter with `!isDeveloperAdmin(e)`.
+    - The Developer Admin is hidden from the main account directory, live search bar, and PDF/Excel exports.
+    - Normal Admin users (`role === 'admin'`) remain fully visible with their `ADMIN` tag and remain searchable, editable, and exportable.
+  - **Leave Management Staff Dropdown Filter (`LeaveRequestsScreen.jsx`)**:
+    - Updated `loadEmployees` to exclude Developer Admin (`!isDeveloperAdmin(e)`).
+  - **Work Management Staff Dropdown Filter (`AllDutiesScreen.jsx`)**:
+    - Updated `loadFilterData` to exclude Developer Admin (`!isDeveloperAdmin(e)`).
+  - **Admin Send Message Modal Recipient Selection (`AdminSendMessageModal.jsx`)**:
+    - Updated `fetchEmployeesList` to exclude Developer Admin (`!isDeveloperAdmin(e)`).
+- Files changed:
+  - `duty-management-app/src/utils/validators.js`
+  - `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/components/AdminSendMessageModal.jsx`
+  - `project.md`
+- Logic changed:
+  - Previously, frontend filtering only excluded `admin@gmail.com`, leaving the active Developer Admin (`mailtokabilan056@gmail.com` / `8883280816`) visible in the user management list. Now `isDeveloperAdmin` universally filters out the Developer Admin across all user lists, search queries, and dropdown selections, while normal Admins remain visible.
+- Reason: User requested: "understanding the project.md;;; then Fix the frontend admin filtering and user selection functionality with minimal changes... Developer Admin email: mailtokabilan056@gmail.com, Developer Admin phone: 8883280816... Hide Developer Admin... Normal Admin users must remain visible and work as expected... Frontend filtering only."
+- Impact: Developer Admin is strictly hidden across all frontend user management and selection interfaces; normal Admin users and other eligible employees continue to function as expected.
+
+### 2026-10-15
 #### Branding Footer Addition & Expansion (Developed by Ameyy Digital Services)
 - What was changed:
   - **External Link Icon**: Updated `BrandingFooter` component (`duty-management-app/src/components/BrandingFooter.jsx`) with a small 11px external link icon (`Ionicons` `open-outline`) styled adjacent to "Ameyy Digital Services".
@@ -2090,7 +2118,8 @@
   - Dynamic Office vs Client Duty Details & Views: When an Office is selected (`companyType === 'office'`), all duty views (`DutyDetailsScreen`, `AllDutiesScreen`, `MyDutiesScreen`, `EmployeeDetailsScreen`, `DutyFormScreen`) dynamically remove "Client Company", "Customer Contact", "Customer Signature", and "Service Verification", replacing them with "Office", "Contact In-Charge", "Office Sign-Off", and "Office Proof Photos". "Company" is only mentioned when it is an actual client company.
   - Export Verification: PDF and Excel exports include the `Type` / classification column for all companies and distinguish Office vs Client Company for duty reports.
   - Branding Footer: Added reusable `BrandingFooter` ("Developed by Ameyy Digital Services" with small external link icon) across Login (`LoginScreen.jsx`), Dashboards (`AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`), Leaves (`LeaveRequestsScreen.jsx`, `MyLeavesScreen.jsx`, `LeaveRequestScreen.jsx`), Profile (`ProfileScreen.jsx`), and PDF exports (`exportUtils.js`) with cross-platform new-tab web and mobile link handling to `https://www.ameyy.in/`.
-  - 41/41 backend unit tests passing (6 suites); 0 syntax errors and 0 raw text issues across all mobile files.
+  - Frontend Developer Admin Filtering: Implemented `isDeveloperAdmin(user)` validator matching Developer Admin email (`mailtokabilan056@gmail.com` / `admin@gmail.com`), phone (`8883280816`), and role (`admin`). Applied across `EmployeeListScreen.jsx`, `LeaveRequestsScreen.jsx`, `AllDutiesScreen.jsx`, and `AdminSendMessageModal.jsx` to exclude Developer Admin from normal Admin user lists, live search, exports, and selection dropdowns while keeping normal Admin accounts visible and functional.
+  - 42/42 backend unit tests passing (6 suites); 0 syntax errors across all mobile files.
 - In Progress:
   - None.
 - Pending:

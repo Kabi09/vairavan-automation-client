@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import employeeApi from '../api/employeeApi';
 import notificationApi from '../api/notificationApi';
 import { extractErrorMessage } from '../utils/errorUtils';
+import { isDeveloperAdmin } from '../utils/validators';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import PrimaryButton from './PrimaryButton';
 import SecondaryButton from './SecondaryButton';
@@ -40,7 +41,7 @@ export const AdminSendMessageModal = ({ visible, onClose, onMessageSent }) => {
         // Exclude system admin / root developer accounts
         const staff = res.data.employees.filter(
           (e) =>
-            e.email?.toLowerCase() !== 'admin@gmail.com' &&
+            !isDeveloperAdmin(e) &&
             e.role !== 'admin' &&
             e.accountStatus !== 'inactive'
         );

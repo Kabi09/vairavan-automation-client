@@ -25,6 +25,7 @@ import EmptyState from '../../components/EmptyState';
 import ConfirmationDialog from '../../components/ConfirmationDialog';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportEmployeesToPDF, exportEmployeesToExcel } from '../../utils/exportUtils';
+import { isDeveloperAdmin } from '../../utils/validators';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const EmployeeListScreen = ({ navigation }) => {
@@ -53,10 +54,8 @@ export const EmployeeListScreen = ({ navigation }) => {
       }
       const res = await employeeApi.getEmployees(params);
       if (res.data?.employees) {
-        // Exclude root developer login from User Management
-        const filtered = res.data.employees.filter(
-          (e) => e.email?.toLowerCase() !== 'admin@gmail.com'
-        );
+        // Exclude Developer Admin from User Management while keeping normal admins visible
+        const filtered = res.data.employees.filter((e) => !isDeveloperAdmin(e));
         setEmployees(filtered);
       }
     } catch (err) {

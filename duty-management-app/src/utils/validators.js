@@ -40,6 +40,41 @@ export const isNonEmptyString = (str) => {
   return typeof str === 'string' && str.trim().length > 0;
 };
 
+/**
+ * Developer Admin Identification Constants
+ */
+export const DEV_ADMIN_EMAIL = 'mailtokabilan056@gmail.com';
+export const DEV_ADMIN_PHONE = '8883280816';
+
+/**
+ * Checks if a given user object represents the Developer Admin.
+ * Used across the frontend to exclude the Developer Admin from normal Admin
+ * user lists, dropdowns, and user-selection options while keeping normal Admins visible.
+ *
+ * @param {Object} user - User/employee data object
+ * @returns {boolean} True if the user matches Developer Admin identifiers
+ */
+export const isDeveloperAdmin = (user) => {
+  if (!user || typeof user !== 'object') return false;
+
+  const email = (user.email || '').toLowerCase().trim();
+  const rawPhone = user.phoneNumber || user.phone || '';
+  const digitsOnly = String(rawPhone).replace(/\D/g, '');
+
+  const matchesEmail =
+    email === DEV_ADMIN_EMAIL ||
+    email === 'admin@gmail.com';
+
+  const matchesPhone =
+    digitsOnly === DEV_ADMIN_PHONE ||
+    digitsOnly.endsWith(DEV_ADMIN_PHONE);
+
+  return Boolean(
+    (matchesEmail || matchesPhone) &&
+    (user.role === 'admin' || !user.role || user.role === 'developer')
+  );
+};
+
 export default {
   isValidEmail,
   isValidPhone,
@@ -47,4 +82,7 @@ export default {
   isTimeOrderValid,
   isDateRangeValid,
   isNonEmptyString,
+  isDeveloperAdmin,
+  DEV_ADMIN_EMAIL,
+  DEV_ADMIN_PHONE,
 };

@@ -36,6 +36,7 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportDutiesToPDF, exportDutiesToExcel } from '../../utils/exportUtils';
 import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
+import { isDeveloperAdmin } from '../../utils/validators';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const AllDutiesScreen = ({ route, navigation }) => {
@@ -161,7 +162,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
       ]);
       if (empRes.data?.employees) {
         setEmployees(
-          empRes.data.employees.filter((e) => e.role !== 'admin' && e.email?.toLowerCase() !== 'admin@gmail.com')
+          empRes.data.employees.filter((e) => e.role !== 'admin' && !isDeveloperAdmin(e))
         );
       }
       if (compRes.data?.companies) setCompanies(compRes.data.companies);
