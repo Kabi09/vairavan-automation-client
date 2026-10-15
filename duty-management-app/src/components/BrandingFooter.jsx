@@ -39,6 +39,8 @@ export const BrandingFooter = ({ style, textStyle, linkStyle, iconSize = 11 }) =
       >
         <Text style={[styles.text, textStyle]}>
           Developed by{' '}
+          <Text style={{ color: '#E53935' }}>❤️</Text>
+          {' '}
           <Text style={[styles.link, linkStyle]}>
             Ameyy Digital Services
           </Text>
