@@ -2,7 +2,7 @@
  * Application Configuration
  */
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || 'https://vairavan-automation-client-iony.vercel.app/api';
+  process.env.EXPO_PUBLIC_API_URL || 'https://vairaworks.vercel.app/api';
 
 export const APP_CONFIG = {
   APP_NAME: 'VairaWorks',
