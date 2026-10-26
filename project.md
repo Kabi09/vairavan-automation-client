@@ -99,6 +99,7 @@
   - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
   - `duty-management-app/src/components/AdminSendMessageModal.jsx`
   - `project.md`
+  
 - Logic changed:
   - When a normal admin is logged in: sees all employees and normal admins; Developer Admin is hidden.
   - When the Developer Admin is logged in: sees all employees and admins without exclusion.
