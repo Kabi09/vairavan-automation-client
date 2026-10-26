@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import {
   createDuty,
+  checkIn,
+  getActiveCheckIn,
+  checkOut,
   getMyDuties,
   getDutyById,
   updateDuty,
@@ -13,6 +16,7 @@ import { authorize } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import {
   validateCreateDuty,
+  validateCheckIn,
   validateUpdateDuty,
   validateUpdateDutyStatus,
   validateDutyIdParam,
@@ -22,11 +26,18 @@ const router = Router();
 
 router.use(authenticate);
 
+// Check-in and Check-out workflows
+router.post('/check-in', authorize('employee', 'staff'), validateCheckIn, validate, checkIn);
+router.get('/active-checkin', authorize('employee', 'staff', 'admin'), getActiveCheckIn);
+router.post('/check-out', authorize('employee', 'staff', 'admin'), checkOut);
+router.post('/:id/check-out', authorize('employee', 'staff', 'admin'), checkOut);
+
 // Employee submits duty
 router.post('/', authorize('employee', 'staff'), validateCreateDuty, validate, createDuty);
 
 // Employee views own duties
 router.get('/my', authorize('employee', 'staff'), getMyDuties);
+
 
 // Admin views all duties
 router.get('/', authorize('admin'), getAllDuties);

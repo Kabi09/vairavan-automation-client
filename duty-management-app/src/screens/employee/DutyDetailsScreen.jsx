@@ -213,11 +213,81 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
 
           {!isOffice ? (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Contact Phone:</Text>
-              <Text style={styles.detailValue}>{duty.customerPhoneNumber || 'N/A'}</Text>
+              <Text style={styles.detailLabel}>Contact Person:</Text>
+              <Text style={styles.detailValue}>
+                {duty.client?.name || duty.customerName || 'N/A'}
+                {(duty.client?.phoneNumber || duty.customerPhoneNumber)
+                  ? ` (${duty.client?.phoneNumber || duty.customerPhoneNumber})`
+                  : ''}
+              </Text>
+            </View>
+          ) : null}
+
+          {duty.checkInTime ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Check-In Time:</Text>
+              <Text style={styles.detailValue}>
+                {new Date(duty.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </Text>
+            </View>
+          ) : null}
+
+          {duty.checkOutTime ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Check-Out Time:</Text>
+              <Text style={styles.detailValue}>
+                {new Date(duty.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </Text>
+            </View>
+          ) : null}
+
+          {duty.totalDurationMinutes ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Duration:</Text>
+              <Text style={[styles.detailValue, { color: COLORS.primary, fontWeight: '700' }]}>
+                {Math.floor(duty.totalDurationMinutes / 60)}h {duty.totalDurationMinutes % 60}m ({duty.totalDurationMinutes} mins)
+              </Text>
             </View>
           ) : null}
         </Card>
+
+        {/* Highlights / Features */}
+        {duty.features && duty.features.length > 0 && (
+          <Card style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Highlights / Features</Text>
+            <View style={styles.featuresContainer}>
+              {duty.features.map((feat, idx) => (
+                <View key={idx} style={styles.featureBadge}>
+                  <Ionicons name="sparkles" size={12} color="#0369A1" />
+                  <Text style={styles.featureBadgeText}>{feat}</Text>
+                </View>
+              ))}
+            </View>
+          </Card>
+        )}
+
+        {/* Manpower Members */}
+        {duty.manpowerMembers && duty.manpowerMembers.length > 0 && (
+          <Card style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>
+              Manpower Team ({duty.manpowerMembers.length})
+            </Text>
+            {duty.manpowerMembers.map((m, idx) => (
+              <View key={idx} style={styles.manpowerCard}>
+                <View style={styles.manpowerHeader}>
+                  <Ionicons name="person-circle-outline" size={20} color={COLORS.primary} />
+                  <Text style={styles.manpowerName}>{m.name}</Text>
+                  {m.phone ? (
+                    <Text style={styles.manpowerPhone}>• {m.phone}</Text>
+                  ) : null}
+                </View>
+                {m.description ? (
+                  <Text style={styles.manpowerDesc}>{m.description}</Text>
+                ) : null}
+              </View>
+            ))}
+          </Card>
+        )}
 
         {/* Work Description */}
         <Card style={styles.sectionCard}>
@@ -622,6 +692,56 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
+  },
+  featuresContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  featureBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  featureBadgeText: {
+    fontSize: 13,
+    color: '#0369A1',
+    fontWeight: '700',
+  },
+  manpowerCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: RADIUS.sm,
+    padding: SPACING.sm,
+    marginTop: 8,
+  },
+  manpowerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  manpowerName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  manpowerPhone: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  manpowerDesc: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+    paddingLeft: 26,
   },
 });
 

@@ -17,6 +17,8 @@ import HolidayManagementScreen from '../screens/admin/HolidayManagementScreen';
 import DutyDetailsScreen from '../screens/employee/DutyDetailsScreen';
 import DutyFormScreen from '../screens/employee/DutyFormScreen';
 import NotificationsScreen from '../screens/admin/NotificationsScreen';
+import AdminExpensesScreen from '../screens/admin/AdminExpensesScreen';
+import ExpenseFormScreen from '../screens/employee/ExpenseFormScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 import ChangePasswordScreen from '../screens/common/ChangePasswordScreen';
 import LeaveRequestScreen from '../screens/employee/LeaveRequestScreen';
@@ -62,6 +64,8 @@ const AdminTabs = () => {
             iconName = focused ? 'speedometer' : 'speedometer-outline';
           } else if (route.name === 'DutiesTab') {
             iconName = focused ? 'clipboard' : 'clipboard-outline';
+          } else if (route.name === 'ExpensesTab') {
+            iconName = focused ? 'wallet' : 'wallet-outline';
           } else if (route.name === 'CompaniesTab') {
             iconName = focused ? 'business' : 'business-outline';
           } else if (route.name === 'EmployeesTab') {
@@ -82,6 +86,11 @@ const AdminTabs = () => {
         name="DutiesTab"
         component={AllDutiesScreen}
         options={{ tabBarLabel: 'Works' }}
+      />
+      <Tab.Screen
+        name="ExpensesTab"
+        component={AdminExpensesScreen}
+        options={{ tabBarLabel: 'Expenses' }}
       />
       <Tab.Screen
         name="CompaniesTab"
@@ -106,6 +115,8 @@ export const AdminNavigator = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="AdminMainTabs" component={AdminTabs} />
+      <Stack.Screen name="AdminExpenses" component={AdminExpensesScreen} />
+      <Stack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
       <Stack.Screen name="CompanyDetails" component={CompanyDetailsScreen} />
       <Stack.Screen name="CompanyForm" component={CompanyFormScreen} />
       <Stack.Screen name="EmployeeDetails" component={EmployeeDetailsScreen} />

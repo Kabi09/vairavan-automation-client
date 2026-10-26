@@ -240,6 +240,16 @@ export const MyDutiesScreen = ({ navigation }) => {
           {item.machineName} ({formatWorkType(item)})
         </Text>
 
+        {item.features && item.features.length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginVertical: 4 }}>
+            {item.features.map((feat, fIdx) => (
+              <View key={fIdx} style={{ backgroundColor: '#F0F9FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#BAE6FD' }}>
+                <Text style={{ fontSize: 11, color: '#0369A1', fontWeight: '700' }}>{feat}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         <Text style={styles.descriptionSnippet} numberOfLines={2}>
           {item.workDescription}
         </Text>

@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import companyApi from '../../api/companyApi';
+import clientApi from '../../api/clientApi';
 import dutyApi from '../../api/dutyApi';
 import uploadApi from '../../api/uploadApi';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -27,11 +29,10 @@ import SignaturePadModal from '../../components/SignaturePadModal';
 import SignatureImage from '../../components/SignatureImage';
 import ImageViewerModal from '../../components/ImageViewerModal';
 import DatePickerModal from '../../components/DatePickerModal';
-import TimePickerModal from '../../components/TimePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
 import ErrorMessage from '../../components/ErrorMessage';
 import { getTodayDateString, formatISODateOnly } from '../../utils/dateUtils';
-import { isValidPhone, isValidTimeFormat, isTimeOrderValid } from '../../utils/validators';
+import { isValidPhone } from '../../utils/validators';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
 import { APP_CONFIG } from '../../constants/config';
@@ -41,6 +42,11 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const dutyToEdit = route?.params?.dutyToEdit;
   const isEditing = Boolean(dutyToEdit);
 
+  // Check-In status state (if editing historical submitted report, consider checked-in)
+  const [isCheckedIn, setIsCheckedIn] = useState(Boolean(dutyToEdit));
+  const [activeDutyId, setActiveDutyId] = useState(() => dutyToEdit?._id || null);
+  const [activeCheckInTime, setActiveCheckInTime] = useState(() => dutyToEdit?.checkInTime || dutyToEdit?.inTime || '');
+
   // Form fields
   const [dutyDate, setDutyDate] = useState(() => {
     if (dutyToEdit?.dutyDate) {
@@ -49,15 +55,19 @@ export const DutyFormScreen = ({ navigation, route }) => {
     return getTodayDateString();
   });
   const [companies, setCompanies] = useState([]);
+  const [clients, setClients] = useState([]);
   const [companyCategory, setCompanyCategory] = useState(() => {
-    if (dutyToEdit?.company?.companyType) {
-      return dutyToEdit.company.companyType;
-    }
+    if (dutyToEdit?.dutyType) return dutyToEdit.dutyType;
+    if (dutyToEdit?.company?.companyType) return dutyToEdit.company.companyType;
     return 'office'; // default Office
   });
   const [selectedCompanyId, setSelectedCompanyId] = useState(() => {
     return dutyToEdit?.company?._id || dutyToEdit?.company || '';
   });
+  const [selectedClientId, setSelectedClientId] = useState(() => {
+    return dutyToEdit?.client?._id || dutyToEdit?.client || '';
+  });
+
   const [customerName, setCustomerName] = useState(() => dutyToEdit?.customerName || '');
   const [customerPhone, setCustomerPhone] = useState(() => dutyToEdit?.customerPhoneNumber || '');
   const [machineName, setMachineName] = useState(() => dutyToEdit?.machineName || '');
@@ -67,18 +77,44 @@ export const DutyFormScreen = ({ navigation, route }) => {
     const match = dutyToEdit?.workDescription?.match(/^\[Work:\s*([^\]]+)\]/);
     return match ? match[1].trim() : '';
   });
-  const [inTime, setInTime] = useState(() => dutyToEdit?.inTime || '09:30');
-  const [outTime, setOutTime] = useState(() => dutyToEdit?.outTime || '17:30');
   const [workDescription, setWorkDescription] = useState(() => {
     if (!dutyToEdit?.workDescription) return '';
     return dutyToEdit.workDescription.replace(/^\[Work:\s*[^\]]+\]\n*/, '');
   });
 
+  // Features / Highlights state (e.g. ['PLC', 'HDM'])
+  const [features, setFeatures] = useState(() => {
+    if (Array.isArray(dutyToEdit?.features) && dutyToEdit.features.length > 0) {
+      return dutyToEdit.features;
+    }
+    return ['']; // start with one slot or empty
+  });
+
+  // Manpower members state
+  const [manpowerMembers, setManpowerMembers] = useState(() => {
+    if (Array.isArray(dutyToEdit?.manpowerMembers) && dutyToEdit.manpowerMembers.length > 0) {
+      return dutyToEdit.manpowerMembers;
+    }
+    return [];
+  });
+
   // Modals state
   const [datePickerVisible, setDatePickerVisible] = useState(false);
-  const [inTimePickerVisible, setInTimePickerVisible] = useState(false);
-  const [outTimePickerVisible, setOutTimePickerVisible] = useState(false);
   const [companyDropdownVisible, setCompanyDropdownVisible] = useState(false);
+  const [clientDropdownVisible, setClientDropdownVisible] = useState(false);
+
+  // Inline Add Company Modal State
+  const [addCompanyModalVisible, setAddCompanyModalVisible] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanyLocation, setNewCompanyLocation] = useState('');
+  const [newCompanyPhone, setNewCompanyPhone] = useState('');
+  const [savingNewCompany, setSavingNewCompany] = useState(false);
+
+  // Inline Add Client Modal State
+  const [addClientModalVisible, setAddClientModalVisible] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [savingNewClient, setSavingNewClient] = useState(false);
 
   // Full-size Image/Signature Preview Modal State
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
@@ -115,7 +151,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
   });
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
 
-  // Photos state (local uris or existing urls)
+  // Photos state (local uris or existing urls, max 3)
   const [photos, setPhotos] = useState(() => {
     if (dutyToEdit?.customerProofPhotos?.length > 0) {
       return dutyToEdit.customerProofPhotos.map((p) => p.url);
@@ -137,51 +173,86 @@ export const DutyFormScreen = ({ navigation, route }) => {
   });
   const [locating, setLocating] = useState(false);
 
-  // If editing an older report with coordinates but no reverse-geocoded address, resolve on mount
-  useEffect(() => {
-    if (dutyToEdit?.location?.latitude && !dutyToEdit?.location?.address) {
-      reverseGeocodeCoords(dutyToEdit.location.latitude, dutyToEdit.location.longitude)
-        .then((addr) => {
-          if (addr) {
-            setLocationCoords((prev) => (prev ? { ...prev, address: addr } : prev));
-          }
-        })
-        .catch(() => {});
-    }
-  }, [dutyToEdit]);
-
-  // Submission state
+  // Submission / Loading state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
 
+  // Helper to determine if company is office
+  const isOfficeCompany = (c) => {
+    if (!c) return false;
+    const type = String(c.companyType || '').trim().toLowerCase();
+    const name = String(c.companyName || '').trim().toLowerCase();
+    return type === 'office' || name.includes('office');
+  };
+
+  // 1. Check for active duty check-in on focus (if not editing an existing report)
   useFocusEffect(
     useCallback(() => {
-      const loadInitialData = async () => {
+      if (isEditing) return;
+
+      const checkActiveSession = async () => {
         try {
-          const compRes = await companyApi.getCompanies({ status: 'active', limit: 100 }).catch(() => ({ data: { companies: [] } }));
+          const res = await dutyApi.getActiveCheckIn().catch(() => null);
+          if (res?.data?.activeDuty) {
+            const active = res.data.activeDuty;
+            setIsCheckedIn(true);
+            setActiveDutyId(active._id);
+            setActiveCheckInTime(active.checkInTime || active.inTime || '');
+            setSelectedCompanyId(active.company?._id || active.company || '');
+            if (active.client?._id || active.client) {
+              setSelectedClientId(active.client?._id || active.client);
+            }
+            if (active.dutyType) {
+              setCompanyCategory(active.dutyType);
+            } else if (active.company?.companyType) {
+              setCompanyCategory(active.company.companyType);
+            }
+            if (active.customerName) setCustomerName(active.customerName);
+            if (active.customerPhoneNumber) setCustomerPhone(active.customerPhoneNumber);
+            if (active.machineName) setMachineName(active.machineName);
+            if (active.workType) setWorkType(active.workType);
+            if (active.customWorkType) setCustomWorkDetails(active.customWorkType);
+            if (active.workDescription) setWorkDescription(active.workDescription);
+            if (Array.isArray(active.features) && active.features.length > 0) {
+              setFeatures(active.features);
+            }
+            if (Array.isArray(active.manpowerMembers) && active.manpowerMembers.length > 0) {
+              setManpowerMembers(active.manpowerMembers);
+            }
+            if (active.location?.latitude) {
+              setLocationCoords({
+                latitude: active.location.latitude,
+                longitude: active.location.longitude,
+                accuracy: active.location.accuracy || 0,
+                address: active.location.address || '',
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('Error checking active duty check-in:', err);
+        }
+      };
+
+      checkActiveSession();
+    }, [isEditing])
+  );
+
+  // 2. Fetch companies on mount / focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadCompanies = async () => {
+        try {
+          const compRes = await companyApi.getCompanies({ status: 'active', limit: 200 }).catch(() => ({ data: { companies: [] } }));
           if (compRes.data?.companies) {
             const activeComps = compRes.data.companies;
             setCompanies(activeComps);
+
+            // If no company selected and in office mode, pre-select default office
             if (!selectedCompanyId && !dutyToEdit && companyCategory === 'office' && activeComps.length > 0) {
-              const defaultOffice = activeComps.find((c) => {
-                const t = String(c.companyType || '').trim().toLowerCase();
-                const n = String(c.companyName || '').trim().toLowerCase();
-                return t === 'office' || n.includes('office');
-              });
+              const defaultOffice = activeComps.find((c) => isOfficeCompany(c));
               if (defaultOffice) {
                 setSelectedCompanyId(defaultOffice._id);
-                if (defaultOffice.companyPhoneNumber && !customerPhone) {
-                  setCustomerPhone(defaultOffice.companyPhoneNumber);
-                }
-              }
-            } else if (selectedCompanyId && activeComps.length > 0) {
-              const currentComp = activeComps.find((c) => c._id === selectedCompanyId);
-              if (currentComp) {
-                const isOff =
-                  String(currentComp.companyType || '').trim().toLowerCase() === 'office' ||
-                  String(currentComp.companyName || '').trim().toLowerCase().includes('office');
-                setCompanyCategory(isOff ? 'office' : 'client');
               }
             }
           }
@@ -190,11 +261,33 @@ export const DutyFormScreen = ({ navigation, route }) => {
         }
       };
 
-      loadInitialData();
-    }, [selectedCompanyId])
+      loadCompanies();
+    }, [selectedCompanyId, companyCategory, dutyToEdit])
   );
 
-  // Location capture
+  // 3. Automatically fetch and filter clients when selectedCompanyId changes
+  useEffect(() => {
+    if (!selectedCompanyId || companyCategory === 'office') {
+      setClients([]);
+      return;
+    }
+
+    const loadClients = async () => {
+      try {
+        const res = await clientApi.getClients({ companyId: selectedCompanyId, status: 'active' }).catch(() => ({ data: { clients: [] } }));
+        if (res.data?.clients) {
+          setClients(res.data.clients);
+          // If a client was previously selected and is in the list, keep it; otherwise leave unselected
+        }
+      } catch (err) {
+        console.warn('Failed to load clients for company:', err);
+      }
+    };
+
+    loadClients();
+  }, [selectedCompanyId, companyCategory]);
+
+  // GPS Location capture
   const handleCaptureLocation = async () => {
     setLocating(true);
     try {
@@ -202,7 +295,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
       if (status !== 'granted') {
         Alert.alert(
           'Permission Denied',
-          'Location permission is required to tag service visit coordinates.'
+          'Location permission is required to tag check-in / service visit coordinates.'
         );
         return;
       }
@@ -238,38 +331,175 @@ export const DutyFormScreen = ({ navigation, route }) => {
     }
   };
 
-  // Lightbox preview openers
-  const handleOpenPhotoPreview = (uri, index) => {
-    setPreviewImageUri(uri);
-    setPreviewTitle(`Proof Photo #${index + 1}`);
-    setPreviewSubtitle(
-      companyCategory === 'office'
-        ? (companies.find((c) => c._id === selectedCompanyId)?.companyName || 'Office Duty')
-        : (customerName ? `Client: ${customerName}` : 'Service Verification')
-    );
-    setPreviewTimestamp(dutyDate || '');
-    setPreviewIsSignature(false);
-    setPreviewModalVisible(true);
+  // Inline Add Company Submit
+  const handleSaveNewCompany = async () => {
+    if (!newCompanyName.trim()) {
+      Alert.alert('Required', 'Please enter company name');
+      return;
+    }
+    if (!newCompanyLocation.trim()) {
+      Alert.alert('Required', 'Please enter company site location');
+      return;
+    }
+
+    setSavingNewCompany(true);
+    try {
+      const res = await companyApi.createCompany({
+        companyName: newCompanyName.trim(),
+        location: newCompanyLocation.trim(),
+        companyPhoneNumber: newCompanyPhone.trim(),
+        companyType: 'client',
+      });
+      const createdComp = res.data?.company;
+      if (createdComp) {
+        setCompanies((prev) => [createdComp, ...prev]);
+        setSelectedCompanyId(createdComp._id);
+        setNewCompanyName('');
+        setNewCompanyLocation('');
+        setNewCompanyPhone('');
+        setAddCompanyModalVisible(false);
+        Alert.alert('Company Added', `${createdComp.companyName} created and selected!`);
+      }
+    } catch (err) {
+      Alert.alert('Error', extractErrorMessage(err, 'Failed to add company'));
+    } finally {
+      setSavingNewCompany(false);
+    }
   };
 
-  const handleOpenSignaturePreview = () => {
-    if (!signatureData?.dataUri && !signatureData?.url) return;
-    setPreviewImageUri(signatureData?.dataUri || signatureData?.url || '');
-    setPreviewTitle(companyCategory === 'office' ? 'Office Sign-Off' : 'Customer Signature');
-    setPreviewSubtitle(
-      companyCategory === 'office'
-        ? (companies.find((c) => c._id === selectedCompanyId)?.companyName || 'Office Duty')
-        : (customerName ? `Client: ${customerName}` : 'Service Verification')
-    );
-    setPreviewTimestamp(signatureData?.timestamp || '');
-    setPreviewIsSignature(true);
-    setPreviewModalVisible(true);
+  // Inline Add Client Submit
+  const handleSaveNewClient = async () => {
+    if (!selectedCompanyId) {
+      Alert.alert('Select Company First', 'Please select a client company before adding a client');
+      return;
+    }
+    if (!newClientName.trim()) {
+      Alert.alert('Required', 'Please enter client contact name');
+      return;
+    }
+
+    setSavingNewClient(true);
+    try {
+      const res = await clientApi.createClient({
+        companyId: selectedCompanyId,
+        clientName: newClientName.trim(),
+        clientPhoneNumber: newClientPhone.trim(),
+      });
+      const createdClient = res.data?.client;
+      if (createdClient) {
+        setClients((prev) => [createdClient, ...prev]);
+        setSelectedClientId(createdClient._id);
+        setCustomerName(createdClient.clientName);
+        if (createdClient.clientPhoneNumber) {
+          setCustomerPhone(createdClient.clientPhoneNumber);
+        }
+        setNewClientName('');
+        setNewClientPhone('');
+        setAddClientModalVisible(false);
+        Alert.alert('Client Added', `${createdClient.clientName} linked to company!`);
+      }
+    } catch (err) {
+      Alert.alert('Error', extractErrorMessage(err, 'Failed to add client'));
+    } finally {
+      setSavingNewClient(false);
+    }
   };
 
-  // Image capture / selection (Allow max 3 proof photos)
+  // Handle Check-In (Workflow 1 & 2)
+  const handleCheckIn = async () => {
+    setError('');
+    const errors = {};
+
+    if (!selectedCompanyId) {
+      errors.company = companyCategory === 'office' ? 'Please select an office' : 'Please select a client company';
+    }
+
+    if (companyCategory === 'client' && !selectedClientId && !customerName.trim()) {
+      errors.client = 'Please select or enter client contact';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      Alert.alert('Incomplete', 'Please fill the required check-in fields.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const checkInPayload = {
+        dutyDate,
+        dutyType: companyCategory,
+        companyId: selectedCompanyId,
+        clientId: selectedClientId || undefined,
+        customerName: companyCategory === 'office' ? 'Office' : (customerName.trim() || undefined),
+        customerPhoneNumber: companyCategory === 'office' ? '' : (customerPhone.trim() || undefined),
+        latitude: locationCoords?.latitude,
+        longitude: locationCoords?.longitude,
+        accuracy: locationCoords?.accuracy,
+        address: locationCoords?.address,
+      };
+
+      const res = await dutyApi.checkIn(checkInPayload);
+      const createdDuty = res.data?.duty;
+      if (createdDuty) {
+        setIsCheckedIn(true);
+        setActiveDutyId(createdDuty._id);
+        setActiveCheckInTime(createdDuty.checkInTime || createdDuty.inTime || '');
+        Alert.alert(
+          'Check-In Successful',
+          `Checked in at ${companyCategory === 'office' ? 'Office' : customerName || 'Client Site'}!\nYou can now log work details and checkout.`
+        );
+      }
+    } catch (err) {
+      const msg = extractErrorMessage(err, 'Check-in failed');
+      setError(msg);
+      Alert.alert('Check-In Error', msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Features / Highlights helpers
+  const handleAddFeature = () => {
+    setFeatures((prev) => [...prev, '']);
+  };
+
+  const handleUpdateFeature = (text, index) => {
+    setFeatures((prev) => {
+      const updated = [...prev];
+      updated[index] = text;
+      return updated;
+    });
+  };
+
+  const handleRemoveFeature = (index) => {
+    setFeatures((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Manpower Members helpers
+  const handleAddManpower = () => {
+    setManpowerMembers((prev) => [
+      ...prev,
+      { name: '', phoneNumber: '', description: '' },
+    ]);
+  };
+
+  const handleUpdateManpower = (field, value, index) => {
+    setManpowerMembers((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleRemoveManpower = (index) => {
+    setManpowerMembers((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Photo helpers (up to 3 photos)
   const handlePickPhoto = async () => {
     if (photos.length >= 3) {
-      Alert.alert('Limit Reached', 'You can attach up to 3 proof photos per visit.');
+      Alert.alert('Limit Reached', 'You can attach up to 3 proof photos.');
       return;
     }
 
@@ -279,7 +509,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
         onPress: async () => {
           const { status } = await ImagePicker.requestCameraPermissionsAsync();
           if (status !== 'granted') {
-            Alert.alert('Camera Permission', 'Camera permission is required to capture proof photos.');
+            Alert.alert('Permission Denied', 'Camera permission is required.');
             return;
           }
           const result = await ImagePicker.launchCameraAsync({
@@ -296,7 +526,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
         onPress: async () => {
           const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (status !== 'granted') {
-            Alert.alert('Gallery Permission', 'Storage permission is required to select photos.');
+            Alert.alert('Permission Denied', 'Gallery permission is required.');
             return;
           }
           const result = await ImagePicker.launchImageLibraryAsync({
@@ -318,68 +548,47 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const validate = () => {
-    const errors = {};
-    if (!dutyDate) errors.dutyDate = 'Duty date is required';
-    if (!selectedCompanyId) {
-      errors.company = companyCategory === 'office' ? 'Please select an office' : 'Please select a client company';
-    }
-    if (companyCategory === 'client') {
-      if (!customerName.trim()) {
-        errors.customerName = 'Customer contact name is required';
-      }
-      if (!customerPhone.trim()) {
-        errors.customerPhone = 'Customer phone is required';
-      } else if (!isValidPhone(customerPhone)) {
-        errors.customerPhone = 'Customer phone must be exactly 10 digits';
-      }
-    }
-    if (!machineName.trim()) errors.machineName = 'Machine name is required';
-    if (workType === 'Other' && !customWorkDetails.trim()) {
-      errors.customWorkDetails = 'Please specify custom work details';
-    }
-    if (!isValidTimeFormat(inTime)) errors.inTime = 'In time must be in HH:mm format (e.g. 09:30)';
-    if (!isValidTimeFormat(outTime)) errors.outTime = 'Out time must be in HH:mm format (e.g. 17:30)';
-    if (isValidTimeFormat(inTime) && isValidTimeFormat(outTime) && !isTimeOrderValid(inTime, outTime)) {
-      errors.outTime = 'Out time must be later than In time';
-    }
-    if (!workDescription.trim()) errors.workDescription = 'Work description cannot be empty';
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+  // Lightbox preview openers
+  const handleOpenPhotoPreview = (uri, index) => {
+    setPreviewImageUri(uri);
+    setPreviewTitle(`Proof Photo #${index + 1}`);
+    setPreviewSubtitle(customerName || 'Service Verification');
+    setPreviewTimestamp(dutyDate || '');
+    setPreviewIsSignature(false);
+    setPreviewModalVisible(true);
   };
 
-  // Required fields completion check: all required fields must be filled to enable submission
-  const isFormComplete = Boolean(
-    dutyDate &&
-    selectedCompanyId &&
-    (companyCategory === 'office' || (
-      customerName.trim() &&
-      customerPhone.trim().length === 10 &&
-      isValidPhone(customerPhone)
-    )) &&
-    machineName.trim() &&
-    (workType !== 'Other' || customWorkDetails.trim()) &&
-    isValidTimeFormat(inTime) &&
-    isValidTimeFormat(outTime) &&
-    isTimeOrderValid(inTime, outTime) &&
-    workDescription.trim()
-  );
-
-  const isOfficeCompany = (c) => {
-    if (!c) return false;
-    const type = String(c.companyType || '').trim().toLowerCase();
-    const name = String(c.companyName || '').trim().toLowerCase();
-    return type === 'office' || name.includes('office');
+  const handleOpenSignaturePreview = () => {
+    if (!signatureData?.dataUri && !signatureData?.url) return;
+    setPreviewImageUri(signatureData?.dataUri || signatureData?.url || '');
+    setPreviewTitle(companyCategory === 'office' ? 'Office Sign-Off' : 'Customer Signature');
+    setPreviewSubtitle(customerName || 'Service Verification');
+    setPreviewTimestamp(signatureData?.timestamp || '');
+    setPreviewIsSignature(true);
+    setPreviewModalVisible(true);
   };
 
-  const displayedCompanies = companies.filter((c) => {
-    if (companyCategory === 'office') return isOfficeCompany(c);
-    return !isOfficeCompany(c);
-  });
+  // Direct Checkout or Work Details Submission
+  const handleCheckoutOrSubmit = async (isDirectCheckout = false) => {
+    if (!activeDutyId && !isEditing) {
+      Alert.alert('Check-In Required', 'Please check in first before checking out.');
+      return;
+    }
 
-  const handleSubmit = async () => {
-    if (!validate()) return;
+    if (!isDirectCheckout) {
+      if (!machineName.trim()) {
+        Alert.alert('Required Field', 'Please enter machine name before submitting work details.');
+        return;
+      }
+      if (!workDescription.trim()) {
+        Alert.alert('Required Field', 'Please enter work description before submitting work details.');
+        return;
+      }
+      if (workType === 'Other' && !customWorkDetails.trim()) {
+        Alert.alert('Required Field', 'Please specify the custom work details.');
+        return;
+      }
+    }
 
     setLoading(true);
     setError('');
@@ -388,10 +597,9 @@ export const DutyFormScreen = ({ navigation, route }) => {
       let uploadedSignature = { url: '', publicId: '', key: '' };
       let uploadedPhotos = [];
 
-      // 1. Process customer signature
+      // 1. Process signature if provided
       if (signatureData) {
         if (signatureData.url && signatureData.url.startsWith('http') && !signatureData.svgPaths) {
-          // Reusing existing Cloudflare R2 uploaded signature
           uploadedSignature = {
             url: signatureData.url,
             publicId: signatureData.publicId || '',
@@ -406,7 +614,6 @@ export const DutyFormScreen = ({ navigation, route }) => {
               uploadedSignature = sigRes.signature;
             }
           } catch (uploadSigErr) {
-            console.warn('Signature upload error:', uploadSigErr);
             if (signatureData.dataUri) {
               uploadedSignature = {
                 url: signatureData.dataUri,
@@ -418,7 +625,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
         }
       }
 
-      // 2. Process proof photos (retain existing URLs, upload newly captured)
+      // 2. Process proof photos
       const existingPhotos = photos
         .filter((uri) => uri.startsWith('http'))
         .map((url) => ({ url, publicId: '', key: '' }));
@@ -430,81 +637,79 @@ export const DutyFormScreen = ({ navigation, route }) => {
           const newlyUploaded = photosRes.data?.photos || [];
           uploadedPhotos = [...existingPhotos, ...newlyUploaded];
         } catch (uploadPhotosErr) {
-          console.warn('Photos upload error:', uploadPhotosErr);
           uploadedPhotos = existingPhotos;
         }
       } else {
         uploadedPhotos = existingPhotos;
       }
 
-      // 3. Assemble duty submission payload
       const effectiveDescription =
         workType === 'Other' && customWorkDetails.trim()
           ? `[Work: ${customWorkDetails.trim()}]\n${workDescription.trim()}`
           : workDescription.trim();
 
-      const selectedCompany = companies.find((c) => c._id === selectedCompanyId);
-      const isOffice = companyCategory === 'office';
-      const officePhone = selectedCompany?.companyPhoneNumber
-        ? selectedCompany.companyPhoneNumber.replace(/\D/g, '').slice(0, 10)
-        : '';
+      const sanitizedFeatures = features.filter((f) => f && f.trim()).map((f) => f.trim());
+      const sanitizedManpower = manpowerMembers.filter((m) => m && m.name && m.name.trim());
 
-      const payload = {
-        dutyDate,
-        companyId: selectedCompanyId,
-        customerName: isOffice ? 'Office' : customerName.trim(),
-        customerPhoneNumber: isOffice ? officePhone : customerPhone.trim(),
-        machineName: machineName.trim(),
+      const checkoutPayload = {
+        dutyId: activeDutyId,
+        machineName: machineName.trim() || (isDirectCheckout ? 'N/A' : ''),
         workType,
         customWorkType: workType === 'Other' ? customWorkDetails.trim() : '',
-        inTime,
-        outTime,
-        workDescription: effectiveDescription,
+        workDescription: effectiveDescription || (isDirectCheckout ? 'Direct checkout' : ''),
+        features: sanitizedFeatures,
+        manpowerMembers: sanitizedManpower,
         customerSignature: uploadedSignature,
         customerProofPhotos: uploadedPhotos,
       };
 
       if (locationCoords) {
-        payload.latitude = locationCoords.latitude;
-        payload.longitude = locationCoords.longitude;
-        payload.accuracy = locationCoords.accuracy;
-        if (locationCoords.address) {
-          payload.address = locationCoords.address;
-        }
+        checkoutPayload.latitude = locationCoords.latitude;
+        checkoutPayload.longitude = locationCoords.longitude;
+        checkoutPayload.accuracy = locationCoords.accuracy;
+        checkoutPayload.address = locationCoords.address;
       }
 
       if (isEditing) {
-        await dutyApi.updateDuty(dutyToEdit._id, payload);
-        Alert.alert(
-          'Work Report Updated',
-          'Your service visit report has been updated successfully.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
+        await dutyApi.updateDuty(dutyToEdit._id, checkoutPayload);
+        Alert.alert('Report Updated', 'Your work report has been updated successfully.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
       } else {
-        await dutyApi.createDuty(payload);
+        await dutyApi.checkOut(checkoutPayload);
         Alert.alert(
-          'Work Report Submitted',
-          'Your service visit report has been submitted successfully for manager review.',
+          'Checkout Complete',
+          'Checked out and work details submitted successfully!',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       }
     } catch (err) {
-      setError(extractErrorMessage(err, isEditing ? 'Failed to update work report' : 'Failed to submit work report'));
+      setError(extractErrorMessage(err, 'Failed to complete checkout'));
     } finally {
       setLoading(false);
     }
   };
 
+  const displayedCompanies = companies.filter((c) => {
+    if (companyCategory === 'office') return isOfficeCompany(c);
+    return !isOfficeCompany(c);
+  });
+
+  const selectedCompany = companies.find((c) => c._id === selectedCompanyId);
+  const selectedClient = clients.find((c) => c._id === selectedClientId);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
-        title={isEditing ? 'Edit Work Report' : 'Submit Work Report'}
+        title={isEditing ? 'Edit Work Report' : isCheckedIn ? 'Work Details & Checkout' : 'Employee Check-In'}
         subtitle={
           isEditing
             ? `Report #${(dutyToEdit.dutyId || dutyToEdit._id.slice(-6)).toUpperCase()}`
+            : isCheckedIn
+            ? `Active Session • Checked in at ${activeCheckInTime || 'Today'}`
             : companyCategory === 'office'
-            ? 'Log office duty and sign-off verification'
-            : 'Log service visit and customer verification'
+            ? 'Select Office & Check In'
+            : 'Select Client Company & Check In'
         }
         onBack={() => navigation.goBack()}
       />
@@ -519,544 +724,779 @@ export const DutyFormScreen = ({ navigation, route }) => {
         >
           <ErrorMessage message={error} />
 
-          {/* Section: Visit Information */}
-          <Card style={styles.formCard}>
-            <Text style={styles.sectionHeader}>1. Service Visit Information</Text>
-
-            <View style={styles.datePickerRow}>
-              <View style={{ flex: 1 }}>
-                <TextInputField
-                  label="Work Date (YYYY-MM-DD)"
-                  value={dutyDate}
-                  onChangeText={setDutyDate}
-                  placeholder="YYYY-MM-DD"
-                  error={fieldErrors.dutyDate}
-                  required
-                />
+          {/* STAGE 1: CHECK-IN DETAILS (If not checked in, employee fills this and checks in) */}
+          {!isCheckedIn ? (
+            <Card style={styles.formCard}>
+              <View style={styles.cardHeaderRow}>
+                <Ionicons name="log-in-outline" size={20} color={COLORS.primary} />
+                <Text style={styles.sectionHeader}>Step 1: Duty Check-In</Text>
               </View>
-              <TouchableOpacity
-                style={styles.calendarIconBtn}
-                onPress={() => setDatePickerVisible(true)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="calendar" size={20} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
 
-            {/* Category Pill Selector: Office vs Client Company */}
-            <Text style={styles.fieldLabel}>Work Location / Entity *</Text>
-            <View style={styles.typeSelectorRow}>
-              <TouchableOpacity
-                style={[
-                  styles.typePill,
-                  companyCategory === 'office' && styles.typePillActive,
-                ]}
-                onPress={() => {
-                  setCompanyCategory('office');
-                  const officeComp = companies.find((c) => isOfficeCompany(c));
-                  if (officeComp) {
-                    setSelectedCompanyId(officeComp._id);
-                    if (fieldErrors.company) {
-                      setFieldErrors((prev) => ({ ...prev, company: null }));
-                    }
-                    if (officeComp.companyPhoneNumber) {
-                      setCustomerPhone(officeComp.companyPhoneNumber);
-                    }
-                  }
-                }}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name="business"
-                  size={16}
-                  color={companyCategory === 'office' ? '#FFFFFF' : COLORS.primary}
-                />
-                <Text
-                  style={[
-                    styles.typePillText,
-                    companyCategory === 'office' && styles.typePillTextActive,
-                  ]}
-                >
-                  Office
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.typePill,
-                  companyCategory === 'client' && styles.typePillActive,
-                ]}
-                onPress={() => {
-                  setCompanyCategory('client');
-                  const currentComp = companies.find((c) => c._id === selectedCompanyId);
-                  if (!currentComp || isOfficeCompany(currentComp)) {
-                    setSelectedCompanyId('');
-                    setCustomerName('');
-                    setCustomerPhone('');
-                  }
-                  if (fieldErrors.company) {
-                    setFieldErrors((prev) => ({ ...prev, company: null }));
-                  }
-                  setCompanyDropdownVisible(true);
-                }}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name="storefront"
-                  size={16}
-                  color={companyCategory === 'client' ? '#FFFFFF' : COLORS.primary}
-                />
-                <Text
-                  style={[
-                    styles.typePillText,
-                    companyCategory === 'client' && styles.typePillTextActive,
-                  ]}
-                >
-                  Client Company
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Company Selection via Searchable Dropdown */}
-            <View style={styles.companyHeaderRow}>
-              <Text style={styles.fieldLabel}>
-                {companyCategory === 'office' ? 'Selected Office *' : 'Client Company *'}
-              </Text>
-              {Boolean(companyCategory === 'client') ? (
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('CompanyForm')}
-                  style={styles.addCompanyBtn}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
-                  <Text style={styles.addCompanyBtnText}>Add Company</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.companyDropdownBtn,
-                fieldErrors.company && styles.companyDropdownBtnError,
-              ]}
-              onPress={() => setCompanyDropdownVisible(true)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.companyDropdownLeft}>
-                <Ionicons
-                  name={companyCategory === 'office' ? 'business' : 'storefront'}
-                  size={18}
-                  color={selectedCompanyId ? COLORS.primary : COLORS.textMuted}
-                />
-                <View style={styles.companyDropdownTextWrap}>
-                  <Text
-                    style={[
-                      styles.companyDropdownText,
-                      !selectedCompanyId && styles.companyDropdownPlaceholder,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {companies.find((c) => c._id === selectedCompanyId)?.companyName ||
-                      (companyCategory === 'office'
-                        ? 'Select Office / Branch...'
-                        : 'Select Client Company...')}
-                  </Text>
-                  {companies.find((c) => c._id === selectedCompanyId)?.location ? (
-                    <Text style={styles.companyDropdownSub} numberOfLines={1}>
-                      Site: {companies.find((c) => c._id === selectedCompanyId).location}
-                    </Text>
-                  ) : null}
+              {/* Date Selector */}
+              <View style={styles.datePickerRow}>
+                <View style={{ flex: 1 }}>
+                  <TextInputField
+                    label="Work Date (YYYY-MM-DD)"
+                    value={dutyDate}
+                    onChangeText={setDutyDate}
+                    placeholder="YYYY-MM-DD"
+                    error={fieldErrors.dutyDate}
+                    required
+                  />
                 </View>
+                <TouchableOpacity
+                  style={styles.calendarIconBtn}
+                  onPress={() => setDatePickerVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="calendar" size={20} color={COLORS.primary} />
+                </TouchableOpacity>
               </View>
-              <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-            {fieldErrors.company ? (
-              <Text style={styles.errorText}>{fieldErrors.company}</Text>
-            ) : null}
 
-            {/* Contact details: only shown for Client Company */}
-            {companyCategory === 'client' ? (
-              <>
-                <TextInputField
-                  label="Customer Contact Name"
-                  placeholder="e.g. Senthil Kumar (Factory Mgr)"
-                  value={customerName}
-                  onChangeText={setCustomerName}
-                  error={fieldErrors.customerName}
-                  required
-                />
-
-                <TextInputField
-                  label="Customer Phone Number (10 Digits)"
-                  placeholder="10-digit mobile number"
-                  value={customerPhone}
-                  onChangeText={(t) => {
-                    const cleaned = t.replace(/\D/g, '').slice(0, 10);
-                    setCustomerPhone(cleaned);
-                    if (fieldErrors.customerPhone) {
-                      setFieldErrors((prev) => ({ ...prev, customerPhone: null }));
+              {/* Duty Type Selector: Office vs Client Company */}
+              <Text style={styles.fieldLabel}>Duty Type / Entity *</Text>
+              <View style={styles.typeSelectorRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.typePill,
+                    companyCategory === 'office' && styles.typePillActive,
+                  ]}
+                  onPress={() => {
+                    setCompanyCategory('office');
+                    const officeComp = companies.find((c) => isOfficeCompany(c));
+                    if (officeComp) {
+                      setSelectedCompanyId(officeComp._id);
                     }
                   }}
-                  keyboardType="number-pad"
-                  maxLength={10}
-                  error={fieldErrors.customerPhone}
-                  required
-                />
-              </>
-            ) : null}
-
-            <TextInputField
-              label="Machine Name / Model"
-              placeholder="e.g. CNC Spinning Frame M4"
-              value={machineName}
-              onChangeText={setMachineName}
-              error={fieldErrors.machineName}
-              required
-            />
-
-            {/* Work Type Selection */}
-            <Text style={[styles.fieldLabel, { marginTop: SPACING.sm }]}>Work Type *</Text>
-            <View style={styles.workTypesWrap}>
-              {APP_CONFIG.WORK_TYPES.map((type) => {
-                const isSelected = workType === type;
-                return (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.workTypeChip, isSelected && styles.workTypeChipSelected]}
-                    onPress={() => setWorkType(type)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="business"
+                    size={16}
+                    color={companyCategory === 'office' ? '#FFFFFF' : COLORS.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.typePillText,
+                      companyCategory === 'office' && styles.typePillTextActive,
+                    ]}
                   >
+                    Office Duty
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.typePill,
+                    companyCategory === 'client' && styles.typePillActive,
+                  ]}
+                  onPress={() => {
+                    setCompanyCategory('client');
+                    const currentComp = companies.find((c) => c._id === selectedCompanyId);
+                    if (!currentComp || isOfficeCompany(currentComp)) {
+                      setSelectedCompanyId('');
+                      setSelectedClientId('');
+                      setCustomerName('');
+                      setCustomerPhone('');
+                    }
+                    setCompanyDropdownVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="storefront"
+                    size={16}
+                    color={companyCategory === 'client' ? '#FFFFFF' : COLORS.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.typePillText,
+                      companyCategory === 'client' && styles.typePillTextActive,
+                    ]}
+                  >
+                    Client Company
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Company Selection Dropdown + Inline Add Company */}
+              <View style={styles.companyHeaderRow}>
+                <Text style={styles.fieldLabel}>
+                  {companyCategory === 'office' ? 'Selected Office *' : 'Client Company *'}
+                </Text>
+                {companyCategory === 'client' ? (
+                  <TouchableOpacity
+                    onPress={() => setAddCompanyModalVisible(true)}
+                    style={styles.addCompanyBtn}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
+                    <Text style={styles.addCompanyBtnText}>+ Add Company</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.companyDropdownBtn,
+                  fieldErrors.company && styles.companyDropdownBtnError,
+                ]}
+                onPress={() => setCompanyDropdownVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.companyDropdownLeft}>
+                  <Ionicons
+                    name={companyCategory === 'office' ? 'business' : 'storefront'}
+                    size={18}
+                    color={selectedCompanyId ? COLORS.primary : COLORS.textMuted}
+                  />
+                  <View style={styles.companyDropdownTextWrap}>
                     <Text
                       style={[
-                        styles.workTypeChipText,
-                        isSelected && styles.workTypeChipTextSelected,
+                        styles.companyDropdownText,
+                        !selectedCompanyId && styles.companyDropdownPlaceholder,
                       ]}
+                      numberOfLines={1}
                     >
-                      {type}
+                      {selectedCompany?.companyName ||
+                        (companyCategory === 'office'
+                          ? 'Select Office / Branch...'
+                          : 'Select Client Company...')}
                     </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* If 'Other' selected, display custom work details input */}
-            {workType === 'Other' && (
-              <TextInputField
-                label="Custom Work Details / Specification *"
-                placeholder="e.g. Retrofit Calibration, PLC Programming, Sensor Replacement"
-                value={customWorkDetails}
-                onChangeText={(t) => {
-                  setCustomWorkDetails(t);
-                  if (fieldErrors.customWorkDetails) {
-                    setFieldErrors((prev) => ({ ...prev, customWorkDetails: null }));
-                  }
-                }}
-                error={fieldErrors.customWorkDetails}
-                required
-              />
-            )}
-
-            {/* Timings (Interactive Time Picker Modals) */}
-            <View style={styles.timesRow}>
-              <View style={styles.timeCol}>
-                <Text style={styles.fieldLabel}>In Time (HH:mm) *</Text>
-                <TouchableOpacity
-                  style={[styles.timePickerCard, fieldErrors.inTime && styles.timePickerCardError]}
-                  onPress={() => setInTimePickerVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="time-outline" size={18} color={COLORS.primary} />
-                  <Text style={styles.timePickerCardText}>{inTime || '09:30'}</Text>
-                  <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
-                </TouchableOpacity>
-                {fieldErrors.inTime ? (
-                  <Text style={styles.errorText}>{fieldErrors.inTime}</Text>
-                ) : null}
-              </View>
-
-              <View style={styles.timeCol}>
-                <Text style={styles.fieldLabel}>Out Time (HH:mm) *</Text>
-                <TouchableOpacity
-                  style={[styles.timePickerCard, fieldErrors.outTime && styles.timePickerCardError]}
-                  onPress={() => setOutTimePickerVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="time-outline" size={18} color={COLORS.primary} />
-                  <Text style={styles.timePickerCardText}>{outTime || '17:30'}</Text>
-                  <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
-                </TouchableOpacity>
-                {fieldErrors.outTime ? (
-                  <Text style={styles.errorText}>{fieldErrors.outTime}</Text>
-                ) : null}
-              </View>
-            </View>
-
-            <TextInputField
-              label="Work Description"
-              placeholder="Describe repairs, parts replaced, diagnostic observations, or testing results..."
-              value={workDescription}
-              onChangeText={setWorkDescription}
-              multiline
-              numberOfLines={4}
-              error={fieldErrors.workDescription}
-              required
-            />
-          </Card>
-
-          {/* Section: GPS Location */}
-          <Card style={styles.formCard}>
-            <Text style={styles.sectionHeader}>2. Service Location (GPS)</Text>
-            <View style={styles.locationContainer}>
-              {locationCoords ? (
-                <View style={styles.locationCapturedBlock}>
-                  {locationCoords.address ? (
-                    <View style={styles.exactAddressCard}>
-                      <Ionicons name="location" size={20} color={COLORS.primary} style={{ marginTop: 2 }} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.exactAddressTitle}>Exact Location Name</Text>
-                        <Text style={styles.exactAddressText}>{locationCoords.address}</Text>
-                      </View>
-                    </View>
-                  ) : null}
-
-                  <View style={styles.locationCapturedRow}>
-                    <Ionicons name="navigate-circle" size={24} color={COLORS.success} />
-                    <View style={styles.locationInfo}>
-                      <Text style={styles.locationCoordText}>
-                        Lat: {locationCoords.latitude.toFixed(5)}, Lon: {locationCoords.longitude.toFixed(5)}
+                    {selectedCompany?.location ? (
+                      <Text style={styles.companyDropdownSub} numberOfLines={1}>
+                        Site: {selectedCompany.location}
                       </Text>
-                      <Text style={styles.locationAccuracyText}>
-                        Accuracy: ~{locationCoords.accuracy}m
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.viewMapChip}
-                      onPress={() =>
-                        openMapLocation(
-                          locationCoords.latitude,
-                          locationCoords.longitude,
-                          customerName || 'Service Visit'
-                        )
-                      }
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="map-outline" size={14} color="#FFFFFF" />
-                      <Text style={styles.viewMapChipText}>View Map</Text>
-                    </TouchableOpacity>
+                    ) : null}
                   </View>
                 </View>
-              ) : (
-                <Text style={styles.locationEmptyText}>
-                  Tag your visit location to verify attendance at the{' '}
-                  {companyCategory === 'office' ? 'office' : 'customer site'}.
-                </Text>
-              )}
-
-              <SecondaryButton
-                title={locationCoords ? 'Retake GPS Coordinates' : 'Capture Current Location'}
-                icon={<Ionicons name="navigate-outline" size={18} color={COLORS.primary} style={{ marginRight: 6 }} />}
-                onPress={handleCaptureLocation}
-                loading={locating}
-                style={{ marginTop: SPACING.sm }}
-              />
-            </View>
-          </Card>
-
-          {/* Section: Signature & Photos */}
-          <Card style={styles.formCard}>
-            <Text style={styles.sectionHeader}>3. Verification & Proofs</Text>
-
-            {/* Signature */}
-            <Text style={styles.fieldLabel}>
-              {companyCategory === 'office' ? 'Office Sign-Off' : 'Customer Signature'}
-            </Text>
-            {signatureData ? (
-              <View style={styles.signaturePreviewWrap}>
-                <View style={styles.signaturePreviewContainer}>
-                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                  <Text style={styles.signatureSuccessText}>
-                    {companyCategory === 'office' ? 'Office sign-off captured' : 'Customer signature captured'}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setSignatureModalVisible(true)}
-                    style={styles.resignLink}
-                  >
-                    <Text style={styles.resignLinkText}>Re-sign</Text>
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity
-                  style={styles.signatureThumbBox}
-                  onPress={handleOpenSignaturePreview}
-                  activeOpacity={0.85}
-                >
-                  <SignatureImage
-                    uri={signatureData.dataUri || signatureData.url}
-                    height={100}
-                    timestamp={signatureData.timestamp}
-                    onPress={handleOpenSignaturePreview}
-                  />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <SecondaryButton
-                title={companyCategory === 'office' ? 'Open Sign-Off Pad' : 'Open Signature Pad'}
-                icon={<Ionicons name="pencil-outline" size={18} color={COLORS.primary} style={{ marginRight: 6 }} />}
-                onPress={() => setSignatureModalVisible(true)}
-                style={{ marginBottom: SPACING.md }}
-              />
-            )}
-
-            {/* Photos */}
-            <View style={styles.photosHeader}>
-              <Text style={styles.fieldLabel}>
-                {companyCategory === 'office' ? 'Office Proof Photos' : 'Proof Photos'} ({photos.length}/3)
-              </Text>
-              <TouchableOpacity onPress={handlePickPhoto}>
-                <Text style={styles.addPhotoLink}>+ Attach Photo</Text>
+                <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
               </TouchableOpacity>
-            </View>
+              {fieldErrors.company ? (
+                <Text style={styles.errorText}>{fieldErrors.company}</Text>
+              ) : null}
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
-              {photos.map((uri, index) => (
-                <View key={index} style={styles.photoThumbContainer}>
+              {/* Client Selection (ONLY for Client Company) + Inline Add Client */}
+              {companyCategory === 'client' ? (
+                <View style={{ marginTop: SPACING.md }}>
+                  <View style={styles.companyHeaderRow}>
+                    <Text style={styles.fieldLabel}>Client Contact Person *</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (!selectedCompanyId) {
+                          Alert.alert('Select Company', 'Please select a company before adding a client');
+                          return;
+                        }
+                        setAddClientModalVisible(true);
+                      }}
+                      style={styles.addCompanyBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="person-add-outline" size={16} color={COLORS.primary} />
+                      <Text style={styles.addCompanyBtnText}>+ Add Client</Text>
+                    </TouchableOpacity>
+                  </View>
+
                   <TouchableOpacity
-                    onPress={() => handleOpenPhotoPreview(uri, index)}
-                    activeOpacity={0.85}
+                    style={[
+                      styles.companyDropdownBtn,
+                      fieldErrors.client && styles.companyDropdownBtnError,
+                    ]}
+                    onPress={() => {
+                      if (!selectedCompanyId) {
+                        Alert.alert('Company Required', 'Please select a client company first.');
+                        return;
+                      }
+                      setClientDropdownVisible(true);
+                    }}
+                    activeOpacity={0.8}
                   >
-                    <Image source={{ uri }} style={styles.photoThumb} />
-                    <View style={styles.photoZoomHint}>
-                      <Ionicons name="expand-outline" size={12} color="#FFFFFF" />
+                    <View style={styles.companyDropdownLeft}>
+                      <Ionicons
+                        name="person"
+                        size={18}
+                        color={selectedClientId || customerName ? COLORS.primary : COLORS.textMuted}
+                      />
+                      <View style={styles.companyDropdownTextWrap}>
+                        <Text
+                          style={[
+                            styles.companyDropdownText,
+                            !selectedClientId && !customerName && styles.companyDropdownPlaceholder,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {selectedClient
+                            ? `${selectedClient.clientName}${selectedClient.clientPhoneNumber ? ` (${selectedClient.clientPhoneNumber})` : ''}`
+                            : customerName || 'Select Client Contact Person...'}
+                        </Text>
+                      </View>
                     </View>
+                    <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.removePhotoBtn}
-                    onPress={() => handleRemovePhoto(index)}
-                  >
-                    <Ionicons name="close" size={14} color={COLORS.textLight} />
-                  </TouchableOpacity>
+                  {fieldErrors.client ? (
+                    <Text style={styles.errorText}>{fieldErrors.client}</Text>
+                  ) : null}
                 </View>
-              ))}
+              ) : null}
 
-              {photos.length < 3 && (
-                <TouchableOpacity style={styles.addPhotoSlot} onPress={handlePickPhoto}>
-                  <Ionicons name="camera-outline" size={28} color={COLORS.textMuted} />
-                  <Text style={styles.addPhotoSlotText}>Add</Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-          </Card>
+              {/* GPS Coordinates Capture for Check-In */}
+              <View style={styles.gpsContainer}>
+                <View style={styles.gpsHeaderRow}>
+                  <Ionicons name="navigate-circle" size={20} color={COLORS.primary} />
+                  <Text style={styles.gpsTitle}>Check-In GPS Location</Text>
+                  {locationCoords ? (
+                    <View style={styles.gpsVerifiedBadge}>
+                      <Ionicons name="checkmark-circle" size={13} color="#059669" />
+                      <Text style={styles.gpsVerifiedText}>Ready</Text>
+                    </View>
+                  ) : null}
+                </View>
 
-          <PrimaryButton
-            title={isEditing ? 'Save Changes' : 'Submit Work Report'}
-            onPress={handleSubmit}
-            loading={loading}
-            disabled={!isFormComplete || loading}
-            style={[
-              styles.submitBtn,
-              !isFormComplete && styles.submitBtnDisabled,
-            ]}
-          />
-          {!isFormComplete ? (
-            <Text style={styles.submitHintText}>
-              * Fill all required fields above to enable submission
-            </Text>
-          ) : null}
+                {locationCoords?.address ? (
+                  <View style={styles.resolvedAddressBox}>
+                    <Text style={styles.resolvedAddressLabel}>Address:</Text>
+                    <Text style={styles.resolvedAddressText}>{locationCoords.address}</Text>
+                  </View>
+                ) : null}
+
+                <SecondaryButton
+                  title={
+                    locating
+                      ? 'Fetching GPS...'
+                      : locationCoords
+                      ? 'Update Location'
+                      : 'Capture Current Location'
+                  }
+                  onPress={handleCaptureLocation}
+                  loading={locating}
+                  icon={locating ? undefined : 'location-outline'}
+                  style={{ marginTop: SPACING.sm }}
+                />
+              </View>
+
+              {/* Check-In Action Button */}
+              <PrimaryButton
+                title="Check In"
+                onPress={handleCheckIn}
+                loading={loading}
+                icon="log-in-outline"
+                style={{ marginTop: SPACING.lg }}
+              />
+            </Card>
+          ) : (
+            /* STAGE 2: CHECKED-IN SESSION & WORK DETAILS FORM */
+            <>
+              {/* Checked-In Active Status Card */}
+              <Card style={styles.activeCheckInCard}>
+                <View style={styles.activeCheckInRow}>
+                  <View style={styles.activeDot} />
+                  <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                    <Text style={styles.activeCheckInTitle}>
+                      {companyCategory === 'office' ? 'Office Duty Session' : 'Client Duty Session'}
+                    </Text>
+                    <Text style={styles.activeCheckInSub}>
+                      Checked in at {activeCheckInTime || 'Today'} • {selectedCompany?.companyName || 'Company'}
+                      {selectedClient ? ` • Client: ${selectedClient.clientName}` : customerName ? ` • ${customerName}` : ''}
+                    </Text>
+                  </View>
+                </View>
+              </Card>
+
+              {/* Work Details Form */}
+              <Card style={styles.formCard}>
+                <Text style={styles.sectionHeader}>Work Details</Text>
+
+                {/* Auto-filled Date, Company & Client Badges */}
+                <View style={styles.autoFilledGrid}>
+                  <View style={styles.autoFilledBadge}>
+                    <Text style={styles.autoFilledLabel}>Date</Text>
+                    <Text style={styles.autoFilledVal}>{dutyDate}</Text>
+                  </View>
+                  <View style={styles.autoFilledBadge}>
+                    <Text style={styles.autoFilledLabel}>{companyCategory === 'office' ? 'Office' : 'Company'}</Text>
+                    <Text style={styles.autoFilledVal} numberOfLines={1}>
+                      {selectedCompany?.companyName || 'Office'}
+                    </Text>
+                  </View>
+                  {companyCategory === 'client' && (selectedClient || customerName) ? (
+                    <View style={styles.autoFilledBadge}>
+                      <Text style={styles.autoFilledLabel}>Client</Text>
+                      <Text style={styles.autoFilledVal} numberOfLines={1}>
+                        {selectedClient?.clientName || customerName}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Machine Name */}
+                <TextInputField
+                  label="Machine Name / Model"
+                  placeholder="e.g. CNC Spinning Frame M4"
+                  value={machineName}
+                  onChangeText={setMachineName}
+                  error={fieldErrors.machineName}
+                  required
+                />
+
+                {/* Work Type Selection */}
+                <Text style={[styles.fieldLabel, { marginTop: SPACING.sm }]}>Work Type *</Text>
+                <View style={styles.workTypesWrap}>
+                  {APP_CONFIG.WORK_TYPES.map((type) => {
+                    const isSelected = workType === type;
+                    return (
+                      <TouchableOpacity
+                        key={type}
+                        style={[styles.workTypeChip, isSelected && styles.workTypeChipSelected]}
+                        onPress={() => setWorkType(type)}
+                      >
+                        <Text
+                          style={[
+                            styles.workTypeChipText,
+                            isSelected && styles.workTypeChipTextSelected,
+                          ]}
+                        >
+                          {type}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {workType === 'Other' && (
+                  <TextInputField
+                    label="Custom Work Details *"
+                    placeholder="e.g. PLC Programming, Sensor Calibration"
+                    value={customWorkDetails}
+                    onChangeText={setCustomWorkDetails}
+                    required
+                  />
+                )}
+
+                {/* Work Description */}
+                <TextInputField
+                  label="Work Description *"
+                  placeholder="Describe maintenance or service actions carried out"
+                  value={workDescription}
+                  onChangeText={setWorkDescription}
+                  multiline
+                  numberOfLines={4}
+                  required
+                />
+
+                {/* NEW: Highlights / Features Section (e.g. PLC, HDM) */}
+                <View style={styles.dynamicSectionWrap}>
+                  <View style={styles.dynamicSectionHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="sparkles" size={18} color="#D97706" />
+                      <Text style={styles.dynamicSectionTitle}>Highlights / Features (Optional)</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleAddFeature}
+                      style={styles.addDynamicBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add-circle" size={16} color={COLORS.primary} />
+                      <Text style={styles.addDynamicBtnText}>+ Add Feature</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.dynamicSectionSubtitle}>
+                    Add specific machine or technical features (e.g., PLC, HDM, VFD, Sensor Module).
+                  </Text>
+
+                  {features.map((feat, idx) => (
+                    <View key={`feat-${idx}`} style={styles.featureRow}>
+                      <View style={{ flex: 1 }}>
+                        <TextInputField
+                          label={`Feature #${idx + 1}`}
+                          placeholder="e.g. PLC, HDM, VFD Controller"
+                          value={feat}
+                          onChangeText={(t) => handleUpdateFeature(t, idx)}
+                        />
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveFeature(idx)}
+                        style={styles.removeDynamicIconBtn}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="trash-outline" size={20} color="#DC2626" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+
+                {/* NEW: Multiple Manpower Members Section */}
+                <View style={styles.dynamicSectionWrap}>
+                  <View style={styles.dynamicSectionHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="people" size={18} color={COLORS.primary} />
+                      <Text style={styles.dynamicSectionTitle}>Multiple Manpower Members (Optional)</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleAddManpower}
+                      style={styles.addDynamicBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add-circle" size={16} color={COLORS.primary} />
+                      <Text style={styles.addDynamicBtnText}>+ Add Member</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.dynamicSectionSubtitle}>
+                    Add team technicians or assistants working on this duty visit.
+                  </Text>
+
+                  {manpowerMembers.map((member, idx) => (
+                    <Card key={`member-${idx}`} style={styles.manpowerCard}>
+                      <View style={styles.manpowerCardHeader}>
+                        <Text style={styles.manpowerCardNum}>Team Member #{idx + 1}</Text>
+                        <TouchableOpacity
+                          onPress={() => handleRemoveManpower(idx)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                        </TouchableOpacity>
+                      </View>
+
+                      <TextInputField
+                        label="Member Name *"
+                        placeholder="e.g. Kabilan M"
+                        value={member.name}
+                        onChangeText={(t) => handleUpdateManpower('name', t, idx)}
+                      />
+
+                      <TextInputField
+                        label="Phone Number (Optional)"
+                        placeholder="10-digit mobile number"
+                        value={member.phoneNumber}
+                        onChangeText={(t) => handleUpdateManpower('phoneNumber', t.replace(/\D/g, '').slice(0, 10), idx)}
+                        keyboardType="number-pad"
+                        maxLength={10}
+                      />
+
+                      <TextInputField
+                        label="Role / Description"
+                        placeholder="e.g. Lead Technician, Assistant"
+                        value={member.description}
+                        onChangeText={(t) => handleUpdateManpower('description', t, idx)}
+                      />
+                    </Card>
+                  ))}
+                </View>
+
+                {/* Photo Proof (Max 3) */}
+                <View style={styles.photosSection}>
+                  <View style={styles.photosHeaderRow}>
+                    <Text style={styles.fieldLabel}>Proof Photos ({photos.length}/3)</Text>
+                    {photos.length < 3 && (
+                      <TouchableOpacity
+                        onPress={handlePickPhoto}
+                        style={styles.addPhotoLink}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="camera-outline" size={16} color={COLORS.primary} />
+                        <Text style={styles.addPhotoLinkText}>Add Photo</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <View style={styles.photosGrid}>
+                    {photos.map((uri, idx) => (
+                      <View key={`photo-${idx}`} style={styles.photoThumbWrap}>
+                        <TouchableOpacity
+                          onPress={() => handleOpenPhotoPreview(uri, idx)}
+                          activeOpacity={0.8}
+                        >
+                          <Image source={{ uri }} style={styles.photoThumb} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.photoRemoveBtn}
+                          onPress={() => handleRemovePhoto(idx)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="close-circle" size={20} color="#DC2626" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    {photos.length === 0 && (
+                      <TouchableOpacity
+                        style={styles.emptyPhotoSlot}
+                        onPress={handlePickPhoto}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="camera" size={24} color={COLORS.textMuted} />
+                        <Text style={styles.emptyPhotoSlotText}>Tap to add proof photo</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                {/* Customer / Office Signature */}
+                <View style={styles.signatureSection}>
+                  <Text style={styles.fieldLabel}>
+                    {companyCategory === 'office' ? 'Office Sign-Off' : 'Customer Signature'}
+                  </Text>
+                  {signatureData ? (
+                    <View style={styles.signaturePreviewWrap}>
+                      <TouchableOpacity
+                        onPress={handleOpenSignaturePreview}
+                        activeOpacity={0.8}
+                      >
+                        <SignatureImage
+                          signature={signatureData.dataUri || signatureData.url}
+                          style={styles.signaturePreviewImg}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.resignBtn}
+                        onPress={() => setSignatureModalVisible(true)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="refresh" size={14} color={COLORS.primary} />
+                        <Text style={styles.resignBtnText}>Re-Sign</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.openSignPadBtn}
+                      onPress={() => setSignatureModalVisible(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="pencil" size={18} color={COLORS.primary} />
+                      <Text style={styles.openSignPadBtnText}>Open Signature Pad</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Current Location Checkout Tagging */}
+                <View style={styles.gpsContainer}>
+                  <View style={styles.gpsHeaderRow}>
+                    <Ionicons name="navigate-circle" size={20} color={COLORS.primary} />
+                    <Text style={styles.gpsTitle}>Current Location</Text>
+                  </View>
+                  {locationCoords?.address ? (
+                    <Text style={styles.resolvedAddressText}>{locationCoords.address}</Text>
+                  ) : null}
+                  <SecondaryButton
+                    title={locating ? 'Fetching...' : 'Refresh Location'}
+                    onPress={handleCaptureLocation}
+                    loading={locating}
+                    icon="location-outline"
+                    style={{ marginTop: SPACING.xs }}
+                  />
+                </View>
+
+                {/* ACTION BUTTONS: Direct Checkout or Submit Work Details & Checkout */}
+                <View style={styles.actionsWrap}>
+                  <PrimaryButton
+                    title="Submit Work Details & Checkout"
+                    onPress={() => handleCheckoutOrSubmit(false)}
+                    loading={loading}
+                    icon="checkmark-done"
+                    style={{ marginBottom: SPACING.sm }}
+                  />
+                  <SecondaryButton
+                    title="Checkout Directly"
+                    onPress={() => handleCheckoutOrSubmit(true)}
+                    disabled={loading}
+                    icon="log-out-outline"
+                  />
+                </View>
+              </Card>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Date Picker Modal */}
+      <DatePickerModal
+        visible={datePickerVisible}
+        onClose={() => setDatePickerVisible(false)}
+        onSelect={(date) => {
+          setDutyDate(date);
+          setDatePickerVisible(false);
+        }}
+        initialDate={dutyDate}
+      />
+
+      {/* Company Selection Modal */}
+      <DropdownPickerModal
+        visible={companyDropdownVisible}
+        title={companyCategory === 'office' ? 'Select Office' : 'Select Client Company'}
+        items={displayedCompanies.map((c) => ({
+          label: c.companyName,
+          value: c._id,
+          subtitle: c.location,
+        }))}
+        selectedValue={selectedCompanyId}
+        onSelect={(item) => {
+          setSelectedCompanyId(item.value);
+          setCompanyDropdownVisible(false);
+          if (fieldErrors.company) {
+            setFieldErrors((prev) => ({ ...prev, company: null }));
+          }
+        }}
+        onClose={() => setCompanyDropdownVisible(false)}
+        actionButtonLabel="+ Add New Company"
+        onActionButtonPress={() => {
+          setCompanyDropdownVisible(false);
+          setAddCompanyModalVisible(true);
+        }}
+      />
+
+      {/* Client Selection Modal */}
+      <DropdownPickerModal
+        visible={clientDropdownVisible}
+        title="Select Client Contact"
+        items={clients.map((cl) => ({
+          label: cl.clientName,
+          value: cl._id,
+          subtitle: cl.clientPhoneNumber ? `Phone: ${cl.clientPhoneNumber}` : '',
+        }))}
+        selectedValue={selectedClientId}
+        onSelect={(item) => {
+          setSelectedClientId(item.value);
+          setCustomerName(item.label);
+          const matched = clients.find((c) => c._id === item.value);
+          if (matched?.clientPhoneNumber) {
+            setCustomerPhone(matched.clientPhoneNumber);
+          }
+          setClientDropdownVisible(false);
+          if (fieldErrors.client) {
+            setFieldErrors((prev) => ({ ...prev, client: null }));
+          }
+        }}
+        onClose={() => setClientDropdownVisible(false)}
+        actionButtonLabel="+ Add New Client"
+        onActionButtonPress={() => {
+          setClientDropdownVisible(false);
+          setAddClientModalVisible(true);
+        }}
+      />
+
+      {/* Inline Modal: Add New Company */}
+      <Modal
+        visible={addCompanyModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAddCompanyModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Card style={styles.dialogCard}>
+            <View style={styles.dialogHeader}>
+              <Text style={styles.dialogTitle}>Add New Client Company</Text>
+              <TouchableOpacity onPress={() => setAddCompanyModalVisible(false)}>
+                <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInputField
+              label="Company Name *"
+              placeholder="e.g. Acme Industrial Corp"
+              value={newCompanyName}
+              onChangeText={setNewCompanyName}
+              required
+            />
+            <TextInputField
+              label="Site Location *"
+              placeholder="e.g. Coimbatore, Tamil Nadu"
+              value={newCompanyLocation}
+              onChangeText={setNewCompanyLocation}
+              required
+            />
+            <TextInputField
+              label="Phone Number (Optional)"
+              placeholder="10-digit number"
+              value={newCompanyPhone}
+              onChangeText={(t) => setNewCompanyPhone(t.replace(/\D/g, '').slice(0, 10))}
+              keyboardType="number-pad"
+              maxLength={10}
+            />
+
+            <View style={styles.dialogButtonsRow}>
+              <SecondaryButton
+                title="Cancel"
+                onPress={() => setAddCompanyModalVisible(false)}
+                style={{ flex: 1, marginRight: SPACING.sm }}
+              />
+              <PrimaryButton
+                title="Create Company"
+                onPress={handleSaveNewCompany}
+                loading={savingNewCompany}
+                style={{ flex: 1.2 }}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
+
+      {/* Inline Modal: Add New Client */}
+      <Modal
+        visible={addClientModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAddClientModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Card style={styles.dialogCard}>
+            <View style={styles.dialogHeader}>
+              <Text style={styles.dialogTitle}>Add Client Contact</Text>
+              <TouchableOpacity onPress={() => setAddClientModalVisible(false)}>
+                <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInputField
+              label="Client Contact Name *"
+              placeholder="e.g. Senthil Kumar (Plant Manager)"
+              value={newClientName}
+              onChangeText={setNewClientName}
+              required
+            />
+            <TextInputField
+              label="Phone Number (Optional)"
+              placeholder="10-digit mobile number"
+              value={newClientPhone}
+              onChangeText={(t) => setNewClientPhone(t.replace(/\D/g, '').slice(0, 10))}
+              keyboardType="number-pad"
+              maxLength={10}
+            />
+
+            <View style={styles.dialogButtonsRow}>
+              <SecondaryButton
+                title="Cancel"
+                onPress={() => setAddClientModalVisible(false)}
+                style={{ flex: 1, marginRight: SPACING.sm }}
+              />
+              <PrimaryButton
+                title="Link Client"
+                onPress={handleSaveNewClient}
+                loading={savingNewClient}
+                style={{ flex: 1.2 }}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
+
+      {/* Signature Pad Modal */}
       <SignaturePadModal
         visible={signatureModalVisible}
         onClose={() => setSignatureModalVisible(false)}
-        onSave={(data) => setSignatureData(data)}
+        onSave={(sig) => {
+          setSignatureData(sig);
+          setSignatureModalVisible(false);
+        }}
         title={companyCategory === 'office' ? 'Office Sign-Off' : 'Customer Signature'}
-        instruction={
-          companyCategory === 'office'
-            ? 'Ask office in-charge to sign with finger inside the box below'
-            : 'Ask customer to sign with finger inside the box below'
-        }
       />
 
+      {/* Image Viewer Lightbox Modal */}
       <ImageViewerModal
         visible={previewModalVisible}
-        onClose={() => setPreviewModalVisible(false)}
         imageUri={previewImageUri}
         title={previewTitle}
         subtitle={previewSubtitle}
         timestamp={previewTimestamp}
         isSignature={previewIsSignature}
-      />
-
-      <DatePickerModal
-        visible={datePickerVisible}
-        value={dutyDate}
-        onSelect={setDutyDate}
-        onClose={() => setDatePickerVisible(false)}
-        title="Select Work Date"
-      />
-
-      <TimePickerModal
-        visible={inTimePickerVisible}
-        value={inTime}
-        onSelect={setInTime}
-        onClose={() => setInTimePickerVisible(false)}
-        title="Select Check-In Time"
-      />
-
-      <TimePickerModal
-        visible={outTimePickerVisible}
-        value={outTime}
-        onSelect={setOutTime}
-        onClose={() => setOutTimePickerVisible(false)}
-        title="Select Check-Out Time"
-      />
-
-      <DropdownPickerModal
-        visible={companyDropdownVisible}
-        onClose={() => setCompanyDropdownVisible(false)}
-        title={companyCategory === 'office' ? 'Select Office / Branch' : 'Select Client Company'}
-        searchPlaceholder={companyCategory === 'office' ? 'Search office by name or location...' : 'Search client company by name or location...'}
-        selectedValue={selectedCompanyId}
-        showAllOption={false}
-        actionButtonLabel={companyCategory === 'client' ? '+ Add New Company' : null}
-        onActionButtonPress={companyCategory === 'client' ? () => {
-          setCompanyDropdownVisible(false);
-          navigation.navigate('CompanyForm');
-        } : null}
-        onSelect={(val, item) => {
-          setSelectedCompanyId(val);
-          if (fieldErrors.company) {
-            setFieldErrors((prev) => ({ ...prev, company: null }));
-          }
-          const targetComp = companies.find((c) => c._id === val) || item;
-          const isOff = isOfficeCompany(targetComp) || companyCategory === 'office';
-          const rawDigits = targetComp?.companyPhoneNumber
-            ? String(targetComp.companyPhoneNumber).replace(/\D/g, '')
-            : '';
-          const phone10 = rawDigits.length >= 10 ? rawDigits.slice(-10) : rawDigits;
-
-          if (!isOff) {
-            // Client company selected: autofill phone if available (editable), else empty for manual entry
-            if (phone10) {
-              setCustomerPhone(phone10);
-              if (fieldErrors.customerPhone) {
-                setFieldErrors((prev) => ({ ...prev, customerPhone: null }));
-              }
-            } else {
-              setCustomerPhone('');
-            }
-          } else {
-            // Office selected
-            if (phone10) {
-              setCustomerPhone(phone10);
-            }
-          }
-        }}
-        items={displayedCompanies.map((c) => ({
-          label: c.companyName,
-          value: c._id,
-          id: c._id,
-          companyPhoneNumber: c.companyPhoneNumber,
-          subtitle: `${c.location || 'Location'}${c.companyPhoneNumber ? ' • ' + c.companyPhoneNumber : ''}`,
-        }))}
+        onClose={() => setPreviewModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -1071,351 +1511,49 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: SPACING.lg,
+    padding: SPACING.md,
+    paddingBottom: SPACING.xxl,
   },
   formCard: {
     marginBottom: SPACING.lg,
+    padding: SPACING.lg,
   },
-  sectionHeader: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.primaryDark,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: SPACING.md,
   },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginLeft: SPACING.xs,
+  },
   fieldLabel: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     color: COLORS.text,
     marginBottom: SPACING.xs,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#DC2626',
+    marginTop: 4,
+    marginBottom: SPACING.sm,
   },
   datePickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
   },
   calendarIconBtn: {
-    width: 46,
-    height: 46,
+    width: 44,
+    height: 44,
     borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primarySubtle,
-    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
     justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: SPACING.sm,
     marginTop: 6,
-  },
-  companyDropdownBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
-    marginBottom: SPACING.md,
-  },
-  companyDropdownBtnError: {
-    borderColor: COLORS.danger,
-    backgroundColor: '#FEF2F2',
-  },
-  companyDropdownLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    marginRight: SPACING.sm,
-  },
-  companyDropdownTextWrap: {
-    flex: 1,
-  },
-  companyDropdownText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  companyDropdownPlaceholder: {
-    fontWeight: '500',
-    color: COLORS.textMuted,
-  },
-  companyDropdownSub: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  chipScroll: {
-    marginBottom: SPACING.md,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    gap: SPACING.xs,
-    paddingVertical: SPACING.xs,
-  },
-  chip: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 7,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surfaceAlt,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  chipSelected: {
-    backgroundColor: COLORS.primarySubtle,
-    borderColor: COLORS.primary,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  chipTextSelected: {
-    color: COLORS.primary,
-  },
-  workTypesWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.xs,
-    marginBottom: SPACING.md,
-  },
-  workTypeChip: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 6,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-  },
-  workTypeChipSelected: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  workTypeChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  workTypeChipTextSelected: {
-    color: COLORS.textLight,
-  },
-  timesRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  timeCol: {
-    flex: 1,
-  },
-  timePickerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-  },
-  timePickerCardError: {
-    borderColor: COLORS.danger,
-  },
-  timePickerCardText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  locationContainer: {
-    backgroundColor: COLORS.surfaceAlt,
-    padding: SPACING.md,
-    borderRadius: RADIUS.md,
-  },
-  locationCapturedBlock: {
-    gap: SPACING.xs,
-  },
-  exactAddressCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    padding: SPACING.sm,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: SPACING.xs,
-  },
-  exactAddressTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  exactAddressText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
-    lineHeight: 18,
-    marginTop: 2,
-  },
-  locationCapturedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  locationInfo: {
-    flex: 1,
-  },
-  locationCoordText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  locationAccuracyText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  viewMapChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: RADIUS.sm,
-  },
-  viewMapChipText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  locationEmptyText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.xs,
-  },
-  signaturePreviewWrap: {
-    marginBottom: SPACING.md,
-  },
-  signaturePreviewContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.successLight,
-    padding: SPACING.sm,
-    borderRadius: RADIUS.md,
-    marginBottom: SPACING.xs,
-    gap: SPACING.sm,
-  },
-  signatureThumbBox: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    backgroundColor: '#FFFFFF',
-    padding: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signatureSuccessText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.success,
-    flex: 1,
-  },
-  resignLink: {
-    paddingHorizontal: SPACING.sm,
-  },
-  resignLinkText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  photosHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  addPhotoLink: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  photosScroll: {
-    flexDirection: 'row',
-    paddingVertical: SPACING.xs,
-  },
-  photoThumbContainer: {
-    position: 'relative',
-    marginRight: SPACING.sm,
-  },
-  photoThumb: {
-    width: 72,
-    height: 72,
-    borderRadius: RADIUS.md,
-  },
-  photoZoomHint: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-    borderRadius: 4,
-    padding: 2,
-  },
-  removePhotoBtn: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: COLORS.danger,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addPhotoSlot: {
-    width: 72,
-    height: 72,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surfaceAlt,
-  },
-  addPhotoSlotText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
-  submitBtn: {
-    marginVertical: SPACING.xl,
-  },
-  errorText: {
-    color: COLORS.danger,
-    fontSize: 12,
-    marginTop: 2,
-    marginBottom: SPACING.xs,
-  },
-  companyHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  addCompanyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-  },
-  addCompanyBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
   },
   typeSelectorRow: {
     flexDirection: 'row',
@@ -1428,11 +1566,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    paddingHorizontal: SPACING.md,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1.5,
-    borderColor: COLORS.primarySubtle,
-    backgroundColor: COLORS.surfaceAlt,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     gap: 6,
   },
   typePillActive: {
@@ -1440,23 +1578,392 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   typePillText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
   },
   typePillTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
   },
-  submitBtnDisabled: {
-    opacity: 0.5,
+  companyHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
-  submitHintText: {
-    textAlign: 'center',
+  addCompanyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addCompanyBtnText: {
     fontSize: 12,
-    color: COLORS.danger,
-    marginTop: -SPACING.md,
-    marginBottom: SPACING.xl,
-    fontWeight: '500',
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  companyDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.md,
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: SPACING.md,
+  },
+  companyDropdownBtnError: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  companyDropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: SPACING.sm,
+  },
+  companyDropdownTextWrap: {
+    flex: 1,
+  },
+  companyDropdownText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  companyDropdownPlaceholder: {
+    color: COLORS.textMuted,
+    fontWeight: '400',
+  },
+  companyDropdownSub: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  gpsContainer: {
+    backgroundColor: '#F8FAFC',
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginVertical: SPACING.sm,
+  },
+  gpsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  gpsTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    flex: 1,
+  },
+  gpsVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    gap: 4,
+  },
+  gpsVerifiedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  resolvedAddressBox: {
+    marginTop: 6,
+  },
+  resolvedAddressLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  resolvedAddressText: {
+    fontSize: 12,
+    color: COLORS.text,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  activeCheckInCard: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+    borderWidth: 1,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  activeCheckInRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activeDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#059669',
+  },
+  activeCheckInTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  activeCheckInSub: {
+    fontSize: 12,
+    color: '#047857',
+    marginTop: 2,
+  },
+  autoFilledGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  autoFilledBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    minWidth: 90,
+  },
+  autoFilledLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+  },
+  autoFilledVal: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 1,
+  },
+  workTypesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  workTypeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: RADIUS.full,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  workTypeChipSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  workTypeChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  workTypeChipTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  dynamicSectionWrap: {
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  dynamicSectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  dynamicSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginLeft: 6,
+  },
+  dynamicSectionSubtitle: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.sm,
+  },
+  addDynamicBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addDynamicBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  removeDynamicIconBtn: {
+    padding: 8,
+    marginTop: 6,
+  },
+  manpowerCard: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  manpowerCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  manpowerCardNum: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  photosSection: {
+    marginBottom: SPACING.md,
+  },
+  photosHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  addPhotoLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addPhotoLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  photosGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  photoThumbWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  photoThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  photoRemoveBtn: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+  },
+  emptyPhotoSlot: {
+    width: '100%',
+    height: 70,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: RADIUS.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  emptyPhotoSlotText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 4,
+  },
+  signatureSection: {
+    marginBottom: SPACING.md,
+  },
+  signaturePreviewWrap: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    padding: SPACING.sm,
+  },
+  signaturePreviewImg: {
+    height: 120,
+    width: '100%',
+  },
+  resignBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    backgroundColor: '#EEF2FF',
+    borderRadius: RADIUS.sm,
+    marginTop: SPACING.xs,
+  },
+  resignBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  openSignPadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderStyle: 'dashed',
+    borderRadius: RADIUS.md,
+    backgroundColor: '#EEF2FF',
+  },
+  openSignPadBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  actionsWrap: {
+    marginTop: SPACING.md,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
+  },
+  dialogCard: {
+    width: '100%',
+    maxWidth: 420,
+    padding: SPACING.lg,
+  },
+  dialogHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  dialogTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  dialogButtonsRow: {
+    flexDirection: 'row',
+    marginTop: SPACING.md,
   },
 });
 

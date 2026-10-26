@@ -562,7 +562,33 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               </View>
             </Card>
 
-
+            {/* Expenses Card */}
+            <Card
+              style={[styles.leaveStatusCard, { borderColor: '#E0E7FF', marginTop: 12 }]}
+              onPress={() => navigation.navigate('MyExpenses')}
+            >
+              <View style={styles.leaveHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ backgroundColor: '#EEF2FF', padding: 8, borderRadius: 10 }}>
+                    <Ionicons name="receipt-outline" size={20} color="#4F46E5" />
+                  </View>
+                  <View>
+                    <Text style={styles.sectionHeaderTitle}>Expenses & Claims</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 1 }}>
+                      Track submitted claims & claim travel/food
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={{ backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  onPress={() => navigation.navigate('ExpenseForm')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add" size={14} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Add</Text>
+                </TouchableOpacity>
+              </View>
+            </Card>
 
             {/* Today's Work Visits */}
             <View style={[styles.sectionHeaderRow, { marginTop: SPACING.md }]}>

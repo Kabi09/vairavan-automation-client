@@ -401,6 +401,16 @@ export const AllDutiesScreen = ({ route, navigation }) => {
           {item.machineName} • <Text style={styles.workTypeLabel}>{formatWorkType(item)}</Text>
         </Text>
 
+        {item.features && item.features.length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginVertical: 4 }}>
+            {item.features.map((feat, fIdx) => (
+              <View key={fIdx} style={{ backgroundColor: '#F0F9FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#BAE6FD' }}>
+                <Text style={{ fontSize: 11, color: '#0369A1', fontWeight: '700' }}>{feat}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         <Text style={styles.descriptionSnippet} numberOfLines={2}>
           {item.workDescription}
         </Text>
@@ -638,7 +648,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                 </Text>
               </View>
 
-              {/* Company & Customer */}
+              {/* Company & Customer / Client */}
               <View style={styles.detailBlock}>
                 <Text style={styles.blockLabel}>
                   {isSelectedDutyOffice ? 'Office Location' : 'Client Company & Contact'}
@@ -647,9 +657,10 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                   {selectedDuty?.company?.companyName || (isSelectedDutyOffice ? 'Office' : 'Client Company')}
                   {selectedDuty?.company?.location ? ` (${selectedDuty?.company?.location})` : ''}
                 </Text>
-                {!isSelectedDutyOffice && selectedDuty?.customerName ? (
+                {!isSelectedDutyOffice ? (
                   <Text style={styles.blockSub}>
-                    Contact: {selectedDuty?.customerName} ({selectedDuty?.customerPhoneNumber || 'N/A'})
+                    Contact: {selectedDuty?.client?.name || selectedDuty?.customerName || 'N/A'}{' '}
+                    ({selectedDuty?.client?.phoneNumber || selectedDuty?.customerPhoneNumber || 'N/A'})
                   </Text>
                 ) : null}
               </View>
@@ -664,6 +675,50 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                   Hours: {formatTime(selectedDuty?.inTime)} to {formatTime(selectedDuty?.outTime)}
                 </Text>
               </View>
+
+              {/* Check-In / Check-Out & Working Duration */}
+              {selectedDuty?.checkInTime ? (
+                <View style={styles.detailBlock}>
+                  <Text style={styles.blockLabel}>Check-In & Check-Out Times</Text>
+                  <Text style={styles.blockValue}>
+                    In: {new Date(selectedDuty.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                    {selectedDuty.checkOutTime ? `  •  Out: ${new Date(selectedDuty.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}` : ' (In Progress)'}
+                  </Text>
+                  {selectedDuty.totalDurationMinutes ? (
+                    <Text style={[styles.blockSub, { color: COLORS.primary, fontWeight: '700' }]}>
+                      Total Duration: {Math.floor(selectedDuty.totalDurationMinutes / 60)}h {selectedDuty.totalDurationMinutes % 60}m ({selectedDuty.totalDurationMinutes} mins)
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Highlights / Features */}
+              {selectedDuty?.features && selectedDuty.features.length > 0 ? (
+                <View style={styles.detailBlock}>
+                  <Text style={styles.blockLabel}>Highlights / Features</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    {selectedDuty.features.map((feat, idx) => (
+                      <View key={idx} style={{ backgroundColor: '#F0F9FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#BAE6FD', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="sparkles" size={11} color="#0369A1" />
+                        <Text style={{ fontSize: 13, color: '#0369A1', fontWeight: '700' }}>{feat}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Manpower Members */}
+              {selectedDuty?.manpowerMembers && selectedDuty.manpowerMembers.length > 0 ? (
+                <View style={styles.detailBlock}>
+                  <Text style={styles.blockLabel}>Manpower Team ({selectedDuty.manpowerMembers.length})</Text>
+                  {selectedDuty.manpowerMembers.map((m, idx) => (
+                    <View key={idx} style={{ marginTop: 6, padding: 8, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.text }}>{m.name} {m.phone ? `(${m.phone})` : ''}</Text>
+                      {m.description ? <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{m.description}</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              ) : null}
 
               {/* GPS Coordinates with Interactive Map Button */}
               {selectedDuty?.location?.latitude ? (

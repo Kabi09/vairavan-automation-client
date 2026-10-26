@@ -164,8 +164,37 @@ export const validateUpdateDutyStatus = [
     .withMessage('Remarks cannot exceed 500 characters'),
 ];
 
+export const validateCheckIn = [
+  body('companyId')
+    .notEmpty()
+    .withMessage('Company ID is required')
+    .isMongoId()
+    .withMessage('Invalid company ID format'),
+  body('dutyDate')
+    .optional()
+    .isISO8601()
+    .withMessage('Duty date must be a valid date'),
+  body('dutyType')
+    .optional()
+    .isIn(['client', 'office'])
+    .withMessage('Duty type must be client or office'),
+  body('clientId')
+    .optional({ checkFalsy: true })
+    .isMongoId()
+    .withMessage('Invalid client ID format'),
+  body('latitude')
+    .optional({ nullable: true })
+    .isFloat({ min: -90, max: 90 })
+    .withMessage('Latitude must be a valid float between -90 and 90'),
+  body('longitude')
+    .optional({ nullable: true })
+    .isFloat({ min: -180, max: 180 })
+    .withMessage('Longitude must be a valid float between -180 and 180'),
+];
+
 export const validateDutyIdParam = [
   param('id')
     .isMongoId()
     .withMessage('Invalid duty ID format'),
 ];
+

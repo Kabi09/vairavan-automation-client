@@ -1,6 +1,21 @@
 import apiClient from './apiClient';
 
 export const dutyApi = {
+  checkIn: async (checkInData) => {
+    const res = await apiClient.post('/duties/check-in', checkInData);
+    return res.data;
+  },
+
+  getActiveCheckIn: async () => {
+    const res = await apiClient.get('/duties/active-checkin');
+    return res.data;
+  },
+
+  checkOut: async (checkOutData) => {
+    const res = await apiClient.post('/duties/check-out', checkOutData);
+    return res.data;
+  },
+
   createDuty: async (dutyData) => {
     const res = await apiClient.post('/duties', dutyData);
     return res.data;

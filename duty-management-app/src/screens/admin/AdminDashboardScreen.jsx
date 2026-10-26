@@ -563,7 +563,26 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </View>
             </Card>
 
-
+            {/* Expense Management Banner */}
+            <Card
+              style={[styles.leaveBannerCard, { borderColor: '#E0E7FF', marginTop: 12 }]}
+              onPress={() => navigation.navigate('AdminExpenses')}
+            >
+              <View style={styles.leaveBannerHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ backgroundColor: '#EEF2FF', padding: 8, borderRadius: 10 }}>
+                    <Ionicons name="wallet-outline" size={20} color="#4F46E5" />
+                  </View>
+                  <View>
+                    <Text style={styles.bannerTitle}>Expense Management</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 1 }}>
+                      View staff claims, rates, and totals
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
+              </View>
+            </Card>
 
             {/* Recent Work Submissions */}
             <View style={[styles.sectionHeaderRow, { marginTop: SPACING.md }]}>

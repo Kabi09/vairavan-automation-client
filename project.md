@@ -2096,26 +2096,69 @@
 - Reason: User requested: "also fix the auto scroll highlight me next scroll the automatticatally next to next like step 3; fix;".
 - Impact: Dashboard highlight banners automatically advance step-by-step next to next every 3 seconds with animated indicator dots.
 
+### 2026-10-26
+#### Dual Duty Check-In/Check-Out Workflows, Work Highlights/Features, and Complete Expense Management
+- What was changed:
+  1. **Dual Duty Workflows with Check-In & Check-Out (`DutyFormScreen.jsx`, `Duty.js`, `dutyController.js`, `dutyRoutes.js`)**:
+     - **Workflow 1: Client Company Duty**: Select Client Company, select existing company or create new inline with location modal, select client linked to company or create new inline with phone modal, fetch GPS coordinates, click Check In. Auto-fills Date/Company/Client, presents work details form with Work Type, Machine Name, Description, Multiple Manpower Members (Name, optional Phone, Description), Location, Photo Proofs, Signature. Options to "Checkout directly" or "Submit Work Details & Checkout".
+     - **Workflow 2: Office Duty**: Select Office, no client required, fetch GPS coordinates, click Check In. Reveals work form with auto-filled Date/Office and options to "Checkout directly" or "Submit Work Details & Checkout".
+     - **Check-in Persistence & Active Resume**: Persists `checkInTime`, `checkOutTime`, `checkInLocation`, `checkOutLocation`, and calculates `totalDurationMinutes`. `GET /api/duties/active-checkin` automatically detects and restores active in-progress check-ins on screen focus. Duplicate check-ins are strictly prohibited.
+  2. **Work Form Highlights / Features (`DutyFormScreen.jsx`, `DutyDetailsScreen.jsx`, `AllDutiesScreen.jsx`, `MyDutiesScreen.jsx`, `Duty.js`)**:
+     - Added dynamic `features` array (`features: [String]`) allowing employees to add multiple features (PLC, HDM, custom).
+     - Provides "+ Add Feature" dynamic input field with inline delete button for each item.
+     - Features are saved in MongoDB and displayed as distinct badge pills across Admin and Employee work detail views and duty list cards.
+  3. **Complete Expense Management System (`ExpenseCategory.js`, `Expense.js`, `expenseController.js`, `expenseCategoryController.js`, `expenseRoutes.js`, `expenseCategoryRoutes.js`, `ExpenseFormScreen.jsx`, `MyExpensesScreen.jsx`, `AdminExpensesScreen.jsx`, `exportUtils.js`)**:
+     - **Expense Categories**: Admin can create, edit, activate, and deactivate categories. Fields: Name, Description, Calculation Mode (`automatic` vs `manual`), Unit, Rate per Unit, and Status (`active` vs `inactive`). Pre-seeds defaults: `Travel – Kilometer` (Auto ₹3/km), `Travel – Bus`, `Travel – Rapido`, `Food`, `Recharge`, `Others`.
+     - **Employee Panel – Add Expense**: Date (defaults to today), optional Company, Client (filtered by company), Related Duty, General Description. Dynamic multi-item builder supporting automatic distance calculation (Outbound km + Return km = Total km * Rate = Amount), manual direct amounts, Others with custom title/description, and multiple proof attachments with camera/gallery selection. Live Grand Total calculation and duplicate submission prevention.
+     - **Server-Side Validation**: Backend recalculates amounts and verifies rates against active database records to prevent client-side rate manipulation.
+     - **Zero Approval Workflow**: STRICTLY NO approval or rejection statuses, no approve/reject buttons, and no approval workflow for expenses. All expenses are submitted and recorded directly.
+     - **Admin Expense Dashboard**: Metric cards (Total Submitted, Total Expense Amount, Expenses Today, Expenses This Month), filter bar (date range, employee, company, category, search), full itemized modal with attachments, category management modal, and export to PDF & Excel.
+     - **Navigation & Dashboard Access**: Added `AdminExpensesScreen` to Admin tabs & stack, `MyExpensesScreen` and `ExpenseFormScreen` to Employee stack, and direct quick-action cards to both `AdminDashboardScreen` and `EmployeeDashboardScreen`.
+- Files changed:
+  - `backend/src/models/Client.js`
+  - `backend/src/models/Duty.js`
+  - `backend/src/models/ExpenseCategory.js`
+  - `backend/src/models/Expense.js`
+  - `backend/src/models/Notification.js`
+  - `backend/src/controllers/clientController.js`
+  - `backend/src/controllers/dutyController.js`
+  - `backend/src/controllers/expenseCategoryController.js`
+  - `backend/src/controllers/expenseController.js`
+  - `backend/src/validators/dutyValidator.js`
+  - `backend/src/routes/clientRoutes.js`
+  - `backend/src/routes/dutyRoutes.js`
+  - `backend/src/routes/expenseCategoryRoutes.js`
+  - `backend/src/routes/expenseRoutes.js`
+  - `backend/src/routes/index.js`
+  - `backend/src/config/autoSeed.js`
+  - `backend/tests/checkin_checkout.test.js`
+  - `backend/tests/expense.test.js`
+  - `duty-management-app/src/api/clientApi.js`
+  - `duty-management-app/src/api/dutyApi.js`
+  - `duty-management-app/src/api/expenseApi.js`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/ExpenseFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyExpensesScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminExpensesScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/navigation/EmployeeNavigator.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `project.md`
+- Reason: User requested: (1) Client Company Duty & Office Duty workflows with Check In & Check Out, (2) Expense Management for Admin and Employee without approval workflow, and (3) Dynamic Highlights / Features field with + Add Feature in Work Details form.
+- Impact: Complete support for GPS-tagged check-in/checkout with active duty resume, dynamic technical features/highlights, and complete expense management with automatic travel distance calculation, manual expenses, proofs, and admin dashboard metrics.
+
 ## Current Progress
 - Completed:
-  - Highlights Modal Section Reorder: Birthdays are displayed first at the top ("Birthdays This Month 🎂"), and Holidays are displayed at the bottom ("This Month's Holidays") in `EmployeeDashboardScreen.jsx`.
-  - Admin Message Broadcast & Targeted Dispatch: Simple 2-field form (`AdminSendMessageModal.jsx`) allowing Admins to compose a message and select recipients via "All Employees" toggle or searchable multi-select checkboxes.
-  - Push & In-App Notification Delivery: Backend `POST /api/notifications/send-message` delivers instant in-app notices and triggers FCM/Expo push notifications to targeted or all active employees.
-  - Employee Message List: "Messages" quick action card added to `EmployeeDashboardScreen.jsx` opening `EmployeeMessagesModal.jsx` to list all received announcements with unread indicators.
-  - 1-Tap Full Message Details: `MessageDetailsModal.jsx` displays complete message text, sender name, timestamp, and target badge when tapping any message from the list or in `NotificationsScreen.jsx`.
-  - Highlight Carousel Auto-Scroll with Animation: 3.5s smooth looping scroll animation for Birthdays, On-Leave, and Holidays across Admin and Employee dashboards.
-  - Custom "Other" Work Type Display: When "Other" is chosen with custom details entered, it is displayed as `Other (custom data)` across all views (forms, cards, details, modals) and in both PDF and Excel exports.
-  - Client Company Location in Work Details & Cards: Company location is displayed alongside or under the company name in `DutyDetailsScreen`, `MyDutiesScreen`, `AllDutiesScreen`, `EmployeeDetailsScreen`, and dashboard activity cards.
-  - Removed Duty/Work Status Workflow: Removed `StatusBadge` and status labels (`approved`, `needs fix`, `rejected`, `submitted`) from duty cards and details, removed status filter chips from the filter modal, and removed the manager feedback card. Leave status workflow remains intact.
-  - Automatic Phone Download: Persisted SAF directory URI via `SecureStore` in `exportUtils.js`, allowing downloads to save directly without prompt after initial authorization.
-  - Proof Photos Limit & Submission Gate: Duty report proof photos capped at maximum 3 photos; submission button is strictly disabled and unclickable until all required fields (date, company, contact name, valid 10-digit phone, machine name, work type/custom details, in/out timings with order validation, work description) are filled.
-  - Company Classification Flow: Company model, validator, and controller support `office` vs `client`. Admin company form allows toggling between Office and Client. Company list provides quick tabs (All, Offices, Clients) and colored type badges. Company details display type badge.
-  - Add Work Company Picker: Duty form location defaults to Office and auto-selects the first office; selecting Client Company automatically triggers the client company directory list modal.
-  - Dynamic Office vs Client Duty Details & Views: When an Office is selected (`companyType === 'office'`), all duty views (`DutyDetailsScreen`, `AllDutiesScreen`, `MyDutiesScreen`, `EmployeeDetailsScreen`, `DutyFormScreen`) dynamically remove "Client Company", "Customer Contact", "Customer Signature", and "Service Verification", replacing them with "Office", "Contact In-Charge", "Office Sign-Off", and "Office Proof Photos". "Company" is only mentioned when it is an actual client company.
-  - Export Verification: PDF and Excel exports include the `Type` / classification column for all companies and distinguish Office vs Client Company for duty reports.
-  - Branding Footer: Added reusable `BrandingFooter` ("Developed by Ameyy Digital Services" with small external link icon) across Login (`LoginScreen.jsx`), Dashboards (`AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`), Leaves (`LeaveRequestsScreen.jsx`, `MyLeavesScreen.jsx`, `LeaveRequestScreen.jsx`), Profile (`ProfileScreen.jsx`), and PDF exports (`exportUtils.js`) with cross-platform new-tab web and mobile link handling to `https://www.ameyy.in/`.
-  - Frontend Developer Admin Filtering: Implemented `isDeveloperAdmin(user)` validator matching Developer Admin email (`mailtokabilan056@gmail.com` / `admin@gmail.com`), phone (`8883280816`), and role (`admin`). Applied across `EmployeeListScreen.jsx`, `LeaveRequestsScreen.jsx`, `AllDutiesScreen.jsx`, and `AdminSendMessageModal.jsx` to exclude Developer Admin from normal Admin user lists, live search, exports, and selection dropdowns while keeping normal Admin accounts visible and functional.
-  - 42/42 backend unit tests passing (6 suites); 0 syntax errors across all mobile files.
+  - Client Company Duty & Office Duty Check-In/Check-Out Workflows: Fully implemented with dual workflows, active check-in resume, duration tracking in minutes, and direct checkout or submit & checkout options.
+  - Work Form Highlights / Features: Dynamic features array (`features: [String]`) with `+ Add Feature` button, inline removal, and display in Admin & Employee work detail views.
+  - Expense Management: Complete system with customizable categories (automatic km rates & manual types), multi-item submissions, attachments, live grand totals, duplicate submission guards, admin dashboard metrics, category management modal, PDF/Excel export, and zero approval workflow.
+  - 49/49 backend unit and integration tests passing across 8 suites.
+  - All 11 modified React Native mobile screens validated with 0 syntax or AST errors.
 - In Progress:
   - None.
 - Pending:

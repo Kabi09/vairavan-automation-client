@@ -50,6 +50,44 @@ const dutySchema = new mongoose.Schema(
       required: [true, 'Company reference is required'],
       index: true,
     },
+    client: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Client',
+      default: null,
+      index: true,
+    },
+    dutyType: {
+      type: String,
+      enum: ['client', 'office'],
+      default: 'client',
+      index: true,
+    },
+    checkInTime: {
+      type: Date,
+      default: null,
+    },
+    checkOutTime: {
+      type: Date,
+      default: null,
+    },
+    checkInLocation: {
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
+      accuracy: { type: Number, default: null },
+      address: { type: String, default: '', trim: true },
+      capturedAt: { type: Date, default: null },
+    },
+    checkOutLocation: {
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
+      accuracy: { type: Number, default: null },
+      address: { type: String, default: '', trim: true },
+      capturedAt: { type: Date, default: null },
+    },
+    totalDurationMinutes: {
+      type: Number,
+      default: 0,
+    },
     customerName: {
       type: String,
       default: 'Office',
@@ -63,13 +101,13 @@ const dutySchema = new mongoose.Schema(
     },
     machineName: {
       type: String,
-      required: [true, 'Machine name is required'],
+      default: '',
       trim: true,
       maxlength: [100, 'Machine name cannot exceed 100 characters'],
     },
     workType: {
       type: String,
-      required: [true, 'Work type is required'],
+      default: 'Maintenance',
       enum: {
         values: ['Electrical', 'Mechanical', 'Installation', 'Maintenance', 'Repair', 'Other'],
         message: '{VALUE} is not a supported work type',
@@ -84,20 +122,45 @@ const dutySchema = new mongoose.Schema(
     },
     inTime: {
       type: String,
-      required: [true, 'In time is required'],
+      default: '',
       trim: true,
     },
     outTime: {
       type: String,
-      required: [true, 'Out time is required'],
+      default: '',
       trim: true,
     },
     workDescription: {
       type: String,
-      required: [true, 'Work description is required'],
+      default: '',
       trim: true,
       maxlength: [2000, 'Work description cannot exceed 2000 characters'],
     },
+    features: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+    manpowerMembers: [
+      {
+        name: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        phoneNumber: {
+          type: String,
+          default: '',
+          trim: true,
+        },
+        description: {
+          type: String,
+          default: '',
+          trim: true,
+        },
+      },
+    ],
     customerSignature: {
       url: { type: String, default: '' },
       publicId: { type: String, default: '' },
@@ -142,7 +205,7 @@ const dutySchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ['submitted', 'approved', 'rejected', 'correction_requested'],
+        values: ['checked_in', 'submitted', 'approved', 'rejected', 'correction_requested'],
         message: '{VALUE} is not a valid duty status',
       },
       default: 'submitted',

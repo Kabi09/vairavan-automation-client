@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import ExpenseCategory from '../models/ExpenseCategory.js';
 
 let isSeeding = false;
 
@@ -61,6 +62,9 @@ export const autoSeedAdmin = async () => {
         console.log(`[AutoSeed] Default Super Admin auto-created: ${envAdminEmail}`);
       }
     }
+
+    // 3. Ensure default Expense Categories are seeded
+    await ExpenseCategory.seedDefaults();
   } catch (error) {
     // Non-fatal: log notice so server startup is never blocked
     console.warn(`[AutoSeed Notice] ${error.message}`);

@@ -1523,6 +1523,204 @@ export const exportCompaniesToExcel = async ({
   }
 };
 
+/**
+ * Export Expenses to PDF
+ */
+export const exportExpensesToPDF = async ({
+  title = 'Expense Claims Report',
+  subtitle = 'VairaWorks Employee Expense Submissions',
+  expenses = [],
+  filterInfo = '',
+}) => {
+  if (!expenses || expenses.length === 0) {
+    Alert.alert('No Records', 'There are no expense records to export.');
+    return;
+  }
+
+  try {
+    const totalAmount = expenses.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
+
+    const rowsHtml = expenses
+      .map((e, index) => {
+        const empName = escapeHtml(e.employee?.employeeName || 'Employee');
+        const empId = escapeHtml(e.employee?.employeeId || '');
+        const comp = escapeHtml(e.company?.companyName || '—');
+        const client = escapeHtml(e.client?.name || '');
+        const dateStr = escapeHtml(formatDate(e.expenseDate));
+        const expId = escapeHtml(e.expenseId || `EXP-${index + 1}`);
+        const total = (e.grandTotal || 0).toLocaleString('en-IN');
+
+        const itemsSummary = (e.items || [])
+          .map((it) => {
+            const name = it.categoryName === 'Others' && it.customCategoryName ? it.customCategoryName : it.categoryName;
+            const amt = (it.amount || 0).toLocaleString('en-IN');
+            return `${escapeHtml(name)}: ₹${amt}`;
+          })
+          .join('<br/>');
+
+        return `
+          <tr>
+            <td style="text-align: center;">${index + 1}</td>
+            <td><strong>${expId}</strong></td>
+            <td>${empName} <br/><span style="font-size: 9px; color: #64748b;">${empId}</span></td>
+            <td>${dateStr}</td>
+            <td>${comp}${client ? `<br/><span style="font-size: 9px; color: #64748b;">Contact: ${client}</span>` : ''}</td>
+            <td style="font-size: 10px;">${itemsSummary}</td>
+            <td style="text-align: right; font-weight: bold; color: #1e40af;">₹${total}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(title)}</title>
+        <style>
+          @page { size: A4; margin: 12mm; }
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 0; font-size: 11px; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 12px; }
+          .logo { height: 40px; }
+          .title { font-size: 18px; font-weight: 800; color: #1e3a8a; margin: 0; }
+          .subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
+          .filter-bar { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-size: 10px; margin-bottom: 12px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+          th { background-color: #f1f5f9; color: #334155; font-weight: 700; font-size: 10px; text-transform: uppercase; border: 1px solid #cbd5e1; padding: 7px 6px; text-align: left; }
+          td { border: 1px solid #e2e8f0; padding: 7px 6px; vertical-align: top; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+          .summary-card { background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px 14px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
+          .summary-label { font-size: 12px; font-weight: 700; color: #1e40af; }
+          .summary-value { font-size: 18px; font-weight: 900; color: #1e40af; }
+          .footer-note { margin-top: 16px; font-size: 9px; color: #94a3b8; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1 class="title">${escapeHtml(title)}</h1>
+            <div class="subtitle">${escapeHtml(subtitle)}</div>
+          </div>
+          <img src="${LOGO_URL}" class="logo" alt="Logo" />
+        </div>
+
+        ${filterInfo ? `<div class="filter-bar"><strong>Filters:</strong> ${escapeHtml(filterInfo)}</div>` : ''}
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 30px; text-align: center;">#</th>
+              <th style="width: 75px;">ID</th>
+              <th>Employee</th>
+              <th style="width: 75px;">Date</th>
+              <th>Company / Client</th>
+              <th>Items & Details</th>
+              <th style="width: 80px; text-align: right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="summary-card">
+          <div class="summary-label">Total Expenses (${expenses.length} Records)</div>
+          <div class="summary-value">₹${totalAmount.toLocaleString('en-IN')}</div>
+        </div>
+
+        <div class="footer-note">
+          Official Expense Report • Vairavan Automation System
+          ${BRANDING_PDF_FOOTER_HTML}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const { uri } = await Print.printToFileAsync({
+      html: htmlContent,
+      base64: false,
+    });
+
+    const cleanTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filenameWithExt = `${cleanTitle}_${Date.now()}.pdf`;
+
+    await promptDownloadOrShare({
+      fileUri: uri,
+      filename: filenameWithExt,
+      mimeType: 'application/pdf',
+      dialogTitle: `Export ${title} (PDF)`,
+    });
+  } catch (err) {
+    Alert.alert('Export Failed', err.message || 'Could not generate PDF export');
+  }
+};
+
+/**
+ * Export Expenses to Excel / CSV
+ */
+export const exportExpensesToExcel = async ({
+  filename = 'Expense_Claims_Report',
+  expenses = [],
+}) => {
+  if (!expenses || expenses.length === 0) {
+    Alert.alert('No Records', 'There are no expense records to export.');
+    return;
+  }
+
+  try {
+    const headers = [
+      'Sl No',
+      'Expense ID',
+      'Employee Name',
+      'Employee ID',
+      'Expense Date',
+      'Company Name',
+      'Client Name',
+      'Client Phone',
+      'Related Duty',
+      'Items Breakdown',
+      'Total Items Count',
+      'Grand Total Amount (INR)',
+      'General Description',
+      'Submitted At',
+    ];
+
+    const rows = expenses.map((e, index) => {
+      const itemsStr = (e.items || [])
+        .map((it) => {
+          const name = it.categoryName === 'Others' && it.customCategoryName ? it.customCategoryName : it.categoryName;
+          const calc = it.calculationMode === 'automatic' ? ` (${it.quantity || 0}km @ Rs.${it.appliedRate})` : '';
+          return `${name}${calc}: Rs.${it.amount || 0}`;
+        })
+        .join('; ');
+
+      return [
+        index + 1,
+        escapeCsv(e.expenseId || `EXP-${index + 1}`),
+        escapeCsv(e.employee?.employeeName || ''),
+        escapeCsv(e.employee?.employeeId || ''),
+        escapeCsv(formatDate(e.expenseDate)),
+        escapeCsv(e.company?.companyName || ''),
+        escapeCsv(e.client?.name || ''),
+        escapeCsv(e.client?.phoneNumber || ''),
+        escapeCsv(e.relatedDuty || ''),
+        escapeCsv(itemsStr),
+        e.items?.length || 0,
+        e.grandTotal || 0,
+        escapeCsv(e.generalDescription || ''),
+        escapeCsv(formatDate(e.createdAt)),
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+    const cleanFilename = filename.replace(/[^a-zA-Z0-9_-]/g, '_');
+    await writeCsvFileAndShare(cleanFilename, csvContent, `Export ${filename} (Excel/CSV)`);
+  } catch (err) {
+    Alert.alert('Export Failed', err.message || 'Could not generate Excel export');
+  }
+};
+
 export default {
   exportDutiesToPDF,
   exportDutiesToExcel,
@@ -1532,4 +1730,6 @@ export default {
   exportEmployeesToExcel,
   exportCompaniesToPDF,
   exportCompaniesToExcel,
+  exportExpensesToPDF,
+  exportExpensesToExcel,
 };

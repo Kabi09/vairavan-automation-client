@@ -12,6 +12,8 @@ import MyLeavesScreen from '../screens/employee/MyLeavesScreen';
 import LeaveRequestScreen from '../screens/employee/LeaveRequestScreen';
 import HolidayListScreen from '../screens/employee/HolidayListScreen';
 import NotificationsScreen from '../screens/admin/NotificationsScreen';
+import MyExpensesScreen from '../screens/employee/MyExpensesScreen';
+import ExpenseFormScreen from '../screens/employee/ExpenseFormScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 import ChangePasswordScreen from '../screens/common/ChangePasswordScreen';
 import CompanyFormScreen from '../screens/admin/CompanyFormScreen';
@@ -104,6 +106,8 @@ export const EmployeeNavigator = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="EmployeeMainTabs" component={EmployeeTabs} />
       <Stack.Screen name="DutyForm" component={DutyFormScreen} />
+      <Stack.Screen name="MyExpenses" component={MyExpensesScreen} />
+      <Stack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
       <Stack.Screen name="CompanyForm" component={CompanyFormScreen} />
       <Stack.Screen name="DutyDetails" component={DutyDetailsScreen} />
       <Stack.Screen name="LeaveRequest" component={LeaveRequestScreen} />
