@@ -302,6 +302,34 @@ export const DutyFormScreen = ({ navigation, route }) => {
     loadClients();
   }, [selectedCompanyId, companyCategory]);
 
+  // Auto-request location permissions and capture on focus if not yet set in check-in mode
+  useEffect(() => {
+    if (!isCheckedIn && !locationCoords && !locating) {
+      (async () => {
+        try {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            const lat = loc.coords.latitude;
+            const lng = loc.coords.longitude;
+            const accuracy = Math.round(loc.coords.accuracy || 0);
+            const address = await reverseGeocodeCoords(lat, lng);
+            setLocationCoords({
+              latitude: lat,
+              longitude: lng,
+              accuracy,
+              address: address || '',
+            });
+          }
+        } catch (e) {
+          // Background location attempt
+        }
+      })();
+    }
+  }, [isCheckedIn]);
+
   // GPS Location capture
   const handleCaptureLocation = async () => {
     setLocating(true);
@@ -332,6 +360,10 @@ export const DutyFormScreen = ({ navigation, route }) => {
         accuracy,
         address: address || '',
       });
+
+      if (fieldErrors.location) {
+        setFieldErrors((prev) => ({ ...prev, location: null }));
+      }
 
       Alert.alert(
         'Location Captured',
@@ -369,10 +401,16 @@ export const DutyFormScreen = ({ navigation, route }) => {
       if (createdComp) {
         setCompanies((prev) => [createdComp, ...prev]);
         setSelectedCompanyId(createdComp._id);
+        setSelectedClientId('');
+        setCustomerName('');
+        setCustomerPhone('');
         setNewCompanyName('');
         setNewCompanyLocation('');
         setNewCompanyPhone('');
         setAddCompanyModalVisible(false);
+        if (fieldErrors.company) {
+          setFieldErrors((prev) => ({ ...prev, company: null }));
+        }
         Alert.alert('Company Added', `${createdComp.companyName} created and selected!`);
       }
     } catch (err) {
@@ -471,6 +509,20 @@ export const DutyFormScreen = ({ navigation, route }) => {
         } catch (gpsErr) {
           console.warn('GPS auto-fetch on checkin error:', gpsErr);
         }
+      }
+
+      // Strictly enforce compulsory GPS coordinates for check-in
+      if (!currentCoords?.latitude || !currentCoords?.longitude) {
+        setLoading(false);
+        setFieldErrors((prev) => ({
+          ...prev,
+          location: 'GPS location is compulsory to check in. Please capture your location.',
+        }));
+        Alert.alert(
+          'GPS Location Required *',
+          'GPS location is strictly compulsory for Duty Check-In. Please turn on device GPS / Location and tap "Capture Current Location" to proceed.'
+        );
+        return;
       }
 
       const checkInPayload = {
@@ -623,7 +675,10 @@ export const DutyFormScreen = ({ navigation, route }) => {
   // Work Details Submission & Checkout
   const handleCheckoutOrSubmit = async () => {
     if (!activeDutyId && !isEditing) {
-      Alert.alert('Check-In Required', 'Please check in first before checking out.');
+      Alert.alert(
+        'Check-In Required *',
+        'Check-in is compulsory! You must check in first before checking out or submitting work details.'
+      );
       return;
     }
 
@@ -764,8 +819,8 @@ export const DutyFormScreen = ({ navigation, route }) => {
     return !isOfficeCompany(c);
   });
 
-  const selectedCompany = companies.find((c) => c._id === selectedCompanyId);
-  const selectedClient = clients.find((c) => c._id === selectedClientId);
+  const selectedCompany = companies.find((c) => String(c._id) === String(selectedCompanyId));
+  const selectedClient = clients.find((c) => String(c._id) === String(selectedClientId));
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1005,17 +1060,25 @@ export const DutyFormScreen = ({ navigation, route }) => {
                 </View>
               ) : null}
 
-              {/* GPS Coordinates Capture for Check-In */}
-              <View style={styles.gpsContainer}>
+              {/* GPS Coordinates Capture for Check-In (Compulsory) */}
+              <View style={[styles.gpsContainer, fieldErrors.location && styles.gpsContainerError]}>
                 <View style={styles.gpsHeaderRow}>
-                  <Ionicons name="navigate-circle" size={20} color={COLORS.primary} />
-                  <Text style={styles.gpsTitle}>Check-In GPS Location</Text>
+                  <Ionicons
+                    name="navigate-circle"
+                    size={20}
+                    color={fieldErrors.location ? '#DC2626' : COLORS.primary}
+                  />
+                  <Text style={styles.gpsTitle}>Check-In GPS Location *</Text>
                   {locationCoords ? (
                     <View style={styles.gpsVerifiedBadge}>
                       <Ionicons name="checkmark-circle" size={13} color="#059669" />
                       <Text style={styles.gpsVerifiedText}>Ready</Text>
                     </View>
-                  ) : null}
+                  ) : (
+                    <View style={styles.gpsMandatoryBadge}>
+                      <Text style={styles.gpsMandatoryBadgeText}>Mandatory</Text>
+                    </View>
+                  )}
                 </View>
 
                 {locationCoords?.address ? (
@@ -1025,13 +1088,19 @@ export const DutyFormScreen = ({ navigation, route }) => {
                   </View>
                 ) : null}
 
+                {fieldErrors.location ? (
+                  <Text style={[styles.errorText, { marginTop: 4, marginBottom: 2 }]}>
+                    {fieldErrors.location}
+                  </Text>
+                ) : null}
+
                 <SecondaryButton
                   title={
                     locating
                       ? 'Fetching GPS...'
                       : locationCoords
                       ? 'Update Location'
-                      : 'Capture Current Location'
+                      : 'Capture Current Location *'
                   }
                   onPress={handleCaptureLocation}
                   loading={locating}
@@ -1452,11 +1521,21 @@ export const DutyFormScreen = ({ navigation, route }) => {
         items={displayedCompanies.map((c) => ({
           label: c.companyName,
           value: c._id,
-          subtitle: c.location,
+          id: c._id,
+          subtitle: `${c.companyType === 'office' ? 'Office' : 'Site'}: ${c.location || ''}${c.companyPhoneNumber ? ' • ' + c.companyPhoneNumber : ''}`,
         }))}
         selectedValue={selectedCompanyId}
-        onSelect={(item) => {
-          setSelectedCompanyId(item.value);
+        showAllOption={false}
+        onSelect={(val, itemObj) => {
+          const compId =
+            typeof val === 'object' && val !== null
+              ? val.value || val._id || val.id
+              : val || itemObj?.value || itemObj?._id || itemObj?.id;
+          setSelectedCompanyId(compId);
+          // Switching company resets client selection
+          setSelectedClientId('');
+          setCustomerName('');
+          setCustomerPhone('');
           setCompanyDropdownVisible(false);
           if (fieldErrors.company) {
             setFieldErrors((prev) => ({ ...prev, company: null }));
@@ -1477,15 +1556,25 @@ export const DutyFormScreen = ({ navigation, route }) => {
         items={clients.map((cl) => ({
           label: cl.clientName,
           value: cl._id,
+          id: cl._id,
           subtitle: cl.clientPhoneNumber ? `Phone: ${cl.clientPhoneNumber}` : '',
         }))}
         selectedValue={selectedClientId}
-        onSelect={(item) => {
-          setSelectedClientId(item.value);
-          setCustomerName(item.label);
-          const matched = clients.find((c) => c._id === item.value);
-          if (matched?.clientPhoneNumber) {
-            setCustomerPhone(matched.clientPhoneNumber);
+        showAllOption={false}
+        onSelect={(val, itemObj) => {
+          const clientId =
+            typeof val === 'object' && val !== null
+              ? val.value || val._id || val.id
+              : val || itemObj?.value || itemObj?._id || itemObj?.id;
+          setSelectedClientId(clientId);
+          const matched = clients.find((c) => String(c._id) === String(clientId));
+          if (matched) {
+            setCustomerName(matched.clientName);
+            if (matched.clientPhoneNumber) {
+              setCustomerPhone(matched.clientPhoneNumber);
+            }
+          } else if (itemObj?.label) {
+            setCustomerName(itemObj.label);
           }
           setClientDropdownVisible(false);
           if (fieldErrors.client) {
@@ -1830,6 +1919,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#059669',
+  },
+  gpsContainerError: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  gpsMandatoryBadge: {
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  gpsMandatoryBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DC2626',
   },
   resolvedAddressBox: {
     marginTop: 6,

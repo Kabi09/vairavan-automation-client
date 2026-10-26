@@ -2237,27 +2237,50 @@
 - Reason: User requested: "add checkin,checkout button like a zoho pepole; check button click- open to check in form; checkout -work form;; incase direct new work/submit work- check the checkin - checkin-workcheckout form show; not checkin - checkin form show;".
 - Impact: Seamless, intuitive attendance and field work experience matching Zoho People, with automatic session detection when accessing forms directly.
 
+### 2026-10-26
+#### Company/Client Dropdown Selection Fix, Compulsory Check-In Location, and Digital Timer Behavior
+- What was changed:
+  - **Company & Client Selection Fix (`DutyFormScreen.jsx`)**:
+    - Resolved critical selection bug where `onSelect` callback received primitive `val` as the first argument, causing `item.value` to evaluate to `undefined` and preventing selection of companies and clients.
+    - Updated `onSelect` in both Company and Client `DropdownPickerModal` to extract ID safely: `typeof val === 'object' && val !== null ? (val.value || val._id || val.id) : (val || itemObj?.value || itemObj?._id || itemObj?.id)`.
+    - Added `showAllOption={false}` to both modals to suppress the irrelevant "All Records" filter option on submission forms.
+    - Updated `selectedCompany` and `selectedClient` lookup using safe string comparison `String(c._id) === String(...)`.
+    - In `handleSaveNewCompany`, automatically cleared stale client selection and customer fields, and cleared field errors.
+    - Now users can select any client company, add a new company, and switch to another company seamlessly.
+  - **Compulsory GPS Location on Check-In (`DutyFormScreen.jsx`)**:
+    - Made GPS location capture strictly compulsory before check-in can proceed.
+    - If GPS coordinates are missing or cannot be retrieved, check-in is stopped and alerts the employee to enable GPS and tap "Capture Current Location".
+    - Added automatic background location request/capture on screen focus if location is not yet captured.
+    - Highlighted GPS section with red border on error and added "Mandatory" badge when pending and "Ready" badge when captured.
+    - Enforced mandatory check-in before checkout: employees cannot access or submit Stage 2 Work Details & Checkout without an active check-in session.
+  - **Digital Timer Behavior (`EmployeeDashboardScreen.jsx`)**:
+    - Eliminated wall clock / current time from the timer digits completely.
+    - **When NOT Checked In (No duty completed today)**: Displays clean `00 : 00 : 00` with status `Out • Tap Check-in to start today's duty`.
+    - **When Checked In**: Live timer counts up running elapsed shift time since `checkInTime` every second.
+    - **When Checked Out**: Timer stops running and displays the total worked duration of that duty (e.g. `08 : 30 : 00`), with status subtitle indicating `Checked Out ([HH]h [MM]m total) • Tap Check-in for next duty`.
+- Files changed:
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Check-in strictly requires valid GPS coordinates (`latitude` and `longitude`).
+  - Company and Client dropdowns correctly receive IDs and switch smoothly.
+  - Dashboard widget timer reflects actual duty states (00:00:00 -> running elapsed time -> stopped total time) instead of current wall clock time.
+- Reason: User requested: "ui fix-form- check- company - not selectable also client not selectable; add comapny sautomattically assign then agein to slect the another not selectable; fix;;; check in,checkout current time is show fix i want to - not checkin - 0000 have then checkin done timer to start checkout timer is stop that time total show;; not want cuurent time;;; compersolry location mattry to checkin ; chechout not defauly ;;;in,out- compersory checkin must; fix;".
+- Impact: Flawless company and client selection, strict GPS audit trail for field duty attendance, and accurate duty-based digital timers.
+
 ## Current Progress
 - Completed:
-  - Zoho People style Check-In / Check-Out dashboard widget with digital running timer.
-  - Dynamic button states: Green "Check-in" (Out) vs Red "Check-out" (In).
-  - Automatic form switching in `DutyFormScreen`:
-    - Direct "New Work" / "Submit Work" automatically routes to Work Details & Checkout form if checked in.
-    - If not checked in, automatically routes to Duty Check-In form.
-  - Smooth loading state while verifying active session without flickering.
-  - Client company and client contact check-in validation.
-  - Active check-in session reset and "New Work" bug fix.
-  - Single checkout action button replacing two buttons.
-  - Non-editable duty date with IST Today badge.
-  - Rename Highlights/Features to Features with preset chips and custom tags.
-  - Full data export in PDF and Excel including Features, Manpower roster, IST times, and Durations.
-  - Strict India Standard Time (IST - Asia/Kolkata) enforcement across frontend and backend.
+  - Fixed company and client selection in `DutyFormScreen`: supports selecting any company, adding new company, and switching between companies.
+  - Auto-reset client contacts on company switch and fetch fresh company-specific clients.
+  - Compulsory GPS location enforcement for duty check-in with auto-capture and visual mandatory indicators.
+  - Enforced compulsory check-in before work checkout: employees cannot checkout by default without checking in first.
+  - Updated Zoho People style timer widget:
+    - When not checked in: `00 : 00 : 00` (no wall clock time).
+    - When checked in: live running elapsed shift duration.
+    - When checked out: timer stops and displays that duty's total completed duration.
   - 49/49 backend tests passing.
   - All modified frontend screens AST validated with 0 errors.
-- In Progress:
-  - None.
-- Pending:
-  - None.
 
 ## Known Issues
 - Issue: None. All systems operational and verified.

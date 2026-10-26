@@ -49,10 +49,13 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const [activeDuty, setActiveDuty] = useState(null);
   const [timerDigits, setTimerDigits] = useState({ hours: '00', minutes: '00', seconds: '00' });
 
-  // Live timer for Zoho People checkin/checkout widget
+  const todayDuties = data?.todayDuties?.reports || [];
+  const lastCompletedDuty = todayDuties.length > 0 ? todayDuties[todayDuties.length - 1] : null;
+
+  // Running timer when checked in, stopped total duration when checked out, or 00:00:00 when not checked in
   useEffect(() => {
-    const updateTimer = () => {
-      if (activeDuty?.checkInTime) {
+    if (activeDuty?.checkInTime) {
+      const updateRunningTimer = () => {
         const checkInDate = new Date(activeDuty.checkInTime);
         const diffMs = Math.max(0, Date.now() - checkInDate.getTime());
         const totalSecs = Math.floor(diffMs / 1000);
@@ -60,27 +63,36 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
         const minutes = String(Math.floor((totalSecs % 3600) / 60)).padStart(2, '0');
         const seconds = String(totalSecs % 60).padStart(2, '0');
         setTimerDigits({ hours, minutes, seconds });
-      } else {
-        const now = new Date();
-        const formatter = new Intl.DateTimeFormat('en-IN', {
-          timeZone: 'Asia/Kolkata',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        });
-        const parts = formatter.formatToParts(now);
-        const hours = parts.find((p) => p.type === 'hour')?.value || '00';
-        const minutes = parts.find((p) => p.type === 'minute')?.value || '00';
-        const seconds = parts.find((p) => p.type === 'second')?.value || '00';
-        setTimerDigits({ hours, minutes, seconds });
-      }
-    };
+      };
 
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, [activeDuty]);
+      updateRunningTimer();
+      const interval = setInterval(updateRunningTimer, 1000);
+      return () => clearInterval(interval);
+    } else if (lastCompletedDuty) {
+      // Stopped timer displaying total worked time of completed duty (never wall clock time)
+      let totalSecs = 0;
+      if (lastCompletedDuty.checkInTime && lastCompletedDuty.checkOutTime) {
+        const inT = new Date(lastCompletedDuty.checkInTime).getTime();
+        const outT = new Date(lastCompletedDuty.checkOutTime).getTime();
+        totalSecs = Math.max(0, Math.floor((outT - inT) / 1000));
+      } else if (lastCompletedDuty.totalHours) {
+        totalSecs = Math.round(Number(lastCompletedDuty.totalHours) * 3600);
+      } else if (lastCompletedDuty.inTime && lastCompletedDuty.outTime) {
+        const [inH, inM] = String(lastCompletedDuty.inTime).split(':').map(Number);
+        const [outH, outM] = String(lastCompletedDuty.outTime).split(':').map(Number);
+        if (!isNaN(inH) && !isNaN(outH)) {
+          totalSecs = Math.max(0, ((outH * 60 + outM) - (inH * 60 + inM)) * 60);
+        }
+      }
+      const hours = String(Math.floor(totalSecs / 3600)).padStart(2, '0');
+      const minutes = String(Math.floor((totalSecs % 3600) / 60)).padStart(2, '0');
+      const seconds = String(totalSecs % 60).padStart(2, '0');
+      setTimerDigits({ hours, minutes, seconds });
+    } else {
+      // Not checked in and no duty completed today: strictly 00 : 00 : 00
+      setTimerDigits({ hours: '00', minutes: '00', seconds: '00' });
+    }
+  }, [activeDuty, lastCompletedDuty]);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -117,7 +129,6 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     fetchDashboard();
   };
 
-  const todayDuties = data?.todayDuties?.reports || [];
   const recentDuties = data?.recentDuties || [];
   const leaves = data?.leaves || {};
   const holidays = data?.upcomingHolidays || [];
@@ -547,7 +558,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
             <Text
               style={[
                 styles.zohoStatusLabel,
-                { color: activeDuty ? '#059669' : '#64748B' },
+                { color: activeDuty ? '#059669' : lastCompletedDuty ? '#0284C7' : '#64748B' },
               ]}
             >
               {activeDuty ? 'In' : 'Out'}
@@ -559,6 +570,8 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                       ? 'Office Duty'
                       : activeDuty.company?.companyName || 'Client Site'
                   }`
+                : lastCompletedDuty
+                ? `Checked Out (${timerDigits.hours}h ${timerDigits.minutes}m total) • Tap Check-in for next duty`
                 : '• Tap Check-in to start today’s duty'}
             </Text>
           </View>
