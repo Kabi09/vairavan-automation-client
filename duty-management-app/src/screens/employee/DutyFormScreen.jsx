@@ -31,18 +31,22 @@ import ImageViewerModal from '../../components/ImageViewerModal';
 import DatePickerModal from '../../components/DatePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
 import ErrorMessage from '../../components/ErrorMessage';
-import { getTodayDateString, formatISODateOnly } from '../../utils/dateUtils';
+import LoadingIndicator from '../../components/LoadingIndicator';
+import { getTodayDateString, formatISODateOnly, formatDate } from '../../utils/dateUtils';
 import { isValidPhone } from '../../utils/validators';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
 import { APP_CONFIG } from '../../constants/config';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
 
+const PRESET_FEATURES = ['PLC', 'HMI', 'VFD', 'Sensor', 'Servo', 'HDM', 'Wiring', 'Pneumatics'];
+
 export const DutyFormScreen = ({ navigation, route }) => {
   const dutyToEdit = route?.params?.dutyToEdit;
   const isEditing = Boolean(dutyToEdit);
 
   // Check-In status state (if editing historical submitted report, consider checked-in)
+  const [checkingSession, setCheckingSession] = useState(!isEditing);
   const [isCheckedIn, setIsCheckedIn] = useState(Boolean(dutyToEdit));
   const [activeDutyId, setActiveDutyId] = useState(() => dutyToEdit?._id || null);
   const [activeCheckInTime, setActiveCheckInTime] = useState(() => dutyToEdit?.checkInTime || dutyToEdit?.inTime || '');
@@ -82,13 +86,14 @@ export const DutyFormScreen = ({ navigation, route }) => {
     return dutyToEdit.workDescription.replace(/^\[Work:\s*[^\]]+\]\n*/, '');
   });
 
-  // Features / Highlights state (e.g. ['PLC', 'HDM'])
+  // Features state (e.g. ['PLC', 'HDM'])
   const [features, setFeatures] = useState(() => {
     if (Array.isArray(dutyToEdit?.features) && dutyToEdit.features.length > 0) {
       return dutyToEdit.features;
     }
-    return ['']; // start with one slot or empty
+    return [];
   });
+  const [customFeatureInput, setCustomFeatureInput] = useState('');
 
   // Manpower members state
   const [manpowerMembers, setManpowerMembers] = useState(() => {
@@ -192,6 +197,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
       if (isEditing) return;
 
       const checkActiveSession = async () => {
+        setCheckingSession(true);
         try {
           const res = await dutyApi.getActiveCheckIn().catch(() => null);
           if (res?.data?.activeDuty) {
@@ -228,9 +234,18 @@ export const DutyFormScreen = ({ navigation, route }) => {
                 address: active.location.address || '',
               });
             }
+          } else {
+            setIsCheckedIn(false);
+            setActiveDutyId(null);
+            setActiveCheckInTime('');
           }
         } catch (err) {
           console.warn('Error checking active duty check-in:', err);
+          setIsCheckedIn(false);
+          setActiveDutyId(null);
+          setActiveCheckInTime('');
+        } finally {
+          setCheckingSession(false);
         }
       };
 
@@ -411,21 +426,53 @@ export const DutyFormScreen = ({ navigation, route }) => {
     const errors = {};
 
     if (!selectedCompanyId) {
-      errors.company = companyCategory === 'office' ? 'Please select an office' : 'Please select a client company';
+      errors.company =
+        companyCategory === 'office' ? 'Please select an office' : 'Please select a client company';
+    } else {
+      const comp = companies.find((c) => c._id === selectedCompanyId);
+      if (companyCategory === 'client' && isOfficeCompany(comp)) {
+        errors.company = 'Please select a valid client company (not an office)';
+      }
     }
 
     if (companyCategory === 'client' && !selectedClientId && !customerName.trim()) {
-      errors.client = 'Please select or enter client contact';
+      errors.client = 'Please select a client contact or add a new client';
     }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      Alert.alert('Incomplete', 'Please fill the required check-in fields.');
+      Alert.alert('Incomplete Check-In', 'Please select both company and client contact to proceed.');
       return;
     }
 
     setLoading(true);
     try {
+      // Auto-capture GPS coordinates if missing
+      let currentCoords = locationCoords;
+      if (!currentCoords?.latitude) {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            const lat = loc.coords.latitude;
+            const lng = loc.coords.longitude;
+            const accuracy = Math.round(loc.coords.accuracy || 0);
+            const address = await reverseGeocodeCoords(lat, lng);
+            currentCoords = {
+              latitude: lat,
+              longitude: lng,
+              accuracy,
+              address: address || '',
+            };
+            setLocationCoords(currentCoords);
+          }
+        } catch (gpsErr) {
+          console.warn('GPS auto-fetch on checkin error:', gpsErr);
+        }
+      }
+
       const checkInPayload = {
         dutyDate,
         dutyType: companyCategory,
@@ -433,10 +480,10 @@ export const DutyFormScreen = ({ navigation, route }) => {
         clientId: selectedClientId || undefined,
         customerName: companyCategory === 'office' ? 'Office' : (customerName.trim() || undefined),
         customerPhoneNumber: companyCategory === 'office' ? '' : (customerPhone.trim() || undefined),
-        latitude: locationCoords?.latitude,
-        longitude: locationCoords?.longitude,
-        accuracy: locationCoords?.accuracy,
-        address: locationCoords?.address,
+        latitude: currentCoords?.latitude,
+        longitude: currentCoords?.longitude,
+        accuracy: currentCoords?.accuracy,
+        address: currentCoords?.address,
       };
 
       const res = await dutyApi.checkIn(checkInPayload);
@@ -459,17 +506,22 @@ export const DutyFormScreen = ({ navigation, route }) => {
     }
   };
 
-  // Features / Highlights helpers
-  const handleAddFeature = () => {
-    setFeatures((prev) => [...prev, '']);
+  // Features helpers
+  const handleTogglePresetFeature = (name) => {
+    if (features.includes(name)) {
+      setFeatures((prev) => prev.filter((f) => f !== name));
+    } else {
+      setFeatures((prev) => [...prev, name]);
+    }
   };
 
-  const handleUpdateFeature = (text, index) => {
-    setFeatures((prev) => {
-      const updated = [...prev];
-      updated[index] = text;
-      return updated;
-    });
+  const handleAddCustomFeature = () => {
+    const trimmed = customFeatureInput.trim();
+    if (!trimmed) return;
+    if (!features.some((f) => f.toLowerCase() === trimmed.toLowerCase())) {
+      setFeatures((prev) => [...prev, trimmed]);
+    }
+    setCustomFeatureInput('');
   };
 
   const handleRemoveFeature = (index) => {
@@ -568,26 +620,24 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setPreviewModalVisible(true);
   };
 
-  // Direct Checkout or Work Details Submission
-  const handleCheckoutOrSubmit = async (isDirectCheckout = false) => {
+  // Work Details Submission & Checkout
+  const handleCheckoutOrSubmit = async () => {
     if (!activeDutyId && !isEditing) {
       Alert.alert('Check-In Required', 'Please check in first before checking out.');
       return;
     }
 
-    if (!isDirectCheckout) {
-      if (!machineName.trim()) {
-        Alert.alert('Required Field', 'Please enter machine name before submitting work details.');
-        return;
-      }
-      if (!workDescription.trim()) {
-        Alert.alert('Required Field', 'Please enter work description before submitting work details.');
-        return;
-      }
-      if (workType === 'Other' && !customWorkDetails.trim()) {
-        Alert.alert('Required Field', 'Please specify the custom work details.');
-        return;
-      }
+    if (!machineName.trim()) {
+      Alert.alert('Required Field', 'Please enter machine name before submitting work details.');
+      return;
+    }
+    if (!workDescription.trim()) {
+      Alert.alert('Required Field', 'Please enter work description before submitting work details.');
+      return;
+    }
+    if (workType === 'Other' && !customWorkDetails.trim()) {
+      Alert.alert('Required Field', 'Please specify the custom work details.');
+      return;
     }
 
     setLoading(true);
@@ -653,10 +703,10 @@ export const DutyFormScreen = ({ navigation, route }) => {
 
       const checkoutPayload = {
         dutyId: activeDutyId,
-        machineName: machineName.trim() || (isDirectCheckout ? 'N/A' : ''),
+        machineName: machineName.trim(),
         workType,
         customWorkType: workType === 'Other' ? customWorkDetails.trim() : '',
-        workDescription: effectiveDescription || (isDirectCheckout ? 'Direct checkout' : ''),
+        workDescription: effectiveDescription,
         features: sanitizedFeatures,
         manpowerMembers: sanitizedManpower,
         customerSignature: uploadedSignature,
@@ -677,6 +727,25 @@ export const DutyFormScreen = ({ navigation, route }) => {
         ]);
       } else {
         await dutyApi.checkOut(checkoutPayload);
+        // Reset all states so subsequent "New Work" starts fresh
+        setIsCheckedIn(false);
+        setActiveDutyId(null);
+        setActiveCheckInTime('');
+        setMachineName('');
+        setWorkDescription('');
+        setFeatures([]);
+        setCustomFeatureInput('');
+        setManpowerMembers([]);
+        setSignatureData(null);
+        setPhotos([]);
+        setLocationCoords(null);
+        setSelectedCompanyId('');
+        setSelectedClientId('');
+        setCustomerName('');
+        setCustomerPhone('');
+        setCustomWorkDetails('');
+        setFieldErrors({});
+
         Alert.alert(
           'Checkout Complete',
           'Checked out and work details submitted successfully!',
@@ -724,33 +793,30 @@ export const DutyFormScreen = ({ navigation, route }) => {
         >
           <ErrorMessage message={error} />
 
-          {/* STAGE 1: CHECK-IN DETAILS (If not checked in, employee fills this and checks in) */}
-          {!isCheckedIn ? (
+          {/* Dynamic Switch: Checking Session Loader -> Stage 1 Check-In -> Stage 2 Work Details */}
+          {checkingSession ? (
+            <View style={{ paddingVertical: SPACING.xxl, alignItems: 'center' }}>
+              <LoadingIndicator message="Verifying duty session..." />
+            </View>
+          ) : !isCheckedIn ? (
             <Card style={styles.formCard}>
               <View style={styles.cardHeaderRow}>
                 <Ionicons name="log-in-outline" size={20} color={COLORS.primary} />
                 <Text style={styles.sectionHeader}>Step 1: Duty Check-In</Text>
               </View>
 
-              {/* Date Selector */}
-              <View style={styles.datePickerRow}>
-                <View style={{ flex: 1 }}>
-                  <TextInputField
-                    label="Work Date (YYYY-MM-DD)"
-                    value={dutyDate}
-                    onChangeText={setDutyDate}
-                    placeholder="YYYY-MM-DD"
-                    error={fieldErrors.dutyDate}
-                    required
-                  />
+              {/* Duty Date (India Standard Time - Non-Editable) */}
+              <View style={styles.fixedDateCard}>
+                <View style={styles.fixedDateIconWrap}>
+                  <Ionicons name="calendar" size={18} color={COLORS.primary} />
                 </View>
-                <TouchableOpacity
-                  style={styles.calendarIconBtn}
-                  onPress={() => setDatePickerVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="calendar" size={20} color={COLORS.primary} />
-                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fixedDateLabel}>Duty Date (IST)</Text>
+                  <Text style={styles.fixedDateValue}>{formatDate(dutyDate) || dutyDate}</Text>
+                </View>
+                <View style={styles.todayBadge}>
+                  <Text style={styles.todayBadgeText}>Today</Text>
+                </View>
               </View>
 
               {/* Duty Type Selector: Office vs Client Company */}
@@ -1083,103 +1149,172 @@ export const DutyFormScreen = ({ navigation, route }) => {
                   required
                 />
 
-                {/* NEW: Highlights / Features Section (e.g. PLC, HDM) */}
+                {/* Features Section */}
                 <View style={styles.dynamicSectionWrap}>
                   <View style={styles.dynamicSectionHeaderRow}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Ionicons name="sparkles" size={18} color="#D97706" />
-                      <Text style={styles.dynamicSectionTitle}>Highlights / Features (Optional)</Text>
+                      <Text style={styles.dynamicSectionTitle}>Features (Optional)</Text>
                     </View>
-                    <TouchableOpacity
-                      onPress={handleAddFeature}
-                      style={styles.addDynamicBtn}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="add-circle" size={16} color={COLORS.primary} />
-                      <Text style={styles.addDynamicBtnText}>+ Add Feature</Text>
-                    </TouchableOpacity>
+                    {features.length > 0 && (
+                      <View style={styles.countBadge}>
+                        <Text style={styles.countBadgeText}>{features.length} Added</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.dynamicSectionSubtitle}>
-                    Add specific machine or technical features (e.g., PLC, HDM, VFD, Sensor Module).
+                    Select common components or type a custom feature.
                   </Text>
 
-                  {features.map((feat, idx) => (
-                    <View key={`feat-${idx}`} style={styles.featureRow}>
-                      <View style={{ flex: 1 }}>
-                        <TextInputField
-                          label={`Feature #${idx + 1}`}
-                          placeholder="e.g. PLC, HDM, VFD Controller"
-                          value={feat}
-                          onChangeText={(t) => handleUpdateFeature(t, idx)}
-                        />
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => handleRemoveFeature(idx)}
-                        style={styles.removeDynamicIconBtn}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="trash-outline" size={20} color="#DC2626" />
-                      </TouchableOpacity>
+                  {/* Quick Preset Buttons */}
+                  <View style={styles.presetChipsWrap}>
+                    {PRESET_FEATURES.map((item) => {
+                      const isSelected = features.includes(item);
+                      return (
+                        <TouchableOpacity
+                          key={item}
+                          style={[styles.presetChip, isSelected && styles.presetChipSelected]}
+                          onPress={() => handleTogglePresetFeature(item)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name={isSelected ? 'checkmark' : 'add'}
+                            size={12}
+                            color={isSelected ? '#1E40AF' : '#2563EB'}
+                          />
+                          <Text
+                            style={[
+                              styles.presetChipText,
+                              isSelected && styles.presetChipTextSelected,
+                            ]}
+                          >
+                            {item}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {/* Inline Custom Feature Input + Add Button */}
+                  <View style={styles.addFeatureRow}>
+                    <View style={{ flex: 1 }}>
+                      <TextInputField
+                        label=""
+                        placeholder="Type custom feature (e.g. Servo Motor)"
+                        value={customFeatureInput}
+                        onChangeText={setCustomFeatureInput}
+                        style={{ marginBottom: 0 }}
+                      />
                     </View>
-                  ))}
+                    <TouchableOpacity
+                      style={styles.featureAddBtn}
+                      onPress={handleAddCustomFeature}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="add" size={16} color="#FFFFFF" />
+                      <Text style={styles.featureAddBtnText}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Active Features Tags */}
+                  {features.length > 0 ? (
+                    <View style={styles.featureTagsContainer}>
+                      {features.map((feat, idx) => (
+                        <View key={`feat-tag-${idx}`} style={styles.featureTagPill}>
+                          <Ionicons name="hardware-chip-outline" size={13} color="#0369A1" />
+                          <Text style={styles.featureTagText}>{feat}</Text>
+                          <TouchableOpacity
+                            onPress={() => handleRemoveFeature(idx)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            activeOpacity={0.6}
+                          >
+                            <Ionicons name="close-circle" size={16} color="#0284C7" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                 </View>
 
-                {/* NEW: Multiple Manpower Members Section */}
+                {/* Manpower Members Section */}
                 <View style={styles.dynamicSectionWrap}>
                   <View style={styles.dynamicSectionHeaderRow}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Ionicons name="people" size={18} color={COLORS.primary} />
-                      <Text style={styles.dynamicSectionTitle}>Multiple Manpower Members (Optional)</Text>
+                      <Text style={styles.dynamicSectionTitle}>Manpower Members (Optional)</Text>
                     </View>
                     <TouchableOpacity
                       onPress={handleAddManpower}
-                      style={styles.addDynamicBtn}
-                      activeOpacity={0.7}
+                      style={styles.addMemberBtn}
+                      activeOpacity={0.8}
                     >
-                      <Ionicons name="add-circle" size={16} color={COLORS.primary} />
-                      <Text style={styles.addDynamicBtnText}>+ Add Member</Text>
+                      <Ionicons name="person-add" size={14} color="#FFFFFF" />
+                      <Text style={styles.addMemberBtnText}>+ Add Member</Text>
                     </TouchableOpacity>
                   </View>
                   <Text style={styles.dynamicSectionSubtitle}>
                     Add team technicians or assistants working on this duty visit.
                   </Text>
 
-                  {manpowerMembers.map((member, idx) => (
-                    <Card key={`member-${idx}`} style={styles.manpowerCard}>
-                      <View style={styles.manpowerCardHeader}>
-                        <Text style={styles.manpowerCardNum}>Team Member #{idx + 1}</Text>
-                        <TouchableOpacity
-                          onPress={() => handleRemoveManpower(idx)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="trash-outline" size={18} color="#DC2626" />
-                        </TouchableOpacity>
-                      </View>
+                  {manpowerMembers.length === 0 ? (
+                    <View style={styles.emptyManpowerBox}>
+                      <Text style={styles.emptyManpowerText}>
+                        No manpower members added yet. Tap "+ Add Member" above if working with colleagues.
+                      </Text>
+                    </View>
+                  ) : (
+                    manpowerMembers.map((member, idx) => (
+                      <Card key={`member-${idx}`} style={styles.manpowerCard}>
+                        <View style={styles.manpowerCardHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name="person-circle" size={18} color={COLORS.primary} />
+                            <Text style={styles.manpowerCardNum}>Team Member #{idx + 1}</Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => handleRemoveManpower(idx)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                          </TouchableOpacity>
+                        </View>
 
-                      <TextInputField
-                        label="Member Name *"
-                        placeholder="e.g. Kabilan M"
-                        value={member.name}
-                        onChangeText={(t) => handleUpdateManpower('name', t, idx)}
-                      />
+                        <TextInputField
+                          label="Member Name *"
+                          placeholder="e.g. Kabilan M"
+                          value={member.name}
+                          onChangeText={(t) => handleUpdateManpower('name', t, idx)}
+                        />
 
-                      <TextInputField
-                        label="Phone Number (Optional)"
-                        placeholder="10-digit mobile number"
-                        value={member.phoneNumber}
-                        onChangeText={(t) => handleUpdateManpower('phoneNumber', t.replace(/\D/g, '').slice(0, 10), idx)}
-                        keyboardType="number-pad"
-                        maxLength={10}
-                      />
-
-                      <TextInputField
-                        label="Role / Description"
-                        placeholder="e.g. Lead Technician, Assistant"
-                        value={member.description}
-                        onChangeText={(t) => handleUpdateManpower('description', t, idx)}
-                      />
-                    </Card>
-                  ))}
+                        <View style={styles.manpowerRowCols}>
+                          <View style={{ flex: 1, marginRight: SPACING.xs }}>
+                            <TextInputField
+                              label="Phone Number"
+                              placeholder="10-digit mobile"
+                              value={member.phoneNumber}
+                              onChangeText={(t) =>
+                                handleUpdateManpower(
+                                  'phoneNumber',
+                                  t.replace(/\D/g, '').slice(0, 10),
+                                  idx
+                                )
+                              }
+                              keyboardType="number-pad"
+                              maxLength={10}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <TextInputField
+                              label="Role / Task"
+                              placeholder="e.g. Assistant"
+                              value={member.description}
+                              onChangeText={(t) => handleUpdateManpower('description', t, idx)}
+                            />
+                          </View>
+                        </View>
+                      </Card>
+                    ))
+                  )}
                 </View>
 
                 {/* Photo Proof (Max 3) */}
@@ -1284,20 +1419,13 @@ export const DutyFormScreen = ({ navigation, route }) => {
                   />
                 </View>
 
-                {/* ACTION BUTTONS: Direct Checkout or Submit Work Details & Checkout */}
+                {/* Single Checkout Action Button */}
                 <View style={styles.actionsWrap}>
                   <PrimaryButton
-                    title="Submit Work Details & Checkout"
-                    onPress={() => handleCheckoutOrSubmit(false)}
+                    title={isEditing ? 'Update Work Report' : 'Submit Work Details & Checkout'}
+                    onPress={handleCheckoutOrSubmit}
                     loading={loading}
                     icon="checkmark-done"
-                    style={{ marginBottom: SPACING.sm }}
-                  />
-                  <SecondaryButton
-                    title="Checkout Directly"
-                    onPress={() => handleCheckoutOrSubmit(true)}
-                    disabled={loading}
-                    icon="log-out-outline"
                   />
                 </View>
               </Card>
@@ -1541,19 +1669,49 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: SPACING.sm,
   },
-  datePickerRow: {
+  fixedDateCard: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  calendarIconBtn: {
-    width: 44,
-    height: 44,
+    backgroundColor: '#F8FAFC',
     borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
+    marginBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  fixedDateIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#EEF2FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: SPACING.sm,
-    marginTop: 6,
+  },
+  fixedDateLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  fixedDateValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginTop: 2,
+  },
+  todayBadge: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+  },
+  todayBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   typeSelectorRow: {
     flexDirection: 'row',
@@ -1793,30 +1951,126 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: SPACING.sm,
   },
-  addDynamicBtn: {
+  countBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  countBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  presetChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: SPACING.sm,
+  },
+  presetChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
   },
-  addDynamicBtnText: {
-    fontSize: 12,
+  presetChipSelected: {
+    backgroundColor: '#DBEAFE',
+    borderColor: COLORS.primary,
+  },
+  presetChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#2563EB',
+  },
+  presetChipTextSelected: {
+    color: '#1E40AF',
     fontWeight: '700',
-    color: COLORS.primary,
   },
-  featureRow: {
+  addFeatureRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
+    marginBottom: SPACING.xs,
   },
-  removeDynamicIconBtn: {
-    padding: 8,
+  featureAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+    justifyContent: 'center',
+  },
+  featureAddBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  featureTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
     marginTop: 6,
+  },
+  featureTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    gap: 6,
+  },
+  featureTagText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  addMemberBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+  },
+  addMemberBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  emptyManpowerBox: {
+    padding: SPACING.sm,
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    marginBottom: SPACING.xs,
+  },
+  emptyManpowerText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   manpowerCard: {
     backgroundColor: '#FFFFFF',
     borderColor: '#E2E8F0',
     borderWidth: 1,
-    padding: SPACING.md,
+    padding: SPACING.sm + 2,
     marginBottom: SPACING.sm,
   },
   manpowerCardHeader: {
@@ -1829,6 +2083,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  manpowerRowCols: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   photosSection: {
     marginBottom: SPACING.md,

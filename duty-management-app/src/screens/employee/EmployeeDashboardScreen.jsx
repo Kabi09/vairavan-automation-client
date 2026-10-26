@@ -17,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import dashboardApi from '../../api/dashboardApi';
+import dutyApi from '../../api/dutyApi';
 import notificationApi from '../../api/notificationApi';
 import Card from '../../components/Card';
 import LoadingIndicator from '../../components/LoadingIndicator';
@@ -44,13 +45,57 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   // Messages modal state
   const [messagesModalVisible, setMessagesModalVisible] = useState(false);
 
+  // Active duty session state for Zoho People Check-in/Check-out widget
+  const [activeDuty, setActiveDuty] = useState(null);
+  const [timerDigits, setTimerDigits] = useState({ hours: '00', minutes: '00', seconds: '00' });
+
+  // Live timer for Zoho People checkin/checkout widget
+  useEffect(() => {
+    const updateTimer = () => {
+      if (activeDuty?.checkInTime) {
+        const checkInDate = new Date(activeDuty.checkInTime);
+        const diffMs = Math.max(0, Date.now() - checkInDate.getTime());
+        const totalSecs = Math.floor(diffMs / 1000);
+        const hours = String(Math.floor(totalSecs / 3600)).padStart(2, '0');
+        const minutes = String(Math.floor((totalSecs % 3600) / 60)).padStart(2, '0');
+        const seconds = String(totalSecs % 60).padStart(2, '0');
+        setTimerDigits({ hours, minutes, seconds });
+      } else {
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        });
+        const parts = formatter.formatToParts(now);
+        const hours = parts.find((p) => p.type === 'hour')?.value || '00';
+        const minutes = parts.find((p) => p.type === 'minute')?.value || '00';
+        const seconds = parts.find((p) => p.type === 'second')?.value || '00';
+        setTimerDigits({ hours, minutes, seconds });
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [activeDuty]);
 
   const fetchDashboard = useCallback(async () => {
     try {
       setError('');
-      const dashRes = await dashboardApi.getEmployeeDashboard();
+      const [dashRes, activeRes] = await Promise.all([
+        dashboardApi.getEmployeeDashboard().catch(() => null),
+        dutyApi.getActiveCheckIn().catch(() => null),
+      ]);
       if (dashRes?.data) {
         setData(dashRes.data);
+      }
+      if (activeRes?.data?.activeDuty) {
+        setActiveDuty(activeRes.data.activeDuty);
+      } else {
+        setActiveDuty(null);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load dashboard'));
@@ -426,6 +471,98 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
         </View>
 
         <ErrorMessage message={error} onRetry={fetchDashboard} />
+
+        {/* Zoho People Style Check-In / Check-Out Widget */}
+        <View style={styles.zohoWidgetCard}>
+          <View style={styles.zohoWidgetTopRow}>
+            {/* 3 Digital Clock Digit Boxes: [ HH ] : [ MM ] : [ SS ] */}
+            <View style={styles.zohoDigitsRow}>
+              <View
+                style={[
+                  styles.zohoDigitBox,
+                  activeDuty ? styles.zohoDigitBoxActive : styles.zohoDigitBoxInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.zohoDigitText,
+                    activeDuty ? styles.zohoDigitTextActive : styles.zohoDigitTextInactive,
+                  ]}
+                >
+                  {timerDigits.hours}
+                </Text>
+              </View>
+              <Text style={styles.zohoColon}>:</Text>
+              <View
+                style={[
+                  styles.zohoDigitBox,
+                  activeDuty ? styles.zohoDigitBoxActive : styles.zohoDigitBoxInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.zohoDigitText,
+                    activeDuty ? styles.zohoDigitTextActive : styles.zohoDigitTextInactive,
+                  ]}
+                >
+                  {timerDigits.minutes}
+                </Text>
+              </View>
+              <Text style={styles.zohoColon}>:</Text>
+              <View
+                style={[
+                  styles.zohoDigitBox,
+                  activeDuty ? styles.zohoDigitBoxActive : styles.zohoDigitBoxInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.zohoDigitText,
+                    activeDuty ? styles.zohoDigitTextActive : styles.zohoDigitTextInactive,
+                  ]}
+                >
+                  {timerDigits.seconds}
+                </Text>
+              </View>
+            </View>
+
+            {/* Action Button: Check-out (Red) if active duty, Check-in (Green) if not */}
+            <TouchableOpacity
+              style={[
+                styles.zohoActionBtn,
+                activeDuty ? styles.zohoCheckoutBtn : styles.zohoCheckinBtn,
+              ]}
+              onPress={() => navigation.navigate('DutyForm')}
+              activeOpacity={0.85}
+              accessibilityLabel={activeDuty ? 'Check-out of duty' : 'Check-in to duty'}
+            >
+              <Text style={styles.zohoActionBtnText}>
+                {activeDuty ? 'Check-out' : 'Check-in'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Status Subtitle Row */}
+          <View style={styles.zohoStatusRow}>
+            <Text
+              style={[
+                styles.zohoStatusLabel,
+                { color: activeDuty ? '#059669' : '#64748B' },
+              ]}
+            >
+              {activeDuty ? 'In' : 'Out'}
+            </Text>
+            <Text style={styles.zohoStatusDetail} numberOfLines={1}>
+              {activeDuty
+                ? `at ${formatTime(activeDuty.checkInTime || activeDuty.inTime)} • ${
+                    activeDuty.dutyType === 'office'
+                      ? 'Office Duty'
+                      : activeDuty.company?.companyName || 'Client Site'
+                  }`
+                : '• Tap Check-in to start today’s duty'}
+            </Text>
+          </View>
+        </View>
 
         {/* Sliding Highlight Banners (Birthday, On-Leave, Holiday) */}
         {Boolean(highlightSlides.length === 1) ? (
@@ -887,6 +1024,106 @@ const styles = StyleSheet.create({
   },
   avatarButton: {
     padding: SPACING.xs,
+  },
+  zohoWidgetCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  zohoWidgetTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  zohoDigitsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  zohoDigitBox: {
+    minWidth: 46,
+    height: 50,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  zohoDigitBoxActive: {
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FFE4E6',
+  },
+  zohoDigitBoxInactive: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  zohoDigitText: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  zohoDigitTextActive: {
+    color: '#0F172A',
+  },
+  zohoDigitTextInactive: {
+    color: '#334155',
+  },
+  zohoColon: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginHorizontal: 3,
+  },
+  zohoActionBtn: {
+    borderRadius: 14,
+    paddingHorizontal: 22,
+    paddingVertical: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  zohoCheckoutBtn: {
+    backgroundColor: '#E11D48',
+  },
+  zohoCheckinBtn: {
+    backgroundColor: '#059669',
+  },
+  zohoActionBtnText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  zohoStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F8FAFC',
+  },
+  zohoStatusLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginRight: 6,
+  },
+  zohoStatusDetail: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    flex: 1,
+    fontWeight: '500',
   },
   quickActionsRow: {
     flexDirection: 'row',

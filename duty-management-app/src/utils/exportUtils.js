@@ -16,16 +16,52 @@ const BRANDING_PDF_FOOTER_HTML = `
 `;
 
 /**
- * Format date nicely for display
+ * Format date nicely for display in India Standard Time (Asia/Kolkata)
  */
 const formatDate = (dateStr) => {
   if (!dateStr) return 'N/A';
   try {
     const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? String(dateStr) : d.toISOString().split('T')[0];
+    return isNaN(d.getTime())
+      ? String(dateStr)
+      : d.toLocaleDateString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        });
   } catch {
     return String(dateStr);
   }
+};
+
+/**
+ * Format time in India Standard Time (Asia/Kolkata)
+ */
+const formatTimeIST = (timeOrDate) => {
+  if (!timeOrDate) return 'N/A';
+  if (typeof timeOrDate === 'string' && timeOrDate.includes(':') && !timeOrDate.includes('T')) {
+    const parts = timeOrDate.split(':');
+    const h = parseInt(parts[0], 10);
+    const m = parts[1] || '00';
+    if (!isNaN(h)) {
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const displayH = h % 12 || 12;
+      return `${displayH}:${m} ${ampm}`;
+    }
+  }
+  try {
+    const d = new Date(timeOrDate);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    }
+  } catch {}
+  return String(timeOrDate);
 };
 
 /**
@@ -389,17 +425,61 @@ export const exportDutiesToPDF = async ({
           d.company?.companyType === 'office' ||
           (compName && compName.toLowerCase().includes('office'));
 
-        const effectiveCustomer = isOffice ? 'Office' : (customer || 'N/A');
+        const effectiveCustomer = isOffice ? 'Office' : (customer || d.client?.clientName || 'N/A');
         const effectiveCustomerPhone = isOffice
           ? (d.company?.companyPhoneNumber || customerPhone || 'N/A')
-          : (customerPhone || 'N/A');
+          : (customerPhone || d.client?.clientPhoneNumber || 'N/A');
+
+        const checkInIST = d.checkInTime ? formatTimeIST(d.checkInTime) : inTime;
+        const checkOutIST = d.checkOutTime ? formatTimeIST(d.checkOutTime) : outTime;
+        const durationText = d.totalDurationMinutes
+          ? `${Math.floor(d.totalDurationMinutes / 60)}h ${d.totalDurationMinutes % 60}m (${d.totalDurationMinutes} mins)`
+          : 'N/A';
+
+        const featuresList = Array.isArray(d.features) ? d.features.filter(Boolean) : [];
+        const featuresHtml =
+          featuresList.length > 0
+            ? `<div style="margin-top: 8px; font-size: 11px;">
+                 <strong style="color: #0f172a;">Features:</strong> ` +
+              featuresList
+                .map(
+                  (f) =>
+                    `<span style="display: inline-block; background: #EFF6FF; border: 1px solid #BFDBFE; color: #1E40AF; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; margin-right: 4px; margin-bottom: 2px;">${escapeHtml(
+                      f
+                    )}</span>`
+                )
+                .join('') +
+              `</div>`
+            : '';
+
+        const manpowerList = Array.isArray(d.manpowerMembers)
+          ? d.manpowerMembers.filter((m) => m && m.name)
+          : [];
+        const manpowerHtml =
+          manpowerList.length > 0
+            ? `<div style="margin-top: 8px; padding: 8px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 6px;">
+                 <strong style="color: #0f172a; font-size: 11px;">Manpower Team (${manpowerList.length}):</strong><br/>` +
+              manpowerList
+                .map(
+                  (m) =>
+                    `<span style="font-size: 11px; color: #334155;">• <strong>${escapeHtml(
+                      m.name
+                    )}</strong>${
+                      m.phoneNumber || m.phone
+                        ? ` (Phone: ${escapeHtml(m.phoneNumber || m.phone)})`
+                        : ''
+                    }${m.description ? ` - <em>${escapeHtml(m.description)}</em>` : ''}</span>`
+                )
+                .join('<br/>') +
+              `</div>`
+            : '';
 
         return `
           <div class="duty-card">
             <div class="card-header">
               <span class="record-badge">${dutyId}</span>
               <span class="duty-date"><strong>Date:</strong> ${dateStr}</span>
-              <span class="duty-time"><strong>Time:</strong> ${inTime} - ${outTime}</span>
+              <span class="duty-time"><strong>Time (IST):</strong> ${checkInIST} - ${checkOutIST}</span>
               <span class="work-badge">${workType}</span>
             </div>
 
@@ -408,17 +488,24 @@ export const exportDutiesToPDF = async ({
                 <td style="width: 50%;">
                   <strong>Work ID:</strong> ${dutyId}<br/>
                   <strong>Employee:</strong> ${empName} (${empId})<br/>
+                  <strong>Duty Type:</strong> ${isOffice ? 'Office Duty' : 'Client Company Duty'}<br/>
                   <strong>${isOffice ? 'Office:' : 'Client Company:'}</strong> ${compName || (isOffice ? 'Office' : 'Client Company')} ${compLoc ? `• ${compLoc}` : ''}<br/>
-                  <strong>Customer Name:</strong> ${effectiveCustomer}<br/>
+                  <strong>Customer / Client Name:</strong> ${effectiveCustomer}<br/>
                   <strong>Phone Number:</strong> ${effectiveCustomerPhone}<br/>
                   <strong>Machine / Asset:</strong> ${machine}
                 </td>
                 <td style="width: 50%;">
+                  <strong>Check-In Time (IST):</strong> ${checkInIST}<br/>
+                  <strong>Check-Out Time (IST):</strong> ${checkOutIST}<br/>
+                  <strong>Total Working Duration:</strong> ${durationText}<br/>
                   <strong>GPS Location:</strong> ${locationText}
                   ${mapsUrl ? `<br/><a href="${mapsUrl}" target="_blank" style="color: #1e40af; font-size: 11px;">[View on Google Maps]</a>` : ''}
                 </td>
               </tr>
             </table>
+
+            ${featuresHtml}
+            ${manpowerHtml}
 
             <div class="description-box">
               <strong>Work Performed / Observations:</strong><br/>
@@ -646,25 +733,29 @@ export const exportDutiesToExcel = async ({
       'Sl No',
       'Work ID',
       'Work Date',
+      'Duty Type',
       'Employee ID',
       'Employee Name',
       'Employee Designation',
-      'Location / Entity Type',
       'Company / Office Name',
       'Company Location',
-      'Customer Name',
-      'Phone Number',
-      'Machine Name',
+      'Client / Customer Name',
+      'Client Phone Number',
+      'Check-In Time (IST)',
+      'Check-Out Time (IST)',
+      'Working Duration (Minutes)',
+      'Working Duration (Hours)',
+      'Machine / Asset Name',
       'Work Type',
-      'In Time',
-      'Out Time',
+      'Features',
+      'Manpower Team',
       'Work Description',
       'Location Address',
       'GPS Coordinates',
       'Signature Timestamp',
       'Customer Signature URL',
       'Proof Photos URLs',
-      'Created At',
+      'Record Created At (IST)',
     ];
 
     // Sort duties strictly in Ascending order by Work ID (e.g. WORK-1000, WORK-1001, ...)
@@ -697,12 +788,14 @@ export const exportDutiesToExcel = async ({
       const signatureUrl = d.customerSignature?.url || '';
       const sigTime = d.customerSignature?.signedAt
         ? new Date(d.customerSignature.signedAt).toLocaleDateString('en-IN', {
+            timeZone: 'Asia/Kolkata',
             day: '2-digit',
             month: 'short',
             year: 'numeric',
           }) +
           ', ' +
           new Date(d.customerSignature.signedAt).toLocaleTimeString('en-IN', {
+            timeZone: 'Asia/Kolkata',
             hour: '2-digit',
             minute: '2-digit',
             hour12: true,
@@ -713,40 +806,86 @@ export const exportDutiesToExcel = async ({
       const photos = Array.isArray(d.customerProofPhotos)
         ? d.customerProofPhotos.map((p) => p.url).join(' | ')
         : '';
-      const createdAt = d.createdAt ? new Date(d.createdAt).toISOString() : '';
 
       const isOffice =
         d.company?.companyType === 'office' ||
         (compName && compName.toLowerCase().includes('office'));
 
-      const effectiveCustomer = isOffice ? 'Office' : customer;
+      const dutyTypeLabel = isOffice ? 'Office Duty' : 'Client Company Duty';
+      const effectiveCustomer = isOffice ? 'Office' : (customer || d.client?.clientName || 'N/A');
       const effectiveCustomerPhone = isOffice
         ? (d.company?.companyPhoneNumber || customerPhone || '')
-        : customerPhone;
+        : (customerPhone || d.client?.clientPhoneNumber || '');
+
+      const checkInTimeIST = d.checkInTime ? formatTimeIST(d.checkInTime) : inTime;
+      const checkOutTimeIST = d.checkOutTime ? formatTimeIST(d.checkOutTime) : outTime;
+      const durationMins =
+        d.totalDurationMinutes !== undefined && d.totalDurationMinutes !== null
+          ? String(d.totalDurationMinutes)
+          : '';
+      const durationHours = d.totalDurationMinutes
+        ? (d.totalDurationMinutes / 60).toFixed(2)
+        : '';
+
+      const featuresStr = Array.isArray(d.features)
+        ? d.features.filter(Boolean).join('; ')
+        : '';
+
+      const manpowerStr = Array.isArray(d.manpowerMembers)
+        ? d.manpowerMembers
+            .filter((m) => m && m.name)
+            .map((m) => {
+              const parts = [m.name];
+              if (m.phoneNumber || m.phone) parts.push(m.phoneNumber || m.phone);
+              if (m.description) parts.push(m.description);
+              return parts.join(', ');
+            })
+            .join(' | ')
+        : '';
+
+      const createdAtIST = d.createdAt
+        ? new Date(d.createdAt).toLocaleDateString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          }) +
+          ' ' +
+          new Date(d.createdAt).toLocaleTimeString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          })
+        : '';
 
       return [
         index + 1,
         escapeCsv(dutyId),
         formatDate(d.dutyDate),
+        escapeCsv(dutyTypeLabel),
         escapeCsv(empId),
         escapeCsv(empName),
         escapeCsv(empDesig),
-        escapeCsv(isOffice ? 'Office' : 'Client Company'),
         escapeCsv(compName || (isOffice ? 'Office' : 'Client Company')),
         escapeCsv(compLoc),
         escapeCsv(effectiveCustomer),
         escapeCsv(effectiveCustomerPhone),
+        escapeCsv(checkInTimeIST),
+        escapeCsv(checkOutTimeIST),
+        escapeCsv(durationMins),
+        escapeCsv(durationHours),
         escapeCsv(machine),
         escapeCsv(workType),
-        escapeCsv(inTime),
-        escapeCsv(outTime),
+        escapeCsv(featuresStr),
+        escapeCsv(manpowerStr),
         escapeCsv(workDesc),
         escapeCsv(address),
         escapeCsv(coords),
         escapeCsv(sigTime),
         escapeCsv(signatureUrl),
         escapeCsv(photos),
-        escapeCsv(createdAt),
+        escapeCsv(createdAtIST),
       ].join(',');
     });
 

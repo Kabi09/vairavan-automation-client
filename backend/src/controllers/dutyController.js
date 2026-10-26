@@ -13,9 +13,14 @@ import notificationService from '../services/notificationService.js';
  */
 export const formatTimeToHHmm = (date = new Date()) => {
   const d = new Date(date);
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
+  if (isNaN(d.getTime())) return '';
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return formatter.format(d);
 };
 
 /**

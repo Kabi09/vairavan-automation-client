@@ -1,12 +1,13 @@
 /**
- * Date and time formatting helpers
+ * Date and time formatting helpers strictly localized to India Standard Time (Asia/Kolkata)
  */
 
 export const formatDate = (dateInput) => {
   if (!dateInput) return '';
   const date = new Date(dateInput);
   if (isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-GB', {
+  return date.toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -16,24 +17,61 @@ export const formatDate = (dateInput) => {
 export const formatISODateOnly = (dateInput = new Date()) => {
   const date = new Date(dateInput);
   if (isNaN(date.getTime())) return '';
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(date);
 };
 
-export const formatTime = (timeStr) => {
-  if (!timeStr) return '';
-  // If timeStr is HH:mm format, return formatted
-  const parts = timeStr.split(':');
+export const formatTime = (timeInput) => {
+  if (!timeInput) return '';
+  if (
+    typeof timeInput === 'object' ||
+    (typeof timeInput === 'string' && (timeInput.includes('T') || timeInput.includes('Z')))
+  ) {
+    const d = new Date(timeInput);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    }
+  }
+  const parts = String(timeInput).split(':');
   if (parts.length >= 2) {
     const hours = parseInt(parts[0], 10);
-    const minutes = parts[1];
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const displayHour = hours % 12 || 12;
-    return `${displayHour}:${minutes} ${ampm}`;
+    const minutes = parts[1].slice(0, 2);
+    if (!isNaN(hours)) {
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const displayHour = hours % 12 || 12;
+      return `${displayHour}:${minutes} ${ampm}`;
+    }
   }
-  return timeStr;
+  return String(timeInput);
+};
+
+export const formatDateTime = (dateInput) => {
+  if (!dateInput) return '';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return '';
+  const dStr = date.toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const tStr = date.toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+  return `${dStr}, ${tStr}`;
 };
 
 export const getTodayDateString = () => {
@@ -47,7 +85,12 @@ export const getYesterdayDateString = () => {
 };
 
 export const getGreeting = () => {
-  const hour = new Date().getHours();
+  const formatter = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    hour12: false,
+  });
+  const hour = parseInt(formatter.format(new Date()), 10);
   if (hour < 12) return 'Good Morning';
   if (hour < 17) return 'Good Afternoon';
   return 'Good Evening';
@@ -65,8 +108,10 @@ export default {
   formatDate,
   formatISODateOnly,
   formatTime,
+  formatDateTime,
   getTodayDateString,
   getYesterdayDateString,
   getGreeting,
   isDateRangeValid,
 };
+

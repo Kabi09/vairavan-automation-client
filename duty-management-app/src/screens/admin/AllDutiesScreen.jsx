@@ -692,10 +692,10 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                 </View>
               ) : null}
 
-              {/* Highlights / Features */}
+              {/* Features */}
               {selectedDuty?.features && selectedDuty.features.length > 0 ? (
                 <View style={styles.detailBlock}>
-                  <Text style={styles.blockLabel}>Highlights / Features</Text>
+                  <Text style={styles.blockLabel}>Features</Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                     {selectedDuty.features.map((feat, idx) => (
                       <View key={idx} style={{ backgroundColor: '#F0F9FF', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#BAE6FD', flexDirection: 'row', alignItems: 'center', gap: 4 }}>

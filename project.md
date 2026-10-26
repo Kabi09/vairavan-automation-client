@@ -2157,8 +2157,103 @@
   - Client Company Duty & Office Duty Check-In/Check-Out Workflows: Fully implemented with dual workflows, active check-in resume, duration tracking in minutes, and direct checkout or submit & checkout options.
   - Work Form Highlights / Features: Dynamic features array (`features: [String]`) with `+ Add Feature` button, inline removal, and display in Admin & Employee work detail views.
   - Expense Management: Complete system with customizable categories (automatic km rates & manual types), multi-item submissions, attachments, live grand totals, duplicate submission guards, admin dashboard metrics, category management modal, PDF/Excel export, and zero approval workflow.
-  - 49/49 backend unit and integration tests passing across 8 suites.
-  - All 11 modified React Native mobile screens validated with 0 syntax or AST errors.
+### 2026-10-26
+#### Duty Check-In Validation, State Reset, Single Checkout, Features & Manpower UX, IST India Time, & Full Data Export
+- What was changed:
+  1. **Client Company Check-In Validation**:
+     - Enforced strict validation preventing check-in without selecting a valid client company (preventing office company selection when in client mode).
+     - Required selecting a client contact person or entering client details. Added auto-fetch of GPS coordinates if missing before submission.
+  2. **Active Check-In State Reset & "New Work" Fix**:
+     - Fixed `DutyFormScreen.jsx` `useFocusEffect` `checkActiveSession` to explicitly reset `isCheckedIn(false)`, `setActiveDutyId(null)`, and `setActiveCheckInTime('')` when `activeDuty` is null.
+     - On checkout completion, completely reset all form states (`isCheckedIn`, `activeDutyId`, machine name, description, features, manpower, signature, photos, location, client/company selection) so subsequent clicks on "New Work" start fresh.
+  3. **Removed Secondary Checkout Button**:
+     - Removed the "Checkout Directly" secondary button from `DutyFormScreen.jsx`.
+     - Provided a single, prominent primary button: `Submit Work Details & Checkout` (or `Update Work Report` in edit mode) that validates required fields (`machineName`, `workDescription`).
+  4. **Non-Editable Duty Date**:
+     - Replaced editable text input and calendar picker button in `DutyFormScreen.jsx` with a fixed, read-only IST date card featuring a calendar icon, human-readable date, and "Today" badge.
+  5. **Renamed Highlights / Features to "Features"**:
+     - Renamed all headers, labels, badges, and export sections from "Highlights / Features" to **"Features"** across `DutyFormScreen.jsx`, `DutyDetailsScreen.jsx`, and `AllDutiesScreen.jsx`.
+  6. **Modern, Touch-Friendly Features UI**:
+     - Added quick preset chips (`[+ PLC]`, `[+ HMI]`, `[+ VFD]`, `[+ Sensor]`, `[+ Servo]`, `[+ HDM]`, `[+ Wiring]`, `[+ Pneumatics]`) allowing single-tap addition/toggling.
+     - Added inline custom feature input with an attached `+ Add` button.
+     - Active features render as sleek tag pills with a tap-to-remove (`×`) button.
+  7. **Modern, Touch-Friendly Manpower UI**:
+     - Added prominent `+ Add Member` button with empty-state guidance.
+     - Replaced heavy form boxes with compact cards displaying Team Member number, Name, Phone Number, Role/Task, and trash icon.
+  8. **India Standard Time (IST - Asia/Kolkata) Across Project**:
+     - Updated `backend/src/controllers/dutyController.js` `formatTimeToHHmm` using `Intl.DateTimeFormat` with `timeZone: 'Asia/Kolkata'` to ensure `inTime` and `outTime` are always stored in IST regardless of cloud server host timezone (e.g. UTC on Vercel).
+     - Updated `duty-management-app/src/utils/dateUtils.js` (`formatDate`, `formatISODateOnly`, `formatTime`, `formatDateTime`, `getTodayDateString`, `getYesterdayDateString`, `getGreeting`) to strictly enforce `timeZone: 'Asia/Kolkata'`.
+     - Updated `DutyDetailsScreen.jsx` check-in/out timestamps to format in `Asia/Kolkata`.
+  9. **Full Data Inclusion in PDF & Excel Exports**:
+     - Updated `exportDutiesToPDF`: Added Duty Type badge, Check-In Time (IST), Check-Out Time (IST), Total Working Duration (`Xh Ym`), Client Contact Person, Features tag list, and complete Manpower Team roster (names, phones, roles).
+     - Updated `exportDutiesToExcel`: Added dedicated columns for `Duty Type`, `Check-In Time (IST)`, `Check-Out Time (IST)`, `Working Duration (Minutes)`, `Working Duration (Hours)`, `Features`, `Manpower Team`, `Client / Customer Name`, `Client Phone Number`, and `Record Created At (IST)`.
+- Files changed:
+  - `backend/src/controllers/dutyController.js`
+  - `duty-management-app/src/utils/dateUtils.js`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Check-in validation prevents missing company/client and auto-captures GPS if available.
+  - Active duty session check resets checked-in state when no active session exists.
+  - Single checkout button enforces work details submission.
+  - Date and time formatting throughout app and backend uses `Asia/Kolkata`.
+  - PDF and Excel exports include all fields (Features, Manpower, IST times, and Durations).
+- Impact:
+  - Eliminates check-in errors and stuck session bugs.
+  - Delivers a significantly more user-friendly, modern experience for entering features and manpower.
+  - Guarantees exact India time display on cloud servers.
+  - Exports provide 100% complete field data for administration and client reporting.
+
+### 2026-10-26
+#### Zoho People Style Check-In / Check-Out Widget & Dynamic Duty Form Routing
+- What was changed:
+  - **Zoho People Check-In / Check-Out Dashboard Widget (`EmployeeDashboardScreen.jsx`)**:
+    - Designed and implemented a dedicated mobile dashboard widget modeled directly after Zoho People:
+      - **3 Digital Pill Boxes (`[ HH ] : [ MM ] : [ SS ]`)**:
+        - When checked in: displays dynamic running elapsed shift duration since `checkInTime`. Active tint with soft rose highlight (`#FFF1F2`).
+        - When not checked in: displays live running India Standard Time (IST) clock. Clean neutral slate tint (`#F8FAFC`).
+      - **Dynamic Action Button**:
+        - Checked in: Vibrant red/coral button labeled **`Check-out`** (`#E11D48`). Tapping opens the duty work details and checkout form.
+        - Not checked in: Vibrant emerald green button labeled **`Check-in`** (`#059669`). Tapping opens the duty check-in form.
+      - **Status Subtitle**:
+        - Displays **`In`** (in emerald green) with check-in time and active company/office name.
+        - Displays **`Out`** (in slate) with prompt to tap check-in.
+  - **Dynamic Direct Navigation Routing (`DutyFormScreen.jsx`)**:
+    - Automatically checks active duty check-in status whenever navigating to `DutyForm` (e.g. from bottom tab "New Work" or quick action "Submit Work"):
+      - While querying `dutyApi.getActiveCheckIn()`, displays a smooth `LoadingIndicator ("Verifying duty session...")` to prevent stage flickering.
+      - **If active check-in exists**: automatically displays **Stage 2 (Work Details & Checkout form)** with all checked-in data (company, client, location, date) pre-populated.
+      - **If no active check-in exists**: automatically displays **Stage 1 (Duty Check-In form)**.
+      - Once the employee checks in from Stage 1, the form immediately and seamlessly transitions to Stage 2.
+- Files changed:
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Dashboard now maintains a 1-second interval to update either shift duration or live IST clock.
+  - Direct form navigation dynamically checks backend active check-in state before choosing which form stage to render.
+- Reason: User requested: "add checkin,checkout button like a zoho pepole; check button click- open to check in form; checkout -work form;; incase direct new work/submit work- check the checkin - checkin-workcheckout form show; not checkin - checkin form show;".
+- Impact: Seamless, intuitive attendance and field work experience matching Zoho People, with automatic session detection when accessing forms directly.
+
+## Current Progress
+- Completed:
+  - Zoho People style Check-In / Check-Out dashboard widget with digital running timer.
+  - Dynamic button states: Green "Check-in" (Out) vs Red "Check-out" (In).
+  - Automatic form switching in `DutyFormScreen`:
+    - Direct "New Work" / "Submit Work" automatically routes to Work Details & Checkout form if checked in.
+    - If not checked in, automatically routes to Duty Check-In form.
+  - Smooth loading state while verifying active session without flickering.
+  - Client company and client contact check-in validation.
+  - Active check-in session reset and "New Work" bug fix.
+  - Single checkout action button replacing two buttons.
+  - Non-editable duty date with IST Today badge.
+  - Rename Highlights/Features to Features with preset chips and custom tags.
+  - Full data export in PDF and Excel including Features, Manpower roster, IST times, and Durations.
+  - Strict India Standard Time (IST - Asia/Kolkata) enforcement across frontend and backend.
+  - 49/49 backend tests passing.
+  - All modified frontend screens AST validated with 0 errors.
 - In Progress:
   - None.
 - Pending:

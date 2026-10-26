@@ -225,18 +225,28 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
 
           {duty.checkInTime ? (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Check-In Time:</Text>
+              <Text style={styles.detailLabel}>Check-In Time (IST):</Text>
               <Text style={styles.detailValue}>
-                {new Date(duty.checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                {new Date(duty.checkInTime).toLocaleTimeString('en-IN', {
+                  timeZone: 'Asia/Kolkata',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true,
+                })}
               </Text>
             </View>
           ) : null}
 
           {duty.checkOutTime ? (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Check-Out Time:</Text>
+              <Text style={styles.detailLabel}>Check-Out Time (IST):</Text>
               <Text style={styles.detailValue}>
-                {new Date(duty.checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                {new Date(duty.checkOutTime).toLocaleTimeString('en-IN', {
+                  timeZone: 'Asia/Kolkata',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true,
+                })}
               </Text>
             </View>
           ) : null}
@@ -251,10 +261,10 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           ) : null}
         </Card>
 
-        {/* Highlights / Features */}
+        {/* Features */}
         {duty.features && duty.features.length > 0 && (
           <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Highlights / Features</Text>
+            <Text style={styles.sectionTitle}>Features</Text>
             <View style={styles.featuresContainer}>
               {duty.features.map((feat, idx) => (
                 <View key={idx} style={styles.featureBadge}>
