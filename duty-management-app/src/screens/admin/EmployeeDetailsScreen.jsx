@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import dutyApi from '../../api/dutyApi';
 import leaveApi from '../../api/leaveApi';
+import expenseApi from '../../api/expenseApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
@@ -28,6 +29,7 @@ import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
 import DatePickerModal from '../../components/DatePickerModal';
 import SignatureImage from '../../components/SignatureImage';
+import ImageViewerModal from '../../components/ImageViewerModal';
 import ExportLoadingModal from '../../components/ExportLoadingModal';
 import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
@@ -36,6 +38,8 @@ import {
   exportDutiesToExcel,
   exportLeavesToPDF,
   exportLeavesToExcel,
+  exportExpensesToPDF,
+  exportExpensesToExcel,
 } from '../../utils/exportUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
@@ -44,7 +48,7 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
   const { employee } = route.params || {};
   const today = formatISODateOnly();
 
-  // Active view: 'leave' or 'work'
+  // Active view: 'work' | 'leave' | 'expense'
   const [activeTab, setActiveTab] = useState('work');
 
   // Work state
@@ -57,6 +61,16 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
   // Leave state
   const [leaves, setLeaves] = useState([]);
   const [loadingLeaves, setLoadingLeaves] = useState(true);
+
+  // Expense state
+  const [expenses, setExpenses] = useState([]);
+  const [loadingExpenses, setLoadingExpenses] = useState(true);
+
+  // Lightbox preview modal state
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [previewImageUri, setPreviewImageUri] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [previewSubtitle, setPreviewSubtitle] = useState('');
 
   // Pickers visibility
   const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
@@ -119,22 +133,52 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
     }
   }, [employee?._id, startDate, endDate]);
 
+  // Fetch Expenses
+  const fetchExpenses = useCallback(async () => {
+    if (!employee?._id) return;
+    try {
+      setError('');
+      const params = {
+        employeeId: employee._id,
+        limit: 500,
+      };
+      if (startDate.trim()) params.startDate = startDate.trim();
+      if (endDate.trim()) params.endDate = endDate.trim();
+
+      const res = await expenseApi.getAllExpenses(params);
+      if (res.data?.expenses) {
+        setExpenses(res.data.expenses);
+      } else if (res.expenses) {
+        setExpenses(res.expenses);
+      }
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Failed to load employee expenses'));
+    } finally {
+      setLoadingExpenses(false);
+      setRefreshing(false);
+    }
+  }, [employee?._id, startDate, endDate]);
+
   useFocusEffect(
     useCallback(() => {
       if (activeTab === 'work') {
         fetchWorkDuties();
-      } else {
+      } else if (activeTab === 'leave') {
         fetchLeaves();
+      } else if (activeTab === 'expense') {
+        fetchExpenses();
       }
-    }, [activeTab, fetchWorkDuties, fetchLeaves])
+    }, [activeTab, fetchWorkDuties, fetchLeaves, fetchExpenses])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
     if (activeTab === 'work') {
       fetchWorkDuties();
-    } else {
+    } else if (activeTab === 'leave') {
       fetchLeaves();
+    } else if (activeTab === 'expense') {
+      fetchExpenses();
     }
   };
 
@@ -208,6 +252,53 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
     }
   };
 
+  // Expense exports
+  const handleExportExpensePDF = async () => {
+    const filterInfo =
+      startDate || endDate
+        ? `From ${startDate || 'Start'} to ${endDate || 'Present'}`
+        : 'All Expense History';
+
+    try {
+      setExportingType('PDF');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await exportExpensesToPDF({
+        title: `${employee.employeeName} (${employee.employeeId})`,
+        subtitle: `Staff Expense Claims • ${employee.designation || 'Staff'}`,
+        expenses,
+        filterInfo,
+      });
+    } finally {
+      setExportingType(null);
+    }
+  };
+
+  const handleExportExpenseExcel = async () => {
+    const safeName = (employee?.employeeName || 'Employee').replace(/\s+/g, '_');
+    try {
+      setExportingType('Excel');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await exportExpensesToExcel({
+        filename: `${safeName}_Expense_Claims`,
+        expenses,
+      });
+    } finally {
+      setExportingType(null);
+    }
+  };
+
+  const handleOpenPhotoPreview = (url, title = 'Proof Photo', subtitle = '') => {
+    setPreviewImageUri(url);
+    setPreviewTitle(title);
+    setPreviewSubtitle(subtitle);
+    setPreviewModalVisible(true);
+  };
+
+  const totalExpenseAmount = expenses.reduce(
+    (sum, e) => sum + Number(e.grandTotal ?? e.totalAmount ?? e.amount ?? 0),
+    0
+  );
+
   // Leave approval / rejection
   const handleOpenLeaveReview = (leave, decision) => {
     setLeaveToReview(leave);
@@ -267,8 +358,25 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
         </View>
       </Card>
 
-      {/* Main Mode Toggle: [ Leave ] and [ Work ] */}
+      {/* Main Mode Toggle: [ Work ], [ Leave ] and [ Expenses ] */}
       <View style={styles.tabToggleContainer}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'work' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('work')}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="briefcase"
+            size={16}
+            color={activeTab === 'work' ? COLORS.primary : COLORS.textSecondary}
+          />
+          <Text
+            style={[styles.tabButtonText, activeTab === 'work' && styles.tabButtonTextActive]}
+          >
+            Work ({duties.length})
+          </Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'leave' && styles.tabButtonActive]}
           onPress={() => setActiveTab('leave')}
@@ -276,7 +384,7 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
         >
           <Ionicons
             name="calendar"
-            size={18}
+            size={16}
             color={activeTab === 'leave' ? COLORS.primary : COLORS.textSecondary}
           />
           <Text
@@ -287,28 +395,32 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'work' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('work')}
+          style={[styles.tabButton, activeTab === 'expense' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('expense')}
           activeOpacity={0.8}
         >
           <Ionicons
-            name="briefcase"
-            size={18}
-            color={activeTab === 'work' ? COLORS.primary : COLORS.textSecondary}
+            name="receipt"
+            size={16}
+            color={activeTab === 'expense' ? COLORS.primary : COLORS.textSecondary}
           />
           <Text
-            style={[styles.tabButtonText, activeTab === 'work' && styles.tabButtonTextActive]}
+            style={[styles.tabButtonText, activeTab === 'expense' && styles.tabButtonTextActive]}
           >
-            Work ({duties.length})
+            Expenses ({expenses.length})
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Date Filters & Export Action Toolbar (Supports both Work & Leave records) */}
+      {/* Date Filters & Export Action Toolbar */}
       <Card style={styles.toolbarCard}>
         <View style={styles.toolbarTitleRow}>
           <Text style={styles.toolbarTitle}>
-            {activeTab === 'work' ? 'Work Records' : 'Leave Records'}
+            {activeTab === 'work'
+              ? 'Work Records'
+              : activeTab === 'leave'
+              ? 'Leave Records'
+              : 'Expense Claims'}
           </Text>
           <View style={styles.quickFilterGroup}>
             <TouchableOpacity
@@ -365,6 +477,23 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
           </View>
         </View>
 
+        {/* Expense KPI summary banner */}
+        {activeTab === 'expense' && (
+          <View style={styles.expenseSummaryBanner}>
+            <View style={styles.expenseSummaryItem}>
+              <Text style={styles.expenseSummaryLabel}>Claims</Text>
+              <Text style={styles.expenseSummaryVal}>{expenses.length}</Text>
+            </View>
+            <View style={styles.expenseSummaryDivider} />
+            <View style={styles.expenseSummaryItem}>
+              <Text style={styles.expenseSummaryLabel}>Total Amount</Text>
+              <Text style={styles.expenseSummaryValGreen}>
+                ₹{totalExpenseAmount.toLocaleString('en-IN')}
+              </Text>
+            </View>
+          </View>
+        )}
+
         <View style={styles.dateFilterRow}>
           <View style={{ flex: 1, marginRight: SPACING.xs }}>
             <Text style={styles.filterFieldLabel}>From Date</Text>
@@ -393,7 +522,13 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
         <View style={styles.exportButtonsRow}>
           <TouchableOpacity
             style={[styles.exportBtn, styles.pdfBtn]}
-            onPress={activeTab === 'work' ? handleExportPDF : handleExportLeavePDF}
+            onPress={
+              activeTab === 'work'
+                ? handleExportPDF
+                : activeTab === 'leave'
+                ? handleExportLeavePDF
+                : handleExportExpensePDF
+            }
             activeOpacity={0.8}
           >
             <Ionicons name="document-text" size={18} color="#FFFFFF" />
@@ -402,7 +537,13 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
 
           <TouchableOpacity
             style={[styles.exportBtn, styles.excelBtn]}
-            onPress={activeTab === 'work' ? handleExportExcel : handleExportLeaveExcel}
+            onPress={
+              activeTab === 'work'
+                ? handleExportExcel
+                : activeTab === 'leave'
+                ? handleExportLeaveExcel
+                : handleExportExpenseExcel
+            }
             activeOpacity={0.8}
           >
             <Ionicons name="grid" size={18} color="#FFFFFF" />
@@ -560,47 +701,225 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
             </View>
           ) : null}
         </View>
+        {/* Linked Expenses Badge */}
+        {item.totalExpenseAmount > 0 ? (
+          <View style={styles.workExpenseBadge}>
+            <Ionicons name="receipt" size={13} color="#047857" />
+            <Text style={styles.workExpenseBadgeText}>
+              Claimed Expenses: ₹{Number(item.totalExpenseAmount).toLocaleString('en-IN')}
+              {item.expenses?.length ? ` (${item.expenses.length} claims)` : ''}
+            </Text>
+          </View>
+        ) : null}
       </Card>
     );
   };
 
-  const isLoading = activeTab === 'work' ? loadingWork : loadingLeaves;
-  const currentData = activeTab === 'work' ? duties : leaves;
+  // Render Expense Claim Item
+  const renderExpenseItem = ({ item, index }) => {
+    const claimCode = item.expenseId || `EXP-${index + 1}`;
+    const claimDate = item.expenseDate ? formatDate(item.expenseDate) : '';
+    const rawItems = item.items && item.items.length > 0 ? item.items : [
+      {
+        categoryName: item.category,
+        customTitle: item.customCategory,
+        amount: item.amount || item.totalAmount || 0,
+        description: item.description || '',
+        billProof: item.billProof || null,
+      }
+    ];
+    const totalAmount = Number(item.grandTotal ?? item.totalAmount ?? item.amount ?? 0);
+    const relatedDutyText = item.duty?.dutyId || item.relatedDuty;
+    const machine = item.duty?.machineName;
+
+    return (
+      <Card style={styles.itemCard}>
+        <View style={styles.cardHeader}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.workCompanyName}>{claimCode}</Text>
+              {item.status ? <StatusBadge status={item.status} /> : null}
+            </View>
+            {relatedDutyText ? (
+              <View style={styles.expenseDutyBadgeWrap}>
+                <Ionicons name="briefcase-outline" size={12} color="#0369A1" />
+                <Text style={styles.expenseDutyBadgeText}>
+                  Work: {relatedDutyText}{machine ? ` • ${machine}` : ''}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>
+            <Text style={styles.expenseClaimAmountText}>₹{totalAmount.toLocaleString('en-IN')}</Text>
+            {claimDate ? (
+              <View style={styles.dateBadge}>
+                <Ionicons name="calendar-outline" size={12} color={COLORS.primary} />
+                <Text style={styles.dateBadgeText}>{claimDate}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        {/* Company & Client if present */}
+        {(item.company?.companyName || item.client?.name || item.customerName) && (
+          <View style={styles.expenseEntityRow}>
+            <Ionicons name="business-outline" size={13} color={COLORS.textSecondary} />
+            <Text style={styles.expenseEntityText}>
+              {item.company?.companyName || ''}
+              {item.client?.name || item.customerName ? ` • Client: ${item.client?.name || item.customerName}` : ''}
+            </Text>
+          </View>
+        )}
+
+        {/* Itemized Breakdown */}
+        <View style={styles.expenseItemsBox}>
+          <Text style={styles.expenseItemsBoxTitle}>Itemized Breakdown ({rawItems.length}):</Text>
+          {rawItems.map((it, itIdx) => {
+            const isOthers = it.categoryName === 'Others' || it.category === 'other';
+            const customTitle = it.customTitle || it.customCategoryName || it.customCategory || '';
+            const rawCat = it.categoryName || it.category || `Item #${itIdx + 1}`;
+            const itCat = isOthers && customTitle ? `Others: ${customTitle}` : (customTitle ? `${rawCat} (${customTitle})` : rawCat);
+
+            const calc = (it.calculationMode === 'automatic' || (it.distanceKm && it.ratePerKm))
+              ? `${it.distanceKm || it.totalDistance || 0} km × ₹${it.ratePerKm || it.ratePerUnit || 0}/km`
+              : null;
+            const pImg = it.billProof?.url || (typeof it.billProof === 'string' ? it.billProof : null);
+
+            return (
+              <View key={`it-${itIdx}`} style={styles.expenseSubItemRow}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={styles.expenseSubItemCat}>{itCat}</Text>
+                  {calc ? <Text style={styles.expenseSubItemCalc}>{calc}</Text> : null}
+                  {it.description ? <Text style={styles.expenseSubItemDesc}>{it.description}</Text> : null}
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Text style={styles.expenseSubItemAmt}>₹{(Number(it.amount) || 0).toLocaleString('en-IN')}</Text>
+                  {pImg && (
+                    <TouchableOpacity
+                      onPress={() => handleOpenPhotoPreview(pImg, `Proof: ${itCat}`, claimCode)}
+                      style={styles.expenseThumbBtn}
+                      activeOpacity={0.8}
+                    >
+                      <Image source={{ uri: pImg }} style={styles.expenseThumbImg} />
+                      <View style={styles.expenseThumbBadge}>
+                        <Ionicons name="eye" size={9} color="#FFFFFF" />
+                        <Text style={styles.expenseThumbBadgeText}>Proof</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Global attachments / proofs */}
+        {Array.isArray(item.proofs) && item.proofs.length > 0 && (
+          <View style={styles.expenseGlobalProofsWrap}>
+            <Text style={styles.expenseGlobalProofsTitle}>Attachments ({item.proofs.length}):</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 4 }}>
+              {item.proofs.map((proof, pIdx) => {
+                const pUrl = proof.url || (typeof proof === 'string' ? proof : null);
+                if (!pUrl) return null;
+                return (
+                  <TouchableOpacity
+                    key={`p-${pIdx}`}
+                    onPress={() => handleOpenPhotoPreview(pUrl, `Attachment #${pIdx + 1}`, claimCode)}
+                    activeOpacity={0.8}
+                    style={styles.expenseThumbBtn}
+                  >
+                    <Image source={{ uri: pUrl }} style={styles.expenseThumbImg} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {item.generalDescription ? (
+          <View style={styles.remarksBox}>
+            <Text style={styles.remarksLabel}>Notes / Remarks:</Text>
+            <Text style={styles.remarksText}>{item.generalDescription}</Text>
+          </View>
+        ) : null}
+      </Card>
+    );
+  };
+
+  const isLoading =
+    activeTab === 'work'
+      ? loadingWork
+      : activeTab === 'leave'
+      ? loadingLeaves
+      : loadingExpenses;
+
+  const currentData =
+    activeTab === 'work' ? duties : activeTab === 'leave' ? leaves : expenses;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
         title={employee?.employeeName || 'Employee Management'}
-        subtitle="Staff Profile, Work Log & Leaves"
+        subtitle="Staff Profile, Work Log, Leaves & Expenses"
         onBack={() => navigation.goBack()}
       />
 
       <View style={styles.container}>
         <ErrorMessage
           message={error}
-          onRetry={activeTab === 'work' ? fetchWorkDuties : fetchLeaves}
+          onRetry={
+            activeTab === 'work'
+              ? fetchWorkDuties
+              : activeTab === 'leave'
+              ? fetchLeaves
+              : fetchExpenses
+          }
         />
 
         {isLoading && !refreshing ? (
           <LoadingIndicator
             message={
-              activeTab === 'work' ? 'Loading work details...' : 'Loading leave applications...'
+              activeTab === 'work'
+                ? 'Loading work details...'
+                : activeTab === 'leave'
+                ? 'Loading leave applications...'
+                : 'Loading expense claims...'
             }
           />
         ) : (
           <FlatList
             data={currentData}
             keyExtractor={(item) => item._id}
-            renderItem={activeTab === 'work' ? renderWorkItem : renderLeaveItem}
+            renderItem={
+              activeTab === 'work'
+                ? renderWorkItem
+                : activeTab === 'leave'
+                ? renderLeaveItem
+                : renderExpenseItem
+            }
             ListHeaderComponent={renderHeader}
             ListEmptyComponent={
               <EmptyState
-                icon={activeTab === 'work' ? 'briefcase-outline' : 'calendar-outline'}
-                title={activeTab === 'work' ? 'No Work Records' : 'No Leave Requests'}
+                icon={
+                  activeTab === 'work'
+                    ? 'briefcase-outline'
+                    : activeTab === 'leave'
+                    ? 'calendar-outline'
+                    : 'receipt-outline'
+                }
+                title={
+                  activeTab === 'work'
+                    ? 'No Work Records'
+                    : activeTab === 'leave'
+                    ? 'No Leave Requests'
+                    : 'No Expense Claims'
+                }
                 description={
                   activeTab === 'work'
                     ? 'No duty visits submitted by this employee for the selected period.'
-                    : 'No leave requests submitted by this employee.'
+                    : activeTab === 'leave'
+                    ? 'No leave requests submitted by this employee.'
+                    : 'No expense claims submitted by this employee for the selected period.'
                 }
               />
             }
@@ -687,6 +1006,14 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
       <ExportLoadingModal
         visible={Boolean(exportingType)}
         type={exportingType}
+      />
+
+      <ImageViewerModal
+        visible={previewModalVisible}
+        imageUri={previewImageUri}
+        title={previewTitle}
+        subtitle={previewSubtitle}
+        onClose={() => setPreviewModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -1096,6 +1423,179 @@ const styles = StyleSheet.create({
   },
   modalBtn: {
     flex: 1,
+  },
+  expenseSummaryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.md,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: SPACING.sm,
+  },
+  expenseSummaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  expenseSummaryLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  expenseSummaryVal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginTop: 2,
+  },
+  expenseSummaryValGreen: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#047857',
+    marginTop: 2,
+  },
+  expenseSummaryDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#CBD5E1',
+  },
+  workExpenseBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  workExpenseBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  expenseDutyBadgeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  expenseDutyBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  expenseClaimAmountText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  expenseEntityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  expenseEntityText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  expenseItemsBox: {
+    marginTop: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.sm,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  expenseItemsBoxTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+  },
+  expenseSubItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  expenseSubItemCat: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+    textTransform: 'capitalize',
+  },
+  expenseSubItemCalc: {
+    fontSize: 11,
+    color: '#6366F1',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  expenseSubItemDesc: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  expenseSubItemAmt: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  expenseThumbBtn: {
+    position: 'relative',
+    borderRadius: 4,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginTop: 2,
+  },
+  expenseThumbImg: {
+    width: 38,
+    height: 38,
+    borderRadius: 3,
+  },
+  expenseThumbBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 1,
+    gap: 2,
+  },
+  expenseThumbBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '700',
+  },
+  expenseGlobalProofsWrap: {
+    marginTop: 8,
+  },
+  expenseGlobalProofsTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
   },
 });
 

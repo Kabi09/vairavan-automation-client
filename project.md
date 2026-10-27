@@ -2436,26 +2436,73 @@
 - Reason: User requested: "expense - small bug there -i want to work click- automattically data asign the comapny,client; also another tab to comapny,client to add expense ; fix user friendly;fix;;".
 - Impact: Highly polished, user-friendly expense entry workflow, zero data loss on work selection, and convenient quick shortcuts across duty views.
 
+### 2026-10-27
+#### Full Work-Centric Expense Overhaul, Modal Item UX, Work Details Expense Inspection & Exports, Admin Employee 3-Tab View
+- What was changed:
+  - **Employee Dashboard UX Cleanup**: Removed redundant bottom "Expenses & Claims" card in `EmployeeDashboardScreen.jsx` since the 3rd quick-action square tile directly opens Expenses.
+  - **Expense Form Work-Centric Workflow**: Removed the "By Company / Client" tab in `ExpenseFormScreen.jsx`; all expenses are now strictly work-related and linked to service duty orders with automatic company & client auto-assignment.
+  - **Previous Expenses Display on Add**: When submitting an expense for a work duty that already has submitted claims, `ExpenseFormScreen.jsx` displays a "Previous Expenses Submitted for this Work" card with live items list, amounts, and statuses so the user sees existing data before adding new items.
+  - **Touch-Friendly Item Entry Modal**: Replaced clunky vertical scrolling in `ExpenseFormScreen.jsx` with a dedicated, touch-friendly `ExpenseItemModal` (category chips, automatic km distance × rate/km calculations, bill proof photo attachment, and notes), keeping the main screen concise and scroll-free.
+  - **Work Details Expense Section**: In `DutyDetailsScreen.jsx`, replaced the single add button with a comprehensive "Expenses & Claims" card showing claim count, total amount, itemized categories, calculations, notes, proof thumbnails, and full-screen image preview lightbox. Added "+ Add More Expenses for this Work" shortcut.
+  - **Admin Duty Inspection Modal**: In `AllDutiesScreen.jsx`, updated the duty inspector sheet to display linked expenses, item breakdowns, total expense pills, and proof photo thumbnails. Added expense badge to duty cards in the list view.
+  - **Work Details Exports (PDF & Excel)**:
+    - `exportDutiesToPDF`: Added itemized expenses block for each duty showing claims count, total amount, categories, distance rates, and proof photo thumbnail grid.
+    - `exportDutiesToExcel`: Added 5 expense columns: `Total Expenses (INR)`, `Expense Claims Count`, `Expense Items Breakdown`, `Expense Proof Photos Count`, and `Expense Proof Photos URLs`.
+  - **Admin Employee Details 3-Tab View**: In `EmployeeDetailsScreen.jsx`, added a 3rd top tab `Expenses` alongside `Work` and `Leave`:
+    - Tab displays real-time employee expense claims count, KPI summary banner (Total Claims, Total Amount in ₹), and itemized claim cards with proof photo gallery and lightbox preview.
+    - Integrated PDF & Excel export handlers (`exportExpensesToPDF` and `exportExpensesToExcel`) with full executive reporting.
+    - Work cards in `EmployeeDetailsScreen.jsx` display claimed expenses badge.
+  - **Backend Two-Way Duty-Expense Linking**:
+    - `Expense.js`: Added indexed `relatedDuty` string field to schema.
+    - `expenseController.js`: `createExpense` automatically resolves both `duty` (ObjectId) and `relatedDuty` (code) from Duty records; auto-populates `company` and `client` if omitted. Added duty filtering to `getMyExpenses` and `getAllExpenses`.
+    - `dutyController.js`: `attachExpensesToDuties` helper automatically links expenses array and `totalExpenseAmount` to every duty in `getMyDuties`, `getAllDuties`, and `getDutyById`.
+- Files changed:
+  - `backend/src/models/Expense.js`
+  - `backend/src/controllers/expenseController.js`
+  - `backend/src/controllers/dutyController.js`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/ExpenseFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `project.md`
+- Logic changed:
+  - Previous behavior: Expenses had separate Company/Client tabs without automatic work duty aggregation, adding expense items required long vertical scrolling, work details lacked expense visibility, work PDF/Excel exports lacked expense items and proof photo arrays, and Admin employee screen only had Work and Leave tabs.
+  - New behavior: Work-related expenses are linked bi-directionally on both backend and frontend, previous expenses display when adding new items for a work order, items are added via a clean modal, work details and exports include complete expense breakdowns and photo proof arrays, and Admin employee screen features a 3rd dedicated Expenses tab with summary metrics and PDF/Excel export.
+  - Reason for change: User request for seamless work expense logging, compact modal entry UX, full expense data display in work details & exports, previous data visibility, and employee 3-tab view with admin exports.
+  - Files affected: Listed above.
+  - Dependencies: React Native StyleSheet, Expo Print, Expo Sharing, Mongoose ODM.
+  - Side effects: None; backwards compatibility preserved across all endpoints and data models.
+- Reason: User requested: "employee dashboard- already have expence squre box so remove the bottom expensense&claims ; one change the feature/worflow-add expense work realated tobe add I don't want company client side tab; expense -add not user friendly add-scroll to add so fix ; one details add - work details add the exense feilde save show,list expense data fully show; export work details - expense details also add phot proof array,etc... ; employee click- alredy have work,leave also add expense - deails add; another - work detail- expense add some expense then agani to add expense previous have the data also list show and add neww; fixx; user friendly;; admin- export pdf,excel all details show;; fix".
+- Impact: Complete end-to-end work expense ecosystem with zero redundancy, modal-based UX, detailed reporting, and multi-tab admin oversight.
+
 ## Current Progress
 - Completed:
-  - Check-in auto-navigation to Dashboard tab upon successful check-in.
-  - Description / task details input field added to Manpower modal and displayed in team cards.
-  - Dual entry mode tabs in `ExpenseFormScreen.jsx`: "By Work / Duty" vs "By Company / Client".
-  - Reliable, race-condition-free auto-assignment of Company, Client, and Date upon selecting a work duty.
-  - High-visibility "Assigned Work Details" card in duty mode with quick change and deselect actions.
-  - Quick "+ Add Expense for this Work" in `DutyDetailsScreen.jsx` and "+ Expense" on duty cards in `MyDutiesScreen.jsx`.
-  - Strict validation: Office requires company only; Client Company strictly requires both company and client contact person.
-  - Fixed `expenseApi.createExpense` and `clientApi.getClientsByCompany`.
-  - Resilient response parsing for categories, companies, clients, and duties.
-  - 49/49 backend unit & integration tests passing.
-  - AST syntax check passing for all modified frontend screens.
+  - Employee dashboard bottom "Expenses & Claims" card removed; 3rd quick-action square tile is the single clean entry point.
+  - Pure work-centric expense form with automatic company/client binding and date synchronization.
+  - Previous expenses card displayed at the top of the expense form when adding expenses for an existing work report.
+  - Touch-friendly `ExpenseItemModal` for adding and editing expense items without page scrolling.
+  - Work Details screen (`DutyDetailsScreen.jsx`) renders comprehensive Expenses & Claims card with itemized calculations and proof photo lightbox preview.
+  - Admin inspection sheet (`AllDutiesScreen.jsx`) displays linked duty expenses, item breakdowns, total amount pill, and photo proofs.
+  - Work Details PDF & Excel exports updated to include complete expense breakdowns, totals, and attached photo proof arrays.
+  - Admin Employee Details screen (`EmployeeDetailsScreen.jsx`) upgraded with a 3rd `Expenses` tab, KPI metrics, itemized claim cards, proof photos, and PDF/Excel export buttons.
+  - Backend schema and controllers updated with `relatedDuty` two-way referencing and automatic expense population.
+  - All test suites passing with 0 failures.
 
 ## Known Issues
-- Issue: None. All reported bugs resolved and verified.
+- Issue: None. All requested features and fixes completed and verified.
 - Status: Clean state.
 - Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
+- Decision: Dedicated ExpenseItemModal for multi-item claims.
+  Reason: Adding multiple expense items inline caused excessive vertical page scrolling on mobile viewports. A modal keeps the main claim view compact while giving each item focused input space.
+  Date: 2026-10-27
+
+- Decision: Automatic duty expense aggregation in dutyController.
+  Reason: Attaching linked expenses and totalExpenseAmount directly in getMyDuties, getAllDuties, and getDutyById eliminates redundant network round-trips from clients while powering instant UI cards and export generators.
+  Date: 2026-10-27
 - Decision: Pre-select Default Office in Add Work and auto-launch Client modal on toggle.
   Reason: Field technicians predominantly report at the main office unless dispatched to a customer client site. Auto-opening the client selection modal on switching reduces clicks for field employees.
   Date: 2026-10-14

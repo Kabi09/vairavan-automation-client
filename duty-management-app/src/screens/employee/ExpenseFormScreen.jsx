@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Modal,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,7 +28,7 @@ import ErrorMessage from '../../components/ErrorMessage';
 import DatePickerModal from '../../components/DatePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
 import ImageViewerModal from '../../components/ImageViewerModal';
-import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
+import { formatDate, formatISODateOnly, formatTime } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
@@ -58,23 +59,6 @@ const extractArray = (res, key) => {
   return [];
 };
 
-const createEmptyItem = (defaultCategory) => ({
-  id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
-  categoryId: defaultCategory?._id || '',
-  categoryName: defaultCategory?.name || '',
-  calculationMode: defaultCategory?.calculationMode || 'manual',
-  ratePerUnit: defaultCategory?.ratePerUnit || 0,
-  unit: defaultCategory?.unit || '',
-  customCategoryName: '',
-  outboundDistanceKm: '',
-  returnDistanceKm: '',
-  totalQuantity: '',
-  amount: '',
-  description: '',
-  localAttachments: [],
-  uploadedAttachments: [],
-});
-
 export const ExpenseFormScreen = ({ navigation, route }) => {
   const routeDuty = route?.params?.duty || route?.params?.dutyToEdit;
 
@@ -82,158 +66,83 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Top-Level Entry Mode: 'duty' (By Work / Duty) vs 'company' (By Company & Client)
-  const [entryMode, setEntryMode] = useState(() => (routeDuty ? 'duty' : 'duty'));
-
   // Dropdown options
   const [categories, setCategories] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [clients, setClients] = useState([]);
   const [duties, setDuties] = useState([]);
 
-  // Company Category: 'office' (Internal Office) vs 'client' (Client Company)
-  const [companyCategory, setCompanyCategory] = useState(() => {
-    if (routeDuty) {
-      return routeDuty.dutyType === 'office' ? 'office' : 'client';
-    }
-    return 'client';
-  });
-
-  // Form Fields - Basic Details
-  const [expenseDate, setExpenseDate] = useState(() => {
-    if (routeDuty?.dutyDate) {
-      return formatISODateOnly(routeDuty.dutyDate);
-    }
-    return formatISODateOnly();
-  });
+  // Work & Entity Association
+  const [selectedDutyId, setSelectedDutyId] = useState(() => (routeDuty?._id ? String(routeDuty._id) : ''));
+  const [relatedDutyId, setRelatedDutyId] = useState(() => routeDuty?.dutyId || (routeDuty?._id ? String(routeDuty._id) : ''));
   const [selectedCompanyId, setSelectedCompanyId] = useState(() => {
     return routeDuty?.company?._id ? String(routeDuty.company._id) : (routeDuty?.company ? String(routeDuty.company) : '');
   });
   const [selectedClientId, setSelectedClientId] = useState(() => {
     return routeDuty?.client?._id ? String(routeDuty.client._id) : (routeDuty?.client ? String(routeDuty.client) : '');
   });
-  const [selectedDutyId, setSelectedDutyId] = useState(() => {
-    return routeDuty?._id ? String(routeDuty._id) : '';
+  const [companyCategory, setCompanyCategory] = useState(() => {
+    if (routeDuty) {
+      return routeDuty.dutyType === 'office' ? 'office' : 'client';
+    }
+    return 'client';
   });
-  const [relatedDutyId, setRelatedDutyId] = useState(() => {
-    return routeDuty?.dutyId || (routeDuty?._id ? String(routeDuty._id) : '');
+  const [expenseDate, setExpenseDate] = useState(() => {
+    if (routeDuty?.dutyDate) {
+      return formatISODateOnly(routeDuty.dutyDate);
+    }
+    return formatISODateOnly();
   });
   const [generalDescription, setGeneralDescription] = useState('');
 
-  // Form Fields - Dynamic Items
+  // Previous expenses for this work
+  const [previousExpenses, setPreviousExpenses] = useState([]);
+  const [loadingPreviousExpenses, setLoadingPreviousExpenses] = useState(false);
+
+  // New Items list
   const [items, setItems] = useState([]);
 
   // Modals
   const [datePickerVisible, setDatePickerVisible] = useState(false);
-  const [companyPickerVisible, setCompanyPickerVisible] = useState(false);
-  const [clientPickerVisible, setClientPickerVisible] = useState(false);
   const [dutyPickerVisible, setDutyPickerVisible] = useState(false);
-  const [activeCategoryPickerIndex, setActiveCategoryPickerIndex] = useState(null);
+
+  // Add / Edit Item Modal State
+  const [itemModalVisible, setItemModalVisible] = useState(false);
+  const [editingItemIndex, setEditingItemIndex] = useState(null);
+  const [modalCategoryId, setModalCategoryId] = useState('');
+  const [modalCategoryName, setModalCategoryName] = useState('');
+  const [modalCalculationMode, setModalCalculationMode] = useState('manual');
+  const [modalRatePerUnit, setModalRatePerUnit] = useState(0);
+  const [modalUnit, setModalUnit] = useState('km');
+  const [modalCustomTitle, setModalCustomTitle] = useState('');
+  const [modalOutboundDist, setModalOutboundDist] = useState('');
+  const [modalReturnDist, setModalReturnDist] = useState('');
+  const [modalAmount, setModalAmount] = useState('');
+  const [modalDescription, setModalDescription] = useState('');
+  const [modalLocalAttachments, setModalLocalAttachments] = useState([]);
 
   // Lightbox preview modal state
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [previewImageUri, setPreviewImageUri] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
 
-  // 1. Load Categories, Companies & Duties on mount
-  useEffect(() => {
-    let isMounted = true;
-    const fetchInitialData = async () => {
-      try {
-        setLoadingInitial(true);
-        setError('');
-        const [catsRes, compsRes, dutiesRes] = await Promise.all([
-          expenseApi.getCategories().catch(() => null),
-          companyApi.getCompanies({ status: 'active', limit: 200 }).catch(() => null),
-          dutyApi.getMyDuties({ limit: 100 }).catch(() => null),
-        ]);
-
-        if (!isMounted) return;
-
-        const activeCats = extractArray(catsRes, 'categories').filter(
-          (c) => c.status === 'active'
-        );
-        const allComps = extractArray(compsRes, 'companies');
-        const allDuties = extractArray(dutiesRes, 'duties');
-
-        setCategories(activeCats);
-        setCompanies(allComps);
-        setDuties(allDuties);
-
-        // If route duty was passed, perform full auto-assignment
-        if (routeDuty) {
-          const dutyMatch = allDuties.find((d) => String(d._id) === String(routeDuty._id)) || routeDuty;
-          applyDutyToState(dutyMatch, allComps);
-        } else if (companyCategory === 'office' && !selectedCompanyId) {
-          const defaultOffice = allComps.find(isOfficeCompany);
-          if (defaultOffice) {
-            setSelectedCompanyId(String(defaultOffice._id));
-          }
-        }
-
-        // Initialize with default item if empty
-        const defaultCat =
-          activeCats.find((c) => c.name === 'Travel – Kilometer') || activeCats[0];
-        setItems([createEmptyItem(defaultCat)]);
-      } catch (err) {
-        if (isMounted) {
-          setError(extractErrorMessage(err, 'Failed to load initial expense settings'));
-        }
-      } finally {
-        if (isMounted) {
-          setLoadingInitial(false);
-        }
-      }
-    };
-
-    fetchInitialData();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // 2. When selected company or companyCategory changes, fetch filtered clients
-  useEffect(() => {
-    if (!selectedCompanyId || companyCategory === 'office') {
-      setClients([]);
-      if (companyCategory === 'office') {
-        setSelectedClientId('');
-      }
+  // Fetch previous expenses submitted for a duty
+  const loadPreviousExpenses = useCallback(async (dutyIdOrCode) => {
+    if (!dutyIdOrCode) {
+      setPreviousExpenses([]);
       return;
     }
-
-    let isMounted = true;
-    const fetchClients = async () => {
-      try {
-        const res = await clientApi.getClientsByCompany(selectedCompanyId);
-        if (isMounted) {
-          const clientList = extractArray(res, 'clients');
-
-          setClients((prev) => {
-            const merged = [...clientList];
-            // Preserve currently selected client if it was already selected or from the duty
-            const currentSelected = prev.find((c) => String(c._id) === String(selectedClientId));
-            if (
-              currentSelected &&
-              !merged.some((c) => String(c._id) === String(currentSelected._id))
-            ) {
-              merged.unshift(currentSelected);
-            }
-            return merged;
-          });
-        }
-      } catch (err) {
-        if (isMounted) {
-          setClients([]);
-        }
-      }
-    };
-
-    fetchClients();
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedCompanyId, companyCategory]);
+    try {
+      setLoadingPreviousExpenses(true);
+      const res = await expenseApi.getMyExpenses({ dutyId: dutyIdOrCode, limit: 100 });
+      const expList = extractArray(res, 'expenses');
+      setPreviousExpenses(expList);
+    } catch (err) {
+      setPreviousExpenses([]);
+    } finally {
+      setLoadingPreviousExpenses(false);
+    }
+  }, []);
 
   // Core helper to assign company, client, date, and category from a duty
   const applyDutyToState = (duty, existingComps = companies) => {
@@ -254,7 +163,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       (duty.customerName && duty.customerName.toLowerCase() === 'office');
     setCompanyCategory(isOffice ? 'office' : 'client');
 
-    // 3. Auto-assign Company and ensure it's in companies state
+    // 3. Auto-assign Company
     if (duty.company) {
       if (typeof duty.company === 'object') {
         const comp = duty.company;
@@ -271,7 +180,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       }
     }
 
-    // 4. Auto-assign Client and ensure it's visible in clients state
+    // 4. Auto-assign Client
     if (!isOffice) {
       if (duty.client) {
         if (typeof duty.client === 'object') {
@@ -288,7 +197,6 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
           setSelectedClientId(String(duty.client));
         }
       } else if (duty.customerName && duty.customerName !== 'Office') {
-        // Customer name was entered on the duty without a registered client ID
         const customClientObj = {
           _id: `custom_${duty._id}`,
           clientName: duty.customerName,
@@ -304,9 +212,62 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     } else {
       setSelectedClientId('');
     }
+
+    // 5. Load previous expenses for this duty
+    loadPreviousExpenses(duty._id || duty.dutyId);
   };
 
-  // Handle duty selection from the dropdown with date like "Oct 3"
+  // 1. Load Categories, Companies & Duties on mount
+  useEffect(() => {
+    let isMounted = true;
+    const fetchInitialData = async () => {
+      try {
+        setLoadingInitial(true);
+        setError('');
+        const [catsRes, compsRes, dutiesRes] = await Promise.all([
+          expenseApi.getCategories().catch(() => null),
+          companyApi.getCompanies({ status: 'active', limit: 200 }).catch(() => null),
+          dutyApi.getMyDuties({ limit: 150 }).catch(() => null),
+        ]);
+
+        if (!isMounted) return;
+
+        const activeCats = extractArray(catsRes, 'categories').filter(
+          (c) => c.status === 'active'
+        );
+        const allComps = extractArray(compsRes, 'companies');
+        const allDuties = extractArray(dutiesRes, 'duties');
+
+        setCategories(activeCats);
+        setCompanies(allComps);
+        setDuties(allDuties);
+
+        // If route duty was passed, perform full auto-assignment
+        if (routeDuty) {
+          const dutyMatch = allDuties.find((d) => String(d._id) === String(routeDuty._id)) || routeDuty;
+          applyDutyToState(dutyMatch, allComps);
+        } else if (allDuties.length > 0 && !selectedDutyId) {
+          // Pre-select most recent duty
+          applyDutyToState(allDuties[0], allComps);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(extractErrorMessage(err, 'Failed to load initial expense settings'));
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingInitial(false);
+        }
+      }
+    };
+
+    fetchInitialData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Handle duty selection from dropdown
   const handleSelectDuty = (dutyId) => {
     const duty = duties.find((d) => String(d._id) === String(dutyId));
     if (!duty) return;
@@ -314,197 +275,13 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     setDutyPickerVisible(false);
   };
 
-  // Clear selected duty
-  const handleClearDuty = () => {
-    setSelectedDutyId('');
-    setRelatedDutyId('');
-  };
-
-  // Switch between "By Work / Duty" and "By Company & Client"
-  const handleChangeEntryMode = (newMode) => {
-    setEntryMode(newMode);
-    if (newMode === 'company') {
-      setSelectedDutyId('');
-      setRelatedDutyId('');
-    }
-  };
-
-  // Handle Category selection for a specific item
-  const handleSelectCategory = (itemIndex, category) => {
-    setItems((prevItems) => {
-      const updated = [...prevItems];
-      const item = { ...updated[itemIndex] };
-      item.categoryId = category._id;
-      item.categoryName = category.name;
-      item.calculationMode = category.calculationMode;
-      item.ratePerUnit = category.ratePerUnit || 0;
-      item.unit = category.unit || '';
-      item.customCategoryName = '';
-
-      if (category.calculationMode === 'automatic') {
-        const outbound = parseFloat(item.outboundDistanceKm) || 0;
-        const ret = parseFloat(item.returnDistanceKm) || 0;
-        const total = outbound + ret;
-        item.totalQuantity = total ? String(total) : '';
-        item.amount = total ? String(Math.round(total * (category.ratePerUnit || 0))) : '';
-      } else {
-        item.outboundDistanceKm = '';
-        item.returnDistanceKm = '';
-        item.totalQuantity = '';
-        item.amount = '';
-      }
-
-      updated[itemIndex] = item;
-      return updated;
-    });
-    setActiveCategoryPickerIndex(null);
-  };
-
-  // Handle distance changes for automatic category
-  const handleDistanceChange = (itemIndex, field, value) => {
-    setItems((prevItems) => {
-      const updated = [...prevItems];
-      const item = { ...updated[itemIndex] };
-      item[field] = value;
-
-      const outbound =
-        field === 'outboundDistanceKm'
-          ? parseFloat(value) || 0
-          : parseFloat(item.outboundDistanceKm) || 0;
-      const ret =
-        field === 'returnDistanceKm'
-          ? parseFloat(value) || 0
-          : parseFloat(item.returnDistanceKm) || 0;
-      const total = outbound + ret;
-
-      item.totalQuantity = total > 0 ? String(total) : '';
-      const rate = item.ratePerUnit || 0;
-      item.amount = total > 0 ? String(Math.round(total * rate)) : '';
-
-      updated[itemIndex] = item;
-      return updated;
-    });
-  };
-
-  // Handle generic field changes
-  const handleItemFieldChange = (itemIndex, field, value) => {
-    setItems((prevItems) => {
-      const updated = [...prevItems];
-      updated[itemIndex] = {
-        ...updated[itemIndex],
-        [field]: value,
-      };
-      return updated;
-    });
-  };
-
-  // Add Item
-  const handleAddItem = () => {
-    const defaultCat = categories.find((c) => c.name === 'Food') || categories[0];
-    setItems((prev) => [...prev, createEmptyItem(defaultCat)]);
-  };
-
-  // Remove Item
-  const handleRemoveItem = (index) => {
-    if (items.length <= 1) {
-      Alert.alert('Cannot Remove', 'An expense must contain at least one item.');
-      return;
-    }
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // Attach Proof Photo for item
-  const handleAddAttachment = (itemIndex) => {
-    Alert.alert('Attach Proof Document / Photo', 'Choose attachment source:', [
-      {
-        text: 'Camera',
-        onPress: async () => {
-          const { status } = await ImagePicker.requestCameraPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Permission Denied', 'Camera permission is required.');
-            return;
-          }
-          const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ['images'],
-            quality: 0.7,
-          });
-          if (!result.canceled && result.assets && result.assets[0]) {
-            setItems((prev) => {
-              const updated = [...prev];
-              updated[itemIndex].localAttachments = [
-                ...updated[itemIndex].localAttachments,
-                result.assets[0].uri,
-              ];
-              return updated;
-            });
-          }
-        },
-      },
-      {
-        text: 'Photo Gallery / File',
-        onPress: async () => {
-          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Permission Denied', 'Gallery permission is required.');
-            return;
-          }
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            quality: 0.7,
-            allowsMultipleSelection: true,
-          });
-          if (!result.canceled && result.assets) {
-            const newUris = result.assets.map((a) => a.uri);
-            setItems((prev) => {
-              const updated = [...prev];
-              updated[itemIndex].localAttachments = [
-                ...updated[itemIndex].localAttachments,
-                ...newUris,
-              ];
-              return updated;
-            });
-          }
-        },
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  const handleRemoveAttachment = (itemIndex, attachIndex) => {
-    setItems((prev) => {
-      const updated = [...prev];
-      updated[itemIndex].localAttachments = updated[itemIndex].localAttachments.filter(
-        (_, i) => i !== attachIndex
-      );
-      return updated;
-    });
-  };
-
-  // Grand Total calculation
-  const grandTotal = useMemo(() => {
-    return items.reduce((sum, item) => {
-      const amt = parseFloat(item.amount) || 0;
-      return sum + amt;
-    }, 0);
-  }, [items]);
-
-  // Filtered companies based on category
-  const filteredCompanies = useMemo(() => {
-    if (companyCategory === 'office') {
-      const offices = companies.filter((c) => isOfficeCompany(c));
-      return offices.length > 0 ? offices : companies;
-    }
-    const clientsList = companies.filter((c) => !isOfficeCompany(c));
-    return clientsList.length > 0 ? clientsList : companies;
-  }, [companies, companyCategory]);
-
   // Selected duty object
   const selectedDutyObj = useMemo(() => {
     if (!selectedDutyId) return null;
     return duties.find((d) => String(d._id) === String(selectedDutyId)) || null;
   }, [duties, selectedDutyId]);
 
-  // Resilient selected company resolution
+  // Selected company object
   const selectedCompanyObj = useMemo(() => {
     if (!selectedCompanyId) return null;
     const found = companies.find((c) => String(c._id) === String(selectedCompanyId));
@@ -515,7 +292,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     return null;
   }, [companies, selectedCompanyId, selectedDutyObj]);
 
-  // Resilient selected client resolution
+  // Selected client object
   const selectedClientObj = useMemo(() => {
     if (!selectedClientId) {
       if (selectedDutyObj?.customerName && selectedDutyObj.customerName !== 'Office') {
@@ -537,96 +314,223 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     return null;
   }, [clients, selectedClientId, selectedDutyObj]);
 
+  // Open modal to add a new item
+  const handleOpenAddItemModal = () => {
+    const defaultCat = categories.find((c) => c.name === 'Travel – Kilometer') || categories[0];
+    setEditingItemIndex(null);
+    setModalCategoryId(defaultCat?._id || '');
+    setModalCategoryName(defaultCat?.name || '');
+    setModalCalculationMode(defaultCat?.calculationMode || 'manual');
+    setModalRatePerUnit(defaultCat?.ratePerUnit || 0);
+    setModalUnit(defaultCat?.unit || 'km');
+    setModalCustomTitle('');
+    setModalOutboundDist('');
+    setModalReturnDist('');
+    setModalAmount('');
+    setModalDescription('');
+    setModalLocalAttachments([]);
+    setItemModalVisible(true);
+  };
+
+  // Open modal to edit an existing item
+  const handleOpenEditItemModal = (index) => {
+    const item = items[index];
+    if (!item) return;
+    setEditingItemIndex(index);
+    setModalCategoryId(item.categoryId || '');
+    setModalCategoryName(item.categoryName || '');
+    setModalCalculationMode(item.calculationMode || 'manual');
+    setModalRatePerUnit(item.ratePerUnit || 0);
+    setModalUnit(item.unit || 'km');
+    setModalCustomTitle(item.customCategoryName || item.customTitle || '');
+    setModalOutboundDist(item.outboundDistanceKm ? String(item.outboundDistanceKm) : '');
+    setModalReturnDist(item.returnDistanceKm ? String(item.returnDistanceKm) : '');
+    setModalAmount(item.amount ? String(item.amount) : '');
+    setModalDescription(item.description || '');
+    setModalLocalAttachments(item.localAttachments || []);
+    setItemModalVisible(true);
+  };
+
+  // Remove an item
+  const handleRemoveItem = (index) => {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Switch category inside modal
+  const handleSelectModalCategory = (cat) => {
+    setModalCategoryId(cat._id);
+    setModalCategoryName(cat.name);
+    setModalCalculationMode(cat.calculationMode);
+    setModalRatePerUnit(cat.ratePerUnit || 0);
+    setModalUnit(cat.unit || 'km');
+    if (cat.name !== 'Others') {
+      setModalCustomTitle('');
+    }
+
+    if (cat.calculationMode === 'automatic') {
+      const out = parseFloat(modalOutboundDist) || 0;
+      const ret = parseFloat(modalReturnDist) || 0;
+      const tot = out + ret;
+      setModalAmount(tot > 0 ? String(Math.round(tot * (cat.ratePerUnit || 0))) : '');
+    } else {
+      setModalOutboundDist('');
+      setModalReturnDist('');
+    }
+  };
+
+  // Handle distance changes inside modal
+  const handleModalDistanceChange = (field, val) => {
+    let out = field === 'out' ? val : modalOutboundDist;
+    let ret = field === 'ret' ? val : modalReturnDist;
+    if (field === 'out') setModalOutboundDist(val);
+    if (field === 'ret') setModalReturnDist(val);
+
+    const outNum = parseFloat(out) || 0;
+    const retNum = parseFloat(ret) || 0;
+    const tot = outNum + retNum;
+    if (tot > 0 && modalCalculationMode === 'automatic') {
+      setModalAmount(String(Math.round(tot * (modalRatePerUnit || 0))));
+    }
+  };
+
+  // Add attachment inside modal
+  const handleAddModalAttachment = () => {
+    Alert.alert('Attach Proof Document / Photo', 'Choose attachment source:', [
+      {
+        text: 'Camera',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Camera permission is required.');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            quality: 0.7,
+          });
+          if (!result.canceled && result.assets && result.assets[0]) {
+            setModalLocalAttachments((prev) => [...prev, result.assets[0].uri]);
+          }
+        },
+      },
+      {
+        text: 'Photo Gallery / File',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Gallery permission is required.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 0.7,
+            allowsMultipleSelection: true,
+          });
+          if (!result.canceled && result.assets) {
+            const newUris = result.assets.map((a) => a.uri);
+            setModalLocalAttachments((prev) => [...prev, ...newUris]);
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleRemoveModalAttachment = (idx) => {
+    setModalLocalAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // Save item from modal
+  const handleSaveModalItem = () => {
+    if (!modalCategoryId) {
+      Alert.alert('Category Required', 'Please select an expense category.');
+      return;
+    }
+    if (modalCategoryName === 'Others' && !modalCustomTitle.trim()) {
+      Alert.alert('Title Required', 'Please enter a title/name for this custom expense.');
+      return;
+    }
+    if (modalCalculationMode === 'automatic') {
+      const outNum = parseFloat(modalOutboundDist);
+      const retNum = parseFloat(modalReturnDist);
+      if (isNaN(outNum) || isNaN(retNum) || outNum + retNum <= 0) {
+        Alert.alert('Distance Required', 'Please enter valid outbound and return distance (> 0 km).');
+        return;
+      }
+    }
+    const amtNum = parseFloat(modalAmount);
+    if (isNaN(amtNum) || amtNum <= 0) {
+      Alert.alert('Amount Required', 'Please enter a valid amount greater than ₹0.');
+      return;
+    }
+
+    const itemObj = {
+      id:
+        editingItemIndex !== null
+          ? items[editingItemIndex].id
+          : Date.now().toString() + Math.random().toString(36).substring(2, 5),
+      categoryId: modalCategoryId,
+      categoryName: modalCategoryName,
+      calculationMode: modalCalculationMode,
+      ratePerUnit: modalRatePerUnit,
+      unit: modalUnit,
+      customCategoryName: modalCustomTitle.trim(),
+      customTitle: modalCustomTitle.trim(),
+      outboundDistanceKm: modalOutboundDist,
+      returnDistanceKm: modalReturnDist,
+      totalQuantity:
+        modalCalculationMode === 'automatic'
+          ? String((parseFloat(modalOutboundDist) || 0) + (parseFloat(modalReturnDist) || 0))
+          : '',
+      amount: String(Math.round(amtNum)),
+      description: modalDescription.trim(),
+      localAttachments: modalLocalAttachments,
+      uploadedAttachments:
+        editingItemIndex !== null ? items[editingItemIndex].uploadedAttachments || [] : [],
+    };
+
+    if (editingItemIndex !== null) {
+      setItems((prev) => {
+        const updated = [...prev];
+        updated[editingItemIndex] = itemObj;
+        return updated;
+      });
+    } else {
+      setItems((prev) => [...prev, itemObj]);
+    }
+
+    setItemModalVisible(false);
+  };
+
+  // Grand Total calculation for new items
+  const grandTotal = useMemo(() => {
+    return items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  }, [items]);
+
+  // Total previously submitted amount
+  const previousTotalAmount = useMemo(() => {
+    return previousExpenses.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
+  }, [previousExpenses]);
+
   // Validation & Submission
   const handleSubmit = async () => {
     if (submitting) return;
 
-    // 1. Validate Work / Company / Client according to Entry Mode
-    if (entryMode === 'duty') {
-      if (!selectedDutyId && !relatedDutyId) {
-        Alert.alert('Work Duty Required', 'Please select a Work / Duty from the list.');
-        return;
-      }
-      if (!selectedCompanyId && !selectedCompanyObj) {
-        Alert.alert('Company Required', 'The selected work duty is missing company information.');
-        return;
-      }
-      if (companyCategory === 'client' && !selectedClientId && !selectedClientObj) {
-        Alert.alert('Client Required', 'The selected work duty is missing client contact information.');
-        return;
-      }
-    } else {
-      // Direct Company / Office mode
-      if (companyCategory === 'office') {
-        if (!selectedCompanyId && !selectedCompanyObj) {
-          Alert.alert('Office Required', 'Please select an Office Location/Company.');
-          return;
-        }
-      } else {
-        // Client Company mode
-        if (!selectedCompanyId && !selectedCompanyObj) {
-          Alert.alert('Company Required', 'Please select a Client Company.');
-          return;
-        }
-        if (!selectedClientId && !selectedClientObj) {
-          Alert.alert('Client Contact Required', 'Please select a Client Contact Person.');
-          return;
-        }
-      }
-    }
-
-    // 2. Validate Items
-    if (!items.length) {
-      Alert.alert('Validation Error', 'Please add at least one expense item.');
+    if (!selectedDutyId && !relatedDutyId) {
+      Alert.alert('Work Duty Required', 'Please select a Work / Duty from the list.');
       return;
     }
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const itemNum = i + 1;
-
-      if (!item.categoryId) {
-        Alert.alert('Validation Error', `Item #${itemNum}: Please select a category.`);
-        return;
-      }
-
-      if (item.categoryName === 'Others' && !item.customCategoryName?.trim()) {
-        Alert.alert(
-          'Validation Error',
-          `Item #${itemNum}: Please specify the custom expense name for Others.`
-        );
-        return;
-      }
-
-      if (item.calculationMode === 'automatic') {
-        const outbound = parseFloat(item.outboundDistanceKm);
-        const ret = parseFloat(item.returnDistanceKm);
-        if (isNaN(outbound) || outbound < 0) {
-          Alert.alert('Validation Error', `Item #${itemNum}: Please enter a valid outbound distance.`);
-          return;
-        }
-        if (isNaN(ret) || ret < 0) {
-          Alert.alert('Validation Error', `Item #${itemNum}: Please enter a valid return distance.`);
-          return;
-        }
-        if (outbound + ret <= 0) {
-          Alert.alert('Validation Error', `Item #${itemNum}: Total distance must be greater than 0.`);
-          return;
-        }
-      }
-
-      const amount = parseFloat(item.amount);
-      if (isNaN(amount) || amount <= 0) {
-        Alert.alert('Validation Error', `Item #${itemNum}: Amount must be greater than ₹0.`);
-        return;
-      }
+    if (!items.length) {
+      Alert.alert('Add Expense Items', 'Please add at least one expense item using "+ Add Expense Item".');
+      return;
     }
 
     try {
       setSubmitting(true);
       setError('');
 
-      // Step 1: Upload attachments per item if any
+      // Step 1: Upload attachments per item
       const preparedItems = [];
       for (const item of items) {
         let uploadedAttachments = [...(item.uploadedAttachments || [])];
@@ -714,7 +618,9 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
 
       Alert.alert(
         'Expense Submitted',
-        `Your expense claim ${expenseCode ? `#${expenseCode} ` : ''}for ₹${grandTotal.toLocaleString('en-IN')} has been submitted successfully.`,
+        `Your expense claim ${expenseCode ? `#${expenseCode} ` : ''}for ₹${grandTotal.toLocaleString(
+          'en-IN'
+        )} has been submitted successfully for ${selectedDutyObj?.dutyId || relatedDutyId || 'this work'}.`,
         [
           {
             text: 'OK',
@@ -740,7 +646,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   if (loadingInitial) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <ScreenHeader title="Add Expense" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Add Work Expense" onBack={() => navigation.goBack()} />
         <LoadingIndicator message="Loading expense configuration..." fullScreen />
       </SafeAreaView>
     );
@@ -749,8 +655,8 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
-        title="Add Expense"
-        subtitle="Log employee travel, food, and project expenses"
+        title="Add Work Expense"
+        subtitle="Claim travel, food, and visit expenses"
         onBack={() => navigation.goBack()}
       />
 
@@ -761,642 +667,388 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       >
         <ErrorMessage message={error} />
 
-        {/* Top-Level Mode Tab Switcher: "By Work / Duty" vs "By Company & Client" */}
-        <View style={styles.entryModeTabBar}>
-          <TouchableOpacity
-            style={[
-              styles.entryModeTab,
-              entryMode === 'duty' && styles.entryModeTabActive,
-            ]}
-            onPress={() => handleChangeEntryMode('duty')}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="briefcase"
-              size={17}
-              color={entryMode === 'duty' ? '#FFFFFF' : COLORS.primary}
-            />
-            <Text
-              style={[
-                styles.entryModeTabText,
-                entryMode === 'duty' && styles.entryModeTabTextActive,
-              ]}
-            >
-              By Work / Duty
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.entryModeTab,
-              entryMode === 'company' && styles.entryModeTabActive,
-            ]}
-            onPress={() => handleChangeEntryMode('company')}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="business"
-              size={17}
-              color={entryMode === 'company' ? '#FFFFFF' : COLORS.primary}
-            />
-            <Text
-              style={[
-                styles.entryModeTabText,
-                entryMode === 'company' && styles.entryModeTabTextActive,
-              ]}
-            >
-              By Company / Client
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* TAB 1: BY WORK / DUTY */}
-        {entryMode === 'duty' ? (
-          <Card style={styles.card}>
-            <View style={styles.cardHeaderRow}>
-              <Ionicons name="briefcase-outline" size={20} color={COLORS.primary} />
-              <Text style={styles.cardTitle}>Link to Work / Duty</Text>
+        {/* 1. Work Duty Association Card */}
+        <Card style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="briefcase" size={20} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Work / Duty Order</Text>
             </View>
-            <Text style={styles.cardSubNotice}>
-              Select your service visit to automatically assign Company, Client & Date.
-            </Text>
-
-            {/* Select Work / Duty Trigger */}
-            <Text style={styles.inputLabel}>Select Work / Duty *</Text>
-            <TouchableOpacity
-              style={[
-                styles.pickerTrigger,
-                selectedDutyObj && styles.pickerTriggerSelected,
-              ]}
-              onPress={() => setDutyPickerVisible(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
-              <View style={{ flex: 1 }}>
-                {selectedDutyObj ? (
-                  <Text style={styles.pickerTriggerText} numberOfLines={1}>
-                    {formatDutyShortDate(selectedDutyObj.dutyDate)} • {selectedDutyObj.dutyId || 'Work'} -{' '}
-                    {selectedDutyObj.machineName || selectedDutyObj.workType || 'Duty'}
-                  </Text>
-                ) : (
-                  <Text style={[styles.pickerTriggerText, styles.pickerPlaceholder]}>
-                    Tap to Select Work Duty (e.g. Oct 3)...
-                  </Text>
-                )}
-              </View>
-              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-
-            {/* Highlighted Auto-Assigned Details Box */}
-            {selectedDutyObj ? (
-              <View style={styles.assignedDetailsBox}>
-                <View style={styles.assignedBoxHeader}>
-                  <View style={styles.assignedBadge}>
-                    <Ionicons name="checkmark-circle" size={14} color="#059669" />
-                    <Text style={styles.assignedBadgeText}>
-                      {selectedDutyObj.dutyId || 'Work Selected'}
-                    </Text>
-                  </View>
-                  <Text style={styles.assignedBoxDate}>
-                    {formatDate(selectedDutyObj.dutyDate || expenseDate)}
-                  </Text>
-                </View>
-
-                {/* Company Row */}
-                <View style={styles.assignedRow}>
-                  <Ionicons
-                    name={companyCategory === 'office' ? 'business' : 'storefront'}
-                    size={16}
-                    color={COLORS.primary}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.assignedLabel}>Auto-Assigned Company</Text>
-                    <Text style={styles.assignedValue} numberOfLines={1}>
-                      {selectedCompanyObj?.companyName ||
-                        (companyCategory === 'office' ? 'Internal Office' : 'Company')}
-                      {selectedCompanyObj?.location ? ` (${selectedCompanyObj.location})` : ''}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Client Row */}
-                {companyCategory === 'client' ? (
-                  <View style={styles.assignedRow}>
-                    <Ionicons name="person" size={16} color={COLORS.primary} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.assignedLabel}>Auto-Assigned Client Contact</Text>
-                      <Text style={styles.assignedValue} numberOfLines={1}>
-                        {selectedClientObj?.clientName ||
-                          selectedDutyObj.customerName ||
-                          'Client Contact'}
-                        {selectedClientObj?.clientPhoneNumber ||
-                        selectedDutyObj.customerPhoneNumber
-                          ? ` • ${selectedClientObj?.clientPhoneNumber || selectedDutyObj.customerPhoneNumber}`
-                          : ''}
-                      </Text>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.assignedRow}>
-                    <Ionicons name="information-circle-outline" size={16} color="#0284C7" />
-                    <Text style={styles.assignedOfficeNotice}>
-                      Internal Office Duty — No client contact required.
-                    </Text>
-                  </View>
-                )}
-
-                {/* Machine / Work Row */}
-                {selectedDutyObj.machineName ? (
-                  <View style={styles.assignedRow}>
-                    <Ionicons name="hardware-chip-outline" size={16} color={COLORS.textSecondary} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.assignedLabel}>Machine / Service</Text>
-                      <Text style={styles.assignedMutedValue} numberOfLines={1}>
-                        {selectedDutyObj.machineName} (
-                        {selectedDutyObj.workType || 'Maintenance'})
-                      </Text>
-                    </View>
-                  </View>
-                ) : null}
-
-                {/* Action Buttons for Assigned Box */}
-                <View style={styles.assignedBoxActions}>
-                  <TouchableOpacity
-                    style={styles.changeWorkBtn}
-                    onPress={() => setDutyPickerVisible(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="swap-horizontal" size={14} color={COLORS.primary} />
-                    <Text style={styles.changeWorkBtnText}>Change Work</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.clearWorkBtn}
-                    onPress={handleClearDuty}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="close-circle-outline" size={14} color={COLORS.danger} />
-                    <Text style={styles.clearWorkBtnText}>Deselect</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : null}
-
-            {/* General Description */}
-            <TextInputField
-              label="General Description (Optional)"
-              placeholder="Brief overview of visit, travel or purpose"
-              value={generalDescription}
-              onChangeText={setGeneralDescription}
-              multiline
-              numberOfLines={2}
-              style={{ marginTop: SPACING.xs }}
-            />
-          </Card>
-        ) : (
-          /* TAB 2: BY COMPANY & CLIENT (DIRECT) */
-          <Card style={styles.card}>
-            <View style={styles.cardHeaderRow}>
-              <Ionicons name="business-outline" size={20} color={COLORS.primary} />
-              <Text style={styles.cardTitle}>Company & Client Details</Text>
-            </View>
-            <Text style={styles.cardSubNotice}>
-              Log expenses directly for the office or a client company without a work order.
-            </Text>
-
-            {/* Expense Date */}
-            <Text style={styles.inputLabel}>Expense Date *</Text>
-            <TouchableOpacity
-              style={styles.pickerTrigger}
-              onPress={() => setDatePickerVisible(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
-              <Text style={styles.pickerTriggerText}>{formatDate(expenseDate)}</Text>
-            </TouchableOpacity>
-
-            {/* Category Toggle: Office vs Client Company */}
-            <Text style={[styles.inputLabel, { marginTop: SPACING.sm }]}>
-              Company Category *
-            </Text>
-            <View style={styles.typeSelectorRow}>
-              <TouchableOpacity
-                style={[
-                  styles.typePill,
-                  companyCategory === 'office' && styles.typePillActive,
-                ]}
-                onPress={() => {
-                  setCompanyCategory('office');
-                  const defaultOffice = companies.find(isOfficeCompany);
-                  if (defaultOffice) {
-                    setSelectedCompanyId(String(defaultOffice._id));
-                  }
-                  setSelectedClientId('');
-                }}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name="business"
-                  size={16}
-                  color={companyCategory === 'office' ? '#FFFFFF' : COLORS.primary}
-                />
-                <Text
-                  style={[
-                    styles.typePillText,
-                    companyCategory === 'office' && styles.typePillTextActive,
-                  ]}
-                >
-                  Internal Office
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.typePill,
-                  companyCategory === 'client' && styles.typePillActive,
-                ]}
-                onPress={() => {
-                  setCompanyCategory('client');
-                  const current = companies.find((c) => String(c._id) === String(selectedCompanyId));
-                  if (!current || isOfficeCompany(current)) {
-                    setSelectedCompanyId('');
-                    setSelectedClientId('');
-                  }
-                }}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name="storefront"
-                  size={16}
-                  color={companyCategory === 'client' ? '#FFFFFF' : COLORS.primary}
-                />
-                <Text
-                  style={[
-                    styles.typePillText,
-                    companyCategory === 'client' && styles.typePillTextActive,
-                  ]}
-                >
-                  Client Company
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Company Picker */}
-            <Text style={styles.inputLabel}>
-              {companyCategory === 'office'
-                ? 'Office Location / Company *'
-                : 'Client Company *'}
-            </Text>
-            <TouchableOpacity
-              style={styles.pickerTrigger}
-              onPress={() => setCompanyPickerVisible(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={
-                  companyCategory === 'office'
-                    ? 'business-outline'
-                    : 'storefront-outline'
-                }
-                size={18}
-                color={COLORS.primary}
-              />
-              <Text
-                style={[
-                  styles.pickerTriggerText,
-                  !selectedCompanyObj && styles.pickerPlaceholder,
-                ]}
-              >
-                {selectedCompanyObj
-                  ? `${selectedCompanyObj.companyName}${selectedCompanyObj.location ? ` (${selectedCompanyObj.location})` : ''}`
-                  : companyCategory === 'office'
-                  ? 'Select Office Location *'
-                  : 'Select Client Company *'}
-              </Text>
-              {selectedCompanyObj ? (
-                <TouchableOpacity
-                  onPress={() => {
-                    setSelectedCompanyId('');
-                    setSelectedClientId('');
-                  }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
-                </TouchableOpacity>
-              ) : (
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-              )}
-            </TouchableOpacity>
-
-            {/* Client Contact Person */}
-            {companyCategory === 'office' ? (
-              <View style={styles.officeClientNotice}>
-                <Ionicons name="information-circle-outline" size={16} color="#0284C7" />
-                <Text style={styles.officeClientNoticeText}>
-                  Office expenses do not require an external client contact.
+            {Boolean(selectedDutyObj?.dutyId || relatedDutyId) && (
+              <View style={styles.workIdPill}>
+                <Ionicons name="link" size={13} color="#FFFFFF" />
+                <Text style={styles.workIdPillText}>
+                  {selectedDutyObj?.dutyId || relatedDutyId}
                 </Text>
               </View>
-            ) : (
-              <>
-                <Text style={styles.inputLabel}>Client Contact Person *</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.pickerTrigger,
-                    !selectedCompanyId && styles.pickerTriggerDisabled,
-                  ]}
-                  onPress={() => {
-                    if (!selectedCompanyId) {
-                      Alert.alert(
-                        'Company Required',
-                        'Please select a Client Company first.'
-                      );
-                      return;
-                    }
-                    setClientPickerVisible(true);
-                  }}
-                  activeOpacity={0.8}
-                  disabled={!selectedCompanyId}
-                >
-                  <Ionicons
-                    name="person-outline"
-                    size={18}
-                    color={selectedCompanyId ? COLORS.primary : COLORS.textMuted}
-                  />
-                  <Text
-                    style={[
-                      styles.pickerTriggerText,
-                      !selectedClientObj && styles.pickerPlaceholder,
-                    ]}
-                  >
-                    {selectedClientObj
-                      ? `${selectedClientObj.clientName || selectedClientObj.name} (${selectedClientObj.clientPhoneNumber || selectedClientObj.phoneNumber || 'No phone'})`
-                      : selectedCompanyId
-                      ? 'Select Client Contact Person *'
-                      : 'Select Company first to choose client'}
-                  </Text>
-                  {selectedClientObj ? (
-                    <TouchableOpacity
-                      onPress={() => setSelectedClientId('')}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    >
-                      <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
-                    </TouchableOpacity>
-                  ) : (
-                    <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-                  )}
-                </TouchableOpacity>
-              </>
             )}
+          </View>
+          <Text style={styles.cardSubNotice}>
+            All expenses are logged directly against your service visit.
+          </Text>
 
-            {/* General Description */}
-            <TextInputField
-              label="General Description (Optional)"
-              placeholder="Brief overview of visit, destination, or purpose"
-              value={generalDescription}
-              onChangeText={setGeneralDescription}
-              multiline
-              numberOfLines={2}
-              style={{ marginTop: SPACING.xs }}
-            />
+          {/* Select Work / Duty Trigger */}
+          <Text style={styles.inputLabel}>Select Work / Duty *</Text>
+          <TouchableOpacity
+            style={[styles.pickerTrigger, selectedDutyObj && styles.pickerTriggerSelected]}
+            onPress={() => setDutyPickerVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+            <View style={{ flex: 1 }}>
+              {selectedDutyObj ? (
+                <Text style={styles.pickerTriggerText} numberOfLines={1}>
+                  {formatDutyShortDate(selectedDutyObj.dutyDate)} • {selectedDutyObj.dutyId || 'Work'} -{' '}
+                  {selectedDutyObj.machineName || selectedDutyObj.workType || 'Duty'}
+                </Text>
+              ) : (
+                <Text style={[styles.pickerTriggerText, styles.pickerPlaceholder]}>
+                  Tap to Select Work Duty (e.g. Oct 3)...
+                </Text>
+              )}
+            </View>
+            <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+
+          {/* Highlighted Auto-Assigned Details Box */}
+          {selectedDutyObj ? (
+            <View style={styles.assignedDetailsBox}>
+              <View style={styles.assignedBoxHeader}>
+                <View style={styles.assignedBadge}>
+                  <Ionicons name="checkmark-circle" size={14} color="#059669" />
+                  <Text style={styles.assignedBadgeText}>
+                    {selectedDutyObj.dutyId || 'Work Selected'}
+                  </Text>
+                </View>
+                <Text style={styles.assignedBoxDate}>
+                  {formatDate(selectedDutyObj.dutyDate || expenseDate)}
+                </Text>
+              </View>
+
+              {/* Company Row */}
+              <View style={styles.assignedRow}>
+                <Ionicons
+                  name={companyCategory === 'office' ? 'business' : 'storefront'}
+                  size={16}
+                  color={COLORS.primary}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.assignedLabel}>Assigned Company / Site</Text>
+                  <Text style={styles.assignedValue} numberOfLines={1}>
+                    {selectedCompanyObj?.companyName ||
+                      (companyCategory === 'office' ? 'Internal Office' : 'Company')}
+                    {selectedCompanyObj?.location ? ` (${selectedCompanyObj.location})` : ''}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Client Row */}
+              {companyCategory === 'client' ? (
+                <View style={styles.assignedRow}>
+                  <Ionicons name="person" size={16} color={COLORS.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.assignedLabel}>Client Contact</Text>
+                    <Text style={styles.assignedValue} numberOfLines={1}>
+                      {selectedClientObj?.clientName ||
+                        selectedDutyObj.customerName ||
+                        'Client Contact'}
+                      {selectedClientObj?.clientPhoneNumber || selectedDutyObj.customerPhoneNumber
+                        ? ` • ${selectedClientObj?.clientPhoneNumber || selectedDutyObj.customerPhoneNumber}`
+                        : ''}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.assignedRow}>
+                  <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.assignedLabel}>Location Type</Text>
+                    <Text style={[styles.assignedValue, { color: '#059669' }]}>
+                      Internal Office Duty
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Machine Row */}
+              {Boolean(selectedDutyObj.machineName) && (
+                <View style={styles.assignedRow}>
+                  <Ionicons name="hardware-chip-outline" size={16} color={COLORS.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.assignedLabel}>Equipment / Machine</Text>
+                    <Text style={styles.assignedValue} numberOfLines={1}>
+                      {selectedDutyObj.machineName} ({selectedDutyObj.workType || 'Service'})
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          ) : null}
+
+          {/* Expense Date Trigger */}
+          <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>Expense Date *</Text>
+          <TouchableOpacity
+            style={styles.pickerTrigger}
+            onPress={() => setDatePickerVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.pickerTriggerText}>{formatDate(expenseDate)}</Text>
+            <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        </Card>
+
+        {/* 2. Previous Expenses for this Work (if any) */}
+        {loadingPreviousExpenses ? (
+          <View style={styles.previousLoadingWrap}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.previousLoadingText}>Checking previous expenses for this work...</Text>
+          </View>
+        ) : previousExpenses.length > 0 ? (
+          <Card style={styles.previousExpensesCard}>
+            <View style={styles.previousHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <Ionicons name="time" size={18} color="#4F46E5" />
+                <Text style={styles.previousHeaderTitle}>
+                  Previous Expenses ({previousExpenses.length})
+                </Text>
+              </View>
+              <View style={styles.previousTotalBadge}>
+                <Text style={styles.previousTotalLabel}>Already Claimed:</Text>
+                <Text style={styles.previousTotalVal}>
+                  ₹{previousTotalAmount.toLocaleString('en-IN')}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.previousSubNotice}>
+              Existing claims logged for {selectedDutyObj?.dutyId || relatedDutyId || 'this work'}:
+            </Text>
+
+            {previousExpenses.map((prevExp, pIdx) => {
+              const prevExpCode = prevExp.expenseId || `EXP-${pIdx + 1}`;
+              const prevItems = prevExp.items || [];
+              const proofCount = prevItems.reduce(
+                (sum, it) => sum + (it.attachments?.length || 0),
+                0
+              );
+
+              return (
+                <View key={prevExp._id || pIdx} style={styles.previousClaimItem}>
+                  <View style={styles.previousClaimTop}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.previousClaimCode}>#{prevExpCode}</Text>
+                      <Text style={styles.previousClaimDate}>
+                        • {formatDate(prevExp.expenseDate)}
+                      </Text>
+                    </View>
+                    <Text style={styles.previousClaimAmount}>
+                      ₹{(prevExp.grandTotal || 0).toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+
+                  {/* Items summary */}
+                  <View style={styles.previousItemsRow}>
+                    {prevItems.map((it, iIdx) => (
+                      <View key={iIdx} style={styles.previousItemChip}>
+                        <Text style={styles.previousItemChipText}>
+                          {it.categoryName}
+                          {it.customTitle ? ` (${it.customTitle})` : ''}: ₹{it.amount}
+                        </Text>
+                      </View>
+                    ))}
+                    {proofCount > 0 && (
+                      <View style={styles.previousProofBadge}>
+                        <Ionicons name="image-outline" size={11} color="#4F46E5" />
+                        <Text style={styles.previousProofBadgeText}>{proofCount} proof(s)</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
           </Card>
-        )}
+        ) : null}
 
-        {/* 2. Multiple Expense Items */}
+        {/* 3. New Expense Items Section */}
         <View style={styles.sectionHeaderRow}>
           <View style={styles.sectionTitleWrap}>
-            <Ionicons name="list-outline" size={20} color={COLORS.primary} />
+            <Ionicons name="wallet-outline" size={20} color={COLORS.primary} />
             <Text style={styles.sectionTitle}>
-              Expense Items ({items.length})
+              {previousExpenses.length > 0 ? 'New Expense Items' : 'Expense Items'} ({items.length})
             </Text>
           </View>
           <TouchableOpacity
             style={styles.addItemBtn}
-            onPress={handleAddItem}
+            onPress={handleOpenAddItemModal}
             activeOpacity={0.8}
           >
             <Ionicons name="add-circle" size={18} color="#FFFFFF" />
-            <Text style={styles.addItemBtnText}>Add Item</Text>
+            <Text style={styles.addItemBtnText}>+ Add Item</Text>
           </TouchableOpacity>
         </View>
 
-        {items.map((item, index) => {
-          const isOthers = item.categoryName === 'Others';
-
-          return (
-            <Card key={item.id} style={styles.itemCard}>
-              <View style={styles.itemCardHeader}>
-                <View style={styles.itemBadge}>
-                  <Text style={styles.itemBadgeText}>Item #{index + 1}</Text>
-                </View>
-                {items.length > 1 && (
-                  <TouchableOpacity
-                    onPress={() => handleRemoveItem(index)}
-                    style={styles.removeItemBtn}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Category Picker Trigger */}
-              <Text style={styles.inputLabel}>Category *</Text>
-              <TouchableOpacity
-                style={styles.pickerTrigger}
-                onPress={() => setActiveCategoryPickerIndex(index)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="pricetag-outline" size={18} color={COLORS.primary} />
-                <Text style={styles.pickerTriggerText}>
-                  {item.categoryName || 'Select Category'}
-                </Text>
-                <View style={styles.modeBadge}>
-                  <Text style={styles.modeBadgeText}>
-                    {item.calculationMode === 'automatic' ? 'Automatic' : 'Manual'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Others: Custom Expense Name */}
-              {isOthers && (
-                <TextInputField
-                  label="Expense Title / Name *"
-                  placeholder="e.g. Parking Fee, Toll, Tollgate, Courier"
-                  value={item.customCategoryName}
-                  onChangeText={(val) => handleItemFieldChange(index, 'customCategoryName', val)}
-                  leftIcon="pencil-outline"
-                />
-              )}
-
-              {/* Automatic Mode Details */}
-              {item.calculationMode === 'automatic' ? (
-                <View style={styles.autoCalcBox}>
-                  <View style={styles.rateRow}>
-                    <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
-                    <Text style={styles.rateText}>
-                      Configured Rate:{' '}
-                      <Text style={styles.rateHighlight}>
-                        ₹{item.ratePerUnit} / {item.unit || 'km'}
-                      </Text>
-                    </Text>
-                  </View>
-
-                  <View style={styles.distInputRow}>
-                    <View style={styles.distInputCol}>
-                      <TextInputField
-                        label="Outbound (km) *"
-                        placeholder="0"
-                        keyboardType="decimal-pad"
-                        value={item.outboundDistanceKm}
-                        onChangeText={(val) =>
-                          handleDistanceChange(index, 'outboundDistanceKm', val)
-                        }
-                      />
-                    </View>
-                    <View style={styles.distInputCol}>
-                      <TextInputField
-                        label="Return (km) *"
-                        placeholder="0"
-                        keyboardType="decimal-pad"
-                        value={item.returnDistanceKm}
-                        onChangeText={(val) =>
-                          handleDistanceChange(index, 'returnDistanceKm', val)
-                        }
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.autoResultRow}>
-                    <Text style={styles.autoResultLabel}>
-                      Total: {item.totalQuantity || '0'} {item.unit || 'km'} × ₹{item.ratePerUnit} =
-                    </Text>
-                    <Text style={styles.autoResultValue}>
-                      ₹{item.amount || '0'}
-                    </Text>
-                  </View>
-                </View>
-              ) : (
-                /* Manual Mode: Amount input */
-                <TextInputField
-                  label="Amount (₹) *"
-                  placeholder="Enter amount in ₹"
-                  keyboardType="numeric"
-                  value={item.amount}
-                  onChangeText={(val) => handleItemFieldChange(index, 'amount', val)}
-                  leftIcon="cash-outline"
-                />
-              )}
-
-              {/* Item Description */}
-              <TextInputField
-                label="Item Description (Optional)"
-                placeholder="Details, purpose, or reason for this expense"
-                value={item.description}
-                onChangeText={(val) => handleItemFieldChange(index, 'description', val)}
-              />
-
-              {/* Attachments Section */}
-              <View style={styles.attachmentsSection}>
-                <View style={styles.attachHeaderRow}>
-                  <Text style={styles.attachTitle}>
-                    Proof Attachments ({item.localAttachments.length})
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.addAttachBtn}
-                    onPress={() => handleAddAttachment(index)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="camera-outline" size={14} color={COLORS.primary} />
-                    <Text style={styles.addAttachBtnText}>+ Attach</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {item.localAttachments.length > 0 ? (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.attachScroll}
-                  >
-                    {item.localAttachments.map((uri, aIdx) => (
-                      <View key={aIdx} style={styles.attachThumbWrap}>
-                        <TouchableOpacity
-                          onPress={() => {
-                            setPreviewImageUri(uri);
-                            setPreviewTitle(`Proof Receipt - Item #${index + 1}`);
-                            setPreviewModalVisible(true);
-                          }}
-                        >
-                          <Image source={{ uri }} style={styles.attachThumb} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.removeAttachBadge}
-                          onPress={() => handleRemoveAttachment(index, aIdx)}
-                          hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
-                        >
-                          <Ionicons name="close" size={12} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </ScrollView>
-                ) : (
-                  <Text style={styles.noAttachText}>Optional receipts, bills, or photo proofs</Text>
-                )}
-              </View>
-            </Card>
-          );
-        })}
-
-        {/* 3. Grand Total & Summary Card */}
-        <Card style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Itemized Summary</Text>
-          {items.map((item, idx) => {
-            const displayName =
-              item.categoryName === 'Others' && item.customCategoryName
-                ? `Others: ${item.customCategoryName}`
-                : item.categoryName || `Item #${idx + 1}`;
-            const itemAmt = parseFloat(item.amount) || 0;
+        {items.length === 0 ? (
+          <TouchableOpacity
+            style={styles.emptyItemsCard}
+            onPress={handleOpenAddItemModal}
+            activeOpacity={0.8}
+          >
+            <View style={styles.emptyItemsIconWrap}>
+              <Ionicons name="receipt-outline" size={32} color={COLORS.primary} />
+            </View>
+            <Text style={styles.emptyItemsTitle}>No Expense Items Added Yet</Text>
+            <Text style={styles.emptyItemsSub}>
+              Tap below to add travel kilometers, food, stay, or other work expenses.
+            </Text>
+            <View style={styles.emptyItemsActionBtn}>
+              <Ionicons name="add" size={16} color="#FFFFFF" />
+              <Text style={styles.emptyItemsActionText}>Add Expense Item</Text>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          items.map((item, index) => {
+            const isAuto = item.calculationMode === 'automatic';
+            const isOthers = item.categoryName === 'Others';
+            const displayTitle =
+              isOthers && item.customCategoryName
+                ? item.customCategoryName
+                : item.customCategoryName
+                ? `${item.categoryName} (${item.customCategoryName})`
+                : item.categoryName;
+            const photoCount = item.localAttachments?.length || item.uploadedAttachments?.length || 0;
 
             return (
-              <View key={item.id} style={styles.summaryRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.summaryItemName} numberOfLines={1}>
-                    {displayName}
-                  </Text>
-                  {item.calculationMode === 'automatic' && item.totalQuantity ? (
-                    <Text style={styles.summaryItemSub}>
-                      {item.totalQuantity} {item.unit || 'km'} @ ₹{item.ratePerUnit}
+              <Card key={item.id || index} style={styles.itemSummaryCard}>
+                <View style={styles.itemSummaryTop}>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.itemCategoryBadgeRow}>
+                      <View style={styles.categoryPill}>
+                        <Text style={styles.categoryPillText}>{item.categoryName}</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.modePill,
+                          isAuto ? styles.modePillAuto : styles.modePillManual,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.modePillText,
+                            isAuto ? styles.modePillTextAuto : styles.modePillTextManual,
+                          ]}
+                        >
+                          {isAuto ? 'Auto km' : 'Manual'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.itemSummaryTitle} numberOfLines={1}>
+                      {displayTitle}
                     </Text>
-                  ) : null}
+                  </View>
+                  <Text style={styles.itemSummaryAmount}>
+                    ₹{Number(item.amount || 0).toLocaleString('en-IN')}
+                  </Text>
                 </View>
-                <Text style={styles.summaryItemAmount}>
-                  ₹{itemAmt.toLocaleString('en-IN')}
-                </Text>
-              </View>
+
+                {/* Calculation breakdown if automatic km */}
+                {isAuto && (
+                  <View style={styles.itemCalcInfoRow}>
+                    <Ionicons name="navigate-outline" size={13} color="#0284C7" />
+                    <Text style={styles.itemCalcInfoText}>
+                      Outbound: {item.outboundDistanceKm || 0} km • Return: {item.returnDistanceKm || 0} km (Total:{' '}
+                      {item.totalQuantity || 0} km @ ₹{item.ratePerUnit || 0}/km)
+                    </Text>
+                  </View>
+                )}
+
+                {/* Notes if any */}
+                {Boolean(item.description) && (
+                  <Text style={styles.itemNotesText} numberOfLines={2}>
+                    “{item.description}”
+                  </Text>
+                )}
+
+                {/* Attachments preview & actions bar */}
+                <View style={styles.itemCardFooterRow}>
+                  {photoCount > 0 ? (
+                    <View style={styles.itemAttachCountBadge}>
+                      <Ionicons name="camera" size={13} color="#4F46E5" />
+                      <Text style={styles.itemAttachCountText}>
+                        {photoCount} proof photo{photoCount !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.noAttachNote}>No receipt attached</Text>
+                  )}
+
+                  <View style={styles.itemActionsWrap}>
+                    <TouchableOpacity
+                      style={styles.itemEditBtn}
+                      onPress={() => handleOpenEditItemModal(index)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="create-outline" size={15} color={COLORS.primary} />
+                      <Text style={styles.itemEditBtnText}>Edit</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.itemDeleteBtn}
+                      onPress={() => handleRemoveItem(index)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="trash-outline" size={15} color={COLORS.danger} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Card>
             );
-          })}
+          })
+        )}
 
-          <View style={styles.summaryDivider} />
-
-          <View style={styles.grandTotalRow}>
-            <Text style={styles.grandTotalLabel}>Grand Total</Text>
-            <Text style={styles.grandTotalValue}>
-              ₹{grandTotal.toLocaleString('en-IN')}
-            </Text>
-          </View>
+        {/* 4. General Notes */}
+        <Card style={styles.card}>
+          <Text style={styles.inputLabel}>General Claim Notes (Optional)</Text>
+          <TextInputField
+            placeholder="Brief overview of claim, purpose, destination, or approval details..."
+            value={generalDescription}
+            onChangeText={setGeneralDescription}
+            multiline
+            numberOfLines={2}
+          />
         </Card>
 
-        {/* Submit Action */}
+        {/* 5. Grand Total Card */}
+        {items.length > 0 && (
+          <Card style={styles.summaryCard}>
+            <View style={styles.grandTotalRow}>
+              <View>
+                <Text style={styles.grandTotalLabel}>Total New Claim</Text>
+                <Text style={styles.grandTotalSub}>
+                  {items.length} item{items.length !== 1 ? 's' : ''} to be submitted
+                </Text>
+              </View>
+              <Text style={styles.grandTotalValue}>
+                ₹{grandTotal.toLocaleString('en-IN')}
+              </Text>
+            </View>
+          </Card>
+        )}
+
+        {/* 6. Submit Button */}
         <View style={styles.submitContainer}>
           <PrimaryButton
-            title={
-              submitting
-                ? 'Submitting Expense...'
-                : `Submit Expense (₹${grandTotal.toLocaleString('en-IN')})`
-            }
+            title={submitting ? 'Submitting Expense...' : `Submit Expense Claim • ₹${grandTotal.toLocaleString('en-IN')}`}
             onPress={handleSubmit}
             loading={submitting}
+            disabled={submitting || items.length === 0}
+            leftIcon="checkmark-circle-outline"
+          />
+
+          <SecondaryButton
+            title="Cancel"
+            onPress={() => navigation.goBack()}
+            style={{ marginTop: SPACING.sm }}
             disabled={submitting}
-            icon="checkmark-circle-outline"
           />
         </View>
       </ScrollView>
@@ -1405,102 +1057,256 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       <DatePickerModal
         visible={datePickerVisible}
         onClose={() => setDatePickerVisible(false)}
-        selectedDate={expenseDate}
-        onSelectDate={setExpenseDate}
-        title="Select Expense Date"
+        onSelect={(date) => {
+          setExpenseDate(date);
+          setDatePickerVisible(false);
+        }}
+        initialDate={expenseDate}
       />
 
-      {/* Related Duty Picker Modal with "Oct 3" formatting */}
+      {/* Work / Duty Dropdown Picker Modal with short dates ("Oct 3 • WORK-1001...") */}
       <DropdownPickerModal
         visible={dutyPickerVisible}
         onClose={() => setDutyPickerVisible(false)}
-        items={duties.map((d) => {
-          const dateStr = formatDutyShortDate(d.dutyDate);
-          const code = d.dutyId || 'Work';
-          const title = d.machineName || d.workType || d.customerName || 'Service Duty';
-          const comp = d.company?.companyName || (d.dutyType === 'office' ? 'Office' : '');
-          return {
-            label: `${dateStr} • ${code} - ${title}${comp ? ` (${comp})` : ''}`,
-            subtitle: `${comp ? `${comp} • ` : ''}${d.customerName || 'General'}`,
-            value: String(d._id),
-            raw: d,
-          };
-        })}
+        title="Select Work / Duty Order"
+        searchPlaceholder="Search work ID, date, machine, company..."
+        items={duties.map((d) => ({
+          _id: d._id,
+          value: d._id,
+          label: `${formatDutyShortDate(d.dutyDate)} • ${d.dutyId || 'Work'} - ${d.machineName || d.workType || 'Duty'} (${d.company?.companyName || (d.dutyType === 'office' ? 'Office' : 'Client')})`,
+          subLabel: `${formatDate(d.dutyDate)} • ${d.company?.companyName || 'Office'} • ${d.customerName || ''}`,
+        }))}
         selectedValue={selectedDutyId}
         onSelect={(val) => {
-          handleSelectDuty(val);
+          const dutyId = typeof val === 'object' && val !== null ? val.value || val._id : val;
+          if (dutyId) handleSelectDuty(dutyId);
         }}
-        title="Select Related Work / Duty"
-        showAllOption={false}
-        searchPlaceholder="Search work code, machine, date..."
-      />
-
-      {/* Company Picker Modal */}
-      <DropdownPickerModal
-        visible={companyPickerVisible}
-        onClose={() => setCompanyPickerVisible(false)}
-        items={filteredCompanies.map((c) => ({
-          label: c.companyName + (c.location ? ` (${c.location})` : ''),
-          subtitle: c.companyType === 'office' ? 'Internal Office' : 'Client Site',
-          value: String(c._id),
-        }))}
-        selectedValue={selectedCompanyId}
-        onSelect={(val) => {
-          setSelectedCompanyId(val);
-          setCompanyPickerVisible(false);
-        }}
-        title={companyCategory === 'office' ? 'Select Office Location' : 'Select Client Company'}
-        showAllOption={false}
-        searchPlaceholder="Search company name or location..."
-      />
-
-      {/* Client Picker Modal */}
-      <DropdownPickerModal
-        visible={clientPickerVisible}
-        onClose={() => setClientPickerVisible(false)}
-        items={clients.map((c) => ({
-          label: `${c.clientName || c.name}${c.clientPhoneNumber || c.phoneNumber ? ` (${c.clientPhoneNumber || c.phoneNumber})` : ''}`,
-          subtitle: c.designation || 'Client Contact',
-          value: String(c._id),
-        }))}
-        selectedValue={selectedClientId}
-        onSelect={(val) => {
-          setSelectedClientId(val);
-          setClientPickerVisible(false);
-        }}
-        title="Select Client Contact Person"
-        showAllOption={false}
-        searchPlaceholder="Search contact name or phone..."
-      />
-
-      {/* Category Picker Modal */}
-      <DropdownPickerModal
-        visible={activeCategoryPickerIndex !== null}
-        onClose={() => setActiveCategoryPickerIndex(null)}
-        items={categories.map((c) => ({
-          label: `${c.name} (${c.calculationMode === 'automatic' ? `Auto ₹${c.ratePerUnit}/${c.unit}` : 'Manual'})`,
-          value: c._id,
-          raw: c,
-        }))}
-        selectedValue={
-          activeCategoryPickerIndex !== null ? items[activeCategoryPickerIndex]?.categoryId : ''
-        }
-        onSelect={(val) => {
-          const selectedCat = categories.find((c) => c._id === val);
-          if (selectedCat && activeCategoryPickerIndex !== null) {
-            handleSelectCategory(activeCategoryPickerIndex, selectedCat);
-          }
-        }}
-        title="Select Expense Category"
         showAllOption={false}
       />
 
-      {/* Lightbox Preview */}
+      {/* =========================================================================
+          ADD / EDIT EXPENSE ITEM MODAL (Touch-friendly, ZERO vertical page scrolling)
+         ========================================================================= */}
+      <Modal
+        visible={itemModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setItemModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.modalHeaderIconWrap}>
+                  <Ionicons name="receipt" size={18} color="#4F46E5" />
+                </View>
+                <Text style={styles.modalTitle}>
+                  {editingItemIndex !== null ? 'Edit Expense Item' : 'Add Expense Item'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setItemModalVisible(false)}
+                style={styles.modalCloseBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Category Chips */}
+              <Text style={styles.modalSectionLabel}>Select Category *</Text>
+              <View style={styles.categoryChipsRow}>
+                {categories.map((cat) => {
+                  const isSelected = modalCategoryId === cat._id;
+                  let iconName = 'pricetag';
+                  if (cat.name.includes('Travel') || cat.name.includes('Kilometer')) iconName = 'car';
+                  else if (cat.name.includes('Food')) iconName = 'fast-food';
+                  else if (cat.name.includes('Hotel') || cat.name.includes('Stay')) iconName = 'bed';
+                  else if (cat.name.includes('Others')) iconName = 'apps';
+
+                  return (
+                    <TouchableOpacity
+                      key={cat._id}
+                      style={[
+                        styles.catChip,
+                        isSelected && styles.catChipActive,
+                      ]}
+                      onPress={() => handleSelectModalCategory(cat)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={iconName}
+                        size={14}
+                        color={isSelected ? '#FFFFFF' : COLORS.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.catChipText,
+                          isSelected && styles.catChipTextActive,
+                        ]}
+                      >
+                        {cat.name}
+                      </Text>
+                      {cat.calculationMode === 'automatic' && (
+                        <View style={[styles.miniAutoBadge, isSelected && styles.miniAutoBadgeActive]}>
+                          <Text style={[styles.miniAutoBadgeText, isSelected && styles.miniAutoBadgeTextActive]}>
+                            Auto km
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Custom Title if Others */}
+              {modalCategoryName === 'Others' && (
+                <TextInputField
+                  label="Custom Expense Name / Title *"
+                  placeholder="e.g. Parking Fee, Toll, Courier, Tools"
+                  value={modalCustomTitle}
+                  onChangeText={setModalCustomTitle}
+                  leftIcon="pencil-outline"
+                />
+              )}
+
+              {/* Automatic Mode: Distances & Rate */}
+              {modalCalculationMode === 'automatic' ? (
+                <View style={styles.modalAutoBox}>
+                  <View style={styles.modalRateRow}>
+                    <Ionicons name="speedometer-outline" size={16} color="#0284C7" />
+                    <Text style={styles.modalRateText}>
+                      Rate: <Text style={styles.modalRateHighlight}>₹{modalRatePerUnit} / {modalUnit || 'km'}</Text>
+                    </Text>
+                  </View>
+
+                  <View style={styles.modalDistInputsRow}>
+                    <View style={{ flex: 1 }}>
+                      <TextInputField
+                        label="Outbound (km) *"
+                        placeholder="0"
+                        keyboardType="decimal-pad"
+                        value={modalOutboundDist}
+                        onChangeText={(val) => handleModalDistanceChange('out', val)}
+                        leftIcon="arrow-forward-outline"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <TextInputField
+                        label="Return (km) *"
+                        placeholder="0"
+                        keyboardType="decimal-pad"
+                        value={modalReturnDist}
+                        onChangeText={(val) => handleModalDistanceChange('ret', val)}
+                        leftIcon="arrow-back-outline"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.modalCalcTotalRow}>
+                    <Text style={styles.modalCalcTotalLabel}>
+                      Total: {(parseFloat(modalOutboundDist) || 0) + (parseFloat(modalReturnDist) || 0)} km
+                    </Text>
+                    <Text style={styles.modalCalcTotalAmount}>
+                      = ₹{Number(modalAmount || 0).toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <TextInputField
+                  label="Expense Amount (₹) *"
+                  placeholder="e.g. 250"
+                  keyboardType="numeric"
+                  value={modalAmount}
+                  onChangeText={setModalAmount}
+                  leftIcon="cash-outline"
+                />
+              )}
+
+              {/* Description / Notes */}
+              <TextInputField
+                label="Item Notes / Description (Optional)"
+                placeholder="e.g. Toll booth bill, lunch at site, courier receipt"
+                value={modalDescription}
+                onChangeText={setModalDescription}
+                multiline
+                numberOfLines={2}
+                leftIcon="document-text-outline"
+              />
+
+              {/* Proof Documents / Photos */}
+              <View style={styles.modalAttachHeader}>
+                <Text style={styles.modalSectionLabel}>Receipt / Proof Photos</Text>
+                <TouchableOpacity
+                  style={styles.modalAddPhotoBtn}
+                  onPress={handleAddModalAttachment}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="camera" size={14} color="#FFFFFF" />
+                  <Text style={styles.modalAddPhotoBtnText}>+ Attach Photo</Text>
+                </TouchableOpacity>
+              </View>
+
+              {modalLocalAttachments.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalPhotoScroll}>
+                  {modalLocalAttachments.map((uri, aIdx) => (
+                    <View key={aIdx} style={styles.modalThumbWrap}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setPreviewImageUri(uri);
+                          setPreviewTitle(`Receipt #${aIdx + 1}`);
+                          setPreviewModalVisible(true);
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Image source={{ uri }} style={styles.modalThumbImg} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.modalRemovePhotoBtn}
+                        onPress={() => handleRemoveModalAttachment(aIdx)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="close" size={12} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              ) : (
+                <Text style={styles.modalNoPhotosNote}>No photos attached yet (camera or gallery).</Text>
+              )}
+
+              {/* Done / Save Button */}
+              <View style={styles.modalActionsRow}>
+                <SecondaryButton
+                  title="Cancel"
+                  onPress={() => setItemModalVisible(false)}
+                  style={{ flex: 1 }}
+                />
+                <PrimaryButton
+                  title={editingItemIndex !== null ? 'Save Changes' : 'Add Item'}
+                  onPress={handleSaveModalItem}
+                  style={{ flex: 1 }}
+                  leftIcon="checkmark"
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Lightbox Preview Modal */}
       <ImageViewerModal
         visible={previewModalVisible}
         onClose={() => setPreviewModalVisible(false)}
         imageUri={previewImageUri}
         title={previewTitle}
+        subtitle="Receipt Verification"
       />
     </SafeAreaView>
   );
@@ -1513,48 +1319,20 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SPACING.md,
-    paddingBottom: SPACING.xl * 2,
-  },
-  entryModeTabBar: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-    backgroundColor: '#E2E8F0',
-    padding: 4,
-    borderRadius: RADIUS.lg,
-  },
-  entryModeTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: RADIUS.md,
-  },
-  entryModeTabActive: {
-    backgroundColor: COLORS.primary,
-    ...SHADOWS.sm,
-  },
-  entryModeTabText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  entryModeTabTextActive: {
-    color: '#FFFFFF',
+    paddingBottom: 40,
   },
   card: {
     marginBottom: SPACING.md,
+    padding: SPACING.md,
   },
   cardHeaderRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
     marginBottom: 4,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.text,
   },
@@ -1563,219 +1341,230 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: SPACING.sm,
   },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 6,
-    marginTop: 8,
-  },
-  assignedDetailsBox: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1.5,
-    borderColor: '#86EFAC',
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginTop: 6,
-    marginBottom: SPACING.sm,
-  },
-  assignedBoxHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#BBF7D0',
-  },
-  assignedBadge: {
+  workIdPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#DCFCE7',
+    gap: 4,
+    backgroundColor: COLORS.primary,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.full,
   },
-  assignedBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#15803D',
-  },
-  assignedBoxDate: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#166534',
-  },
-  assignedRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginVertical: 4,
-  },
-  assignedLabel: {
+  workIdPillText: {
+    color: '#FFFFFF',
     fontSize: 11,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
+    fontWeight: '800',
   },
-  assignedValue: {
-    fontSize: 13,
+  inputLabel: {
+    fontSize: 12,
     fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  pickerTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    gap: 8,
+    marginBottom: 6,
+  },
+  pickerTriggerSelected: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#F8FAFC',
+  },
+  pickerTriggerText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: COLORS.text,
   },
-  assignedMutedValue: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
+  pickerPlaceholder: {
+    color: COLORS.textMuted,
+    fontWeight: '400',
   },
-  assignedOfficeNotice: {
-    fontSize: 12,
-    color: '#0369A1',
-    fontWeight: '600',
-    flex: 1,
-  },
-  assignedBoxActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#BBF7D0',
-  },
-  changeWorkBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: RADIUS.sm,
-    backgroundColor: '#EEF2FF',
-  },
-  changeWorkBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  clearWorkBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: RADIUS.sm,
-    backgroundColor: '#FEE2E2',
-  },
-  clearWorkBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.danger,
-  },
-  typeSelectorRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  typePill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: RADIUS.md,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-  },
-  typePillActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-    ...SHADOWS.sm,
-  },
-  typePillText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  typePillTextActive: {
-    color: '#FFFFFF',
-  },
-  officeClientNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  assignedDetailsBox: {
     backgroundColor: '#F0F9FF',
     borderWidth: 1,
     borderColor: '#BAE6FD',
     borderRadius: RADIUS.md,
     padding: 10,
     marginTop: 8,
-    marginBottom: 4,
+    gap: 6,
   },
-  officeClientNoticeText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#0369A1',
-    fontWeight: '600',
+  assignedBoxHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0F2FE',
+    paddingBottom: 6,
+    marginBottom: 2,
   },
-  pickerTrigger: {
+  assignedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-    marginBottom: SPACING.xs,
+    gap: 4,
   },
-  pickerTriggerSelected: {
-    borderColor: '#86EFAC',
-    backgroundColor: '#F0FDF4',
+  assignedBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0369A1',
   },
-  pickerTriggerDisabled: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-    opacity: 0.7,
-  },
-  pickerTriggerText: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.text,
+  assignedBoxDate: {
+    fontSize: 11,
     fontWeight: '600',
+    color: COLORS.textSecondary,
   },
-  pickerPlaceholder: {
-    color: COLORS.textMuted,
-    fontWeight: '400',
+  assignedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  modeBadge: {
-    backgroundColor: '#EFF6FF',
+  assignedLabel: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  assignedValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+
+  // Previous Expenses
+  previousLoadingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+  },
+  previousLoadingText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  previousExpensesCard: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#C7D2FE',
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+  },
+  previousHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  previousHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#3730A3',
+  },
+  previousTotalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#4F46E5',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: RADIUS.full,
+    borderRadius: RADIUS.sm,
   },
-  modeBadgeText: {
+  previousTotalLabel: {
+    fontSize: 10,
+    color: '#E0E7FF',
+    fontWeight: '600',
+  },
+  previousTotalVal: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  previousSubNotice: {
     fontSize: 11,
-    color: COLORS.primary,
+    color: '#4B5563',
+    marginBottom: 8,
+  },
+  previousClaimItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.sm,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+    marginBottom: 6,
+  },
+  previousClaimTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  previousClaimCode: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  previousClaimDate: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  previousClaimAmount: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  previousItemsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  previousItemChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  previousItemChipText: {
+    fontSize: 10,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  previousProofBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  previousProofBadgeText: {
+    fontSize: 10,
+    color: '#4F46E5',
     fontWeight: '700',
   },
+
+  // Section Header
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SPACING.sm,
-    marginTop: SPACING.xs,
+    marginTop: 4,
   },
   sectionTitleWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     color: COLORS.text,
   },
@@ -1784,133 +1573,407 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: COLORS.primary,
-    paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: RADIUS.full,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
   },
   addItemBtnText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  itemCard: {
+
+  // Empty items
+  emptyItemsCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    borderRadius: RADIUS.md,
+    padding: SPACING.lg,
+    alignItems: 'center',
     marginBottom: SPACING.md,
   },
-  itemCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  emptyItemsIconWrap: {
+    backgroundColor: '#EEF2FF',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
-    marginBottom: SPACING.xs,
+    justifyContent: 'center',
+    marginBottom: SPACING.sm,
   },
-  itemBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADIUS.sm,
+  emptyItemsTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 4,
   },
-  itemBadgeText: {
+  emptyItemsSub: {
     fontSize: 12,
-    fontWeight: '700',
     color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: SPACING.md,
+    lineHeight: 18,
+    paddingHorizontal: 12,
   },
-  removeItemBtn: {
-    padding: 4,
-  },
-  autoCalcBox: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: RADIUS.md,
-    padding: SPACING.sm,
-    marginTop: 6,
-    marginBottom: 6,
-  },
-  rateRow: {
+  emptyItemsActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 6,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: RADIUS.md,
   },
-  rateText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
+  emptyItemsActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  rateHighlight: {
-    fontWeight: '800',
-    color: COLORS.primary,
+
+  // Item Summary Cards
+  itemSummaryCard: {
+    marginBottom: SPACING.sm,
+    padding: SPACING.md,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  distInputRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  distInputCol: {
-    flex: 1,
-  },
-  autoResultRow: {
+  itemSummaryTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  itemCategoryBadgeRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    padding: 10,
+    gap: 6,
+    marginBottom: 4,
+  },
+  categoryPill: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: RADIUS.sm,
-    marginTop: 4,
   },
-  autoResultLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
+  categoryPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#4F46E5',
   },
-  autoResultValue: {
+  modePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  modePillAuto: {
+    backgroundColor: '#E0F2FE',
+  },
+  modePillManual: {
+    backgroundColor: '#F1F5F9',
+  },
+  modePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  modePillTextAuto: {
+    color: '#0284C7',
+  },
+  modePillTextManual: {
+    color: '#64748B',
+  },
+  itemSummaryTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  itemSummaryAmount: {
     fontSize: 16,
     fontWeight: '900',
     color: COLORS.primary,
   },
-  attachmentsSection: {
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+  itemCalcInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0F9FF',
+    padding: 6,
+    borderRadius: RADIUS.sm,
+    marginTop: 6,
   },
-  attachHeaderRow: {
+  itemCalcInfoText: {
+    fontSize: 11,
+    color: '#0369A1',
+    fontWeight: '600',
+    flex: 1,
+  },
+  itemNotesText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 6,
+  },
+  itemCardFooterRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginTop: 8,
+    paddingTop: 8,
   },
-  attachTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  addAttachBtn: {
+  itemAttachCountBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  addAttachBtnText: {
-    fontSize: 12,
+  itemAttachCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4F46E5',
+  },
+  noAttachNote: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+  },
+  itemActionsWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  itemEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+  },
+  itemEditBtnText: {
+    fontSize: 11,
     fontWeight: '700',
     color: COLORS.primary,
   },
-  attachScroll: {
-    flexDirection: 'row',
-    marginTop: 6,
+  itemDeleteBtn: {
+    backgroundColor: '#FEF2F2',
+    padding: 5,
+    borderRadius: RADIUS.sm,
   },
-  attachThumbWrap: {
+
+  // Summary Card
+  summaryCard: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+  },
+  grandTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  grandTotalLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  grandTotalSub: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  grandTotalValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: COLORS.primary,
+  },
+  submitContainer: {
+    marginTop: SPACING.xs,
+  },
+
+  // =========================================================================
+  // MODAL STYLING
+  // =========================================================================
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    maxHeight: '90%',
+    paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalHeaderIconWrap: {
+    backgroundColor: '#EEF2FF',
+    padding: 6,
+    borderRadius: RADIUS.sm,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalScrollContent: {
+    padding: SPACING.md,
+  },
+  modalSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+  },
+  categoryChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: SPACING.md,
+  },
+  catChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: RADIUS.full,
+  },
+  catChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  catChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  catChipTextActive: {
+    color: '#FFFFFF',
+  },
+  miniAutoBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  miniAutoBadgeActive: {
+    backgroundColor: '#1E3A8A',
+  },
+  miniAutoBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  miniAutoBadgeTextActive: {
+    color: '#FFFFFF',
+  },
+  modalAutoBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  modalRateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  modalRateText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  modalRateHighlight: {
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  modalDistInputsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  modalCalcTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    padding: 8,
+    borderRadius: RADIUS.sm,
+    marginTop: 4,
+  },
+  modalCalcTotalLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  modalCalcTotalAmount: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: COLORS.primary,
+  },
+  modalAttachHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  modalAddPhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+  },
+  modalAddPhotoBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  modalPhotoScroll: {
+    flexDirection: 'row',
+    marginBottom: SPACING.md,
+    marginTop: 4,
+  },
+  modalThumbWrap: {
     position: 'relative',
     marginRight: 10,
   },
-  attachThumb: {
-    width: 60,
-    height: 60,
+  modalThumbImg: {
+    width: 64,
+    height: 64,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#CBD5E1',
   },
-  removeAttachBadge: {
+  modalRemovePhotoBtn: {
     position: 'absolute',
-    top: -5,
-    right: -5,
+    top: -4,
+    right: -4,
     backgroundColor: COLORS.danger,
     width: 18,
     height: 18,
@@ -1918,66 +1981,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  noAttachText: {
+  modalNoPhotosNote: {
     fontSize: 11,
     color: COLORS.textMuted,
     fontStyle: 'italic',
-    marginTop: 2,
+    marginBottom: SPACING.md,
   },
-  summaryCard: {
-    backgroundColor: '#FAFAF9',
-    borderColor: '#E7E5E4',
-    marginBottom: SPACING.lg,
-  },
-  summaryTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginBottom: SPACING.sm,
-  },
-  summaryRow: {
+  modalActionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 5,
-  },
-  summaryItemName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  summaryItemSub: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  summaryItemAmount: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: '#E7E5E4',
-    marginVertical: SPACING.sm,
-  },
-  grandTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 4,
-  },
-  grandTotalLabel: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  grandTotalValue: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: COLORS.primary,
-  },
-  submitContainer: {
-    marginTop: SPACING.xs,
+    gap: SPACING.md,
+    marginTop: SPACING.sm,
   },
 });
 

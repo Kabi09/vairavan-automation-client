@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import dutyApi from '../../api/dutyApi';
+import expenseApi from '../../api/expenseApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
@@ -34,6 +35,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   const [error, setError] = useState('');
   const [resolvedCheckInAddress, setResolvedCheckInAddress] = useState('');
   const [resolvedCheckOutAddress, setResolvedCheckOutAddress] = useState('');
+  const [dutyExpenses, setDutyExpenses] = useState([]);
 
   // Lightbox preview modal state
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
@@ -52,6 +54,26 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           if (res.data?.duty) {
             const dutyRecord = res.data.duty;
             setDuty(dutyRecord);
+
+            // Fetch expenses for this duty
+            try {
+              const expApiCall = isAdmin ? expenseApi.getAllExpenses : expenseApi.getMyExpenses;
+              const expRes = await expApiCall({ dutyId: dutyRecord._id || dutyRecord.dutyId, limit: 100 });
+              const expList = expRes.data?.expenses || expRes.expenses || [];
+              if (expList.length > 0) {
+                setDutyExpenses(expList);
+              } else if (dutyRecord.expenses && Array.isArray(dutyRecord.expenses)) {
+                setDutyExpenses(dutyRecord.expenses);
+              } else {
+                setDutyExpenses([]);
+              }
+            } catch {
+              if (dutyRecord.expenses && Array.isArray(dutyRecord.expenses)) {
+                setDutyExpenses(dutyRecord.expenses);
+              } else {
+                setDutyExpenses([]);
+              }
+            }
 
             // Resolve Check-In address (or legacy location)
             const checkInLoc = dutyRecord.checkInLocation?.latitude
@@ -87,7 +109,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
       };
 
       fetchDuty();
-    }, [dutyId])
+    }, [dutyId, isAdmin])
   );
 
   if (loading) {
@@ -162,6 +184,20 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
     setPreviewIsSignature(true);
     setPreviewModalVisible(true);
   };
+
+  const handleOpenExpensePhotoPreview = (url, itemName) => {
+    setPreviewImageUri(url);
+    setPreviewTitle(itemName ? `Expense Proof: ${itemName}` : 'Expense Bill / Proof');
+    setPreviewSubtitle(displayDutyId ? `Work #${displayDutyId}` : '');
+    setPreviewTimestamp('');
+    setPreviewIsSignature(false);
+    setPreviewModalVisible(true);
+  };
+
+  const totalExpenseAmount = dutyExpenses.reduce(
+    (sum, exp) => sum + (Number(exp.totalAmount) || Number(exp.amount) || 0),
+    0
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -512,15 +548,142 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           </Card>
         ) : null}
 
-        {/* Quick Add Expense for this Work */}
-        <TouchableOpacity
-          style={styles.addExpenseBtn}
-          onPress={() => navigation.navigate('ExpenseForm', { duty })}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="receipt-outline" size={18} color="#FFFFFF" />
-          <Text style={styles.addExpenseBtnText}>+ Add Expense for this Work</Text>
-        </TouchableOpacity>
+        {/* Expenses & Claims Section */}
+        <Card style={styles.sectionCard}>
+          <View style={styles.expenseSectionHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="receipt" size={18} color={COLORS.primary} />
+              <Text style={styles.sectionTitle}>Expenses & Claims</Text>
+            </View>
+            <View style={styles.expenseHeaderBadges}>
+              {dutyExpenses.length > 0 && (
+                <View style={styles.expenseCountBadge}>
+                  <Text style={styles.expenseCountText}>{dutyExpenses.length} Claims</Text>
+                </View>
+              )}
+              {totalExpenseAmount > 0 && (
+                <View style={styles.expenseTotalBadge}>
+                  <Text style={styles.expenseTotalText}>₹{totalExpenseAmount.toLocaleString('en-IN')}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {dutyExpenses.length === 0 ? (
+            <View style={styles.emptyExpenseBox}>
+              <Ionicons name="receipt-outline" size={30} color={COLORS.textLight} />
+              <Text style={styles.emptyExpenseText}>No expenses or claims submitted yet for this work.</Text>
+            </View>
+          ) : (
+            <View style={styles.expensesList}>
+              {dutyExpenses.map((exp, expIdx) => {
+                const claimId = exp.expenseId || `EXP-${expIdx + 1}`;
+                const expDate = exp.expenseDate ? formatDate(exp.expenseDate) : '';
+                const items = exp.items && exp.items.length > 0 ? exp.items : [
+                  {
+                    category: exp.category || 'other',
+                    customCategory: exp.customCategory || '',
+                    amount: exp.amount || exp.totalAmount || 0,
+                    description: exp.description || '',
+                    billProof: exp.billProof || null,
+                  }
+                ];
+
+                return (
+                  <View key={exp._id || `exp-${expIdx}`} style={styles.expenseClaimCard}>
+                    <View style={styles.expenseClaimHeader}>
+                      <View>
+                        <Text style={styles.expenseClaimId}>{claimId}</Text>
+                        {expDate ? <Text style={styles.expenseClaimDate}>{expDate}</Text> : null}
+                      </View>
+                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                        <Text style={styles.expenseClaimTotal}>
+                          ₹{(Number(exp.totalAmount) || Number(exp.amount) || 0).toLocaleString('en-IN')}
+                        </Text>
+                        {exp.status ? <StatusBadge status={exp.status} /> : null}
+                      </View>
+                    </View>
+
+                    {/* Itemized lines */}
+                    <View style={styles.expenseItemsTable}>
+                      {items.map((item, itemIdx) => {
+                        const itemCat = item.customCategory || item.category || 'Expense';
+                        const calcText = item.distanceKm && item.ratePerKm
+                          ? `${item.distanceKm} km × ₹${item.ratePerKm}/km`
+                          : null;
+                        const proofImg = item.billProof?.url || (typeof item.billProof === 'string' ? item.billProof : null);
+
+                        return (
+                          <View key={`item-${itemIdx}`} style={styles.expenseItemRow}>
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <View style={styles.itemBullet} />
+                                <Text style={styles.expenseItemCat}>{itemCat}</Text>
+                              </View>
+                              {calcText && <Text style={styles.expenseItemCalc}>{calcText}</Text>}
+                              {item.description ? <Text style={styles.expenseItemDesc}>{item.description}</Text> : null}
+                            </View>
+                            <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                              <Text style={styles.expenseItemAmount}>₹{(Number(item.amount) || 0).toLocaleString('en-IN')}</Text>
+                              {proofImg && (
+                                <TouchableOpacity
+                                  style={styles.proofThumbnailBtn}
+                                  onPress={() => handleOpenExpensePhotoPreview(proofImg, itemCat)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Image source={{ uri: proofImg }} style={styles.proofThumbnail} />
+                                  <View style={styles.proofBadgeOverlay}>
+                                    <Ionicons name="eye" size={9} color="#FFFFFF" />
+                                    <Text style={styles.proofBadgeText}>Proof</Text>
+                                  </View>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* Global proofs if any attached at claim level */}
+                    {Array.isArray(exp.proofs) && exp.proofs.length > 0 && (
+                      <View style={styles.claimProofsRow}>
+                        <Text style={styles.claimProofsLabel}>Attachments:</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                          {exp.proofs.map((proof, pIdx) => {
+                            const pUrl = proof.url || (typeof proof === 'string' ? proof : null);
+                            if (!pUrl) return null;
+                            return (
+                              <TouchableOpacity
+                                key={`proof-${pIdx}`}
+                                style={styles.proofThumbnailBtn}
+                                onPress={() => handleOpenExpensePhotoPreview(pUrl, `Attachment #${pIdx + 1}`)}
+                                activeOpacity={0.8}
+                              >
+                                <Image source={{ uri: pUrl }} style={styles.proofThumbnail} />
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Action button to add / add more expenses */}
+          <TouchableOpacity
+            style={styles.addExpenseBtn}
+            onPress={() => navigation.navigate('ExpenseForm', { duty })}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.addExpenseBtnText}>
+              {dutyExpenses.length > 0 ? '+ Add More Expenses for this Work' : '+ Add Expense for this Work'}
+            </Text>
+          </TouchableOpacity>
+        </Card>
 
         {/* Action Buttons: Admin has Edit + Delete, Employee has Edit */}
         {(canEdit || canDelete) && (
@@ -926,6 +1089,188 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
     paddingLeft: 26,
+  },
+  addExpenseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: RADIUS.md,
+    marginTop: 10,
+  },
+  addExpenseBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  expenseSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  expenseHeaderBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  expenseCountBadge: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  expenseCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  expenseTotalBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  expenseTotalText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  emptyExpenseBox: {
+    alignItems: 'center',
+    paddingVertical: 18,
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.md,
+    marginVertical: 6,
+    gap: 6,
+  },
+  emptyExpenseText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  expensesList: {
+    gap: 10,
+    marginVertical: 6,
+  },
+  expenseClaimCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+  },
+  expenseClaimHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingBottom: 8,
+    marginBottom: 8,
+  },
+  expenseClaimId: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  expenseClaimDate: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  expenseClaimTotal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#047857',
+  },
+  expenseItemsTable: {
+    gap: 8,
+  },
+  expenseItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 4,
+  },
+  itemBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
+  },
+  expenseItemCat: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    textTransform: 'capitalize',
+  },
+  expenseItemCalc: {
+    fontSize: 11,
+    color: '#6366F1',
+    fontWeight: '600',
+    marginLeft: 12,
+    marginTop: 1,
+  },
+  expenseItemDesc: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginLeft: 12,
+    marginTop: 2,
+  },
+  expenseItemAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  proofThumbnailBtn: {
+    position: 'relative',
+    marginTop: 4,
+    borderRadius: 6,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  proofThumbnail: {
+    width: 44,
+    height: 44,
+    borderRadius: 5,
+  },
+  proofBadgeOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 1,
+    gap: 2,
+  },
+  proofBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '700',
+  },
+  claimProofsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  claimProofsLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
   },
 });
 

@@ -3,6 +3,7 @@ import Duty from '../models/Duty.js';
 import Company from '../models/Company.js';
 import Client from '../models/Client.js';
 import User from '../models/User.js';
+import Expense from '../models/Expense.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -21,6 +22,34 @@ export const formatTimeToHHmm = (date = new Date()) => {
     hour12: false,
   });
   return formatter.format(d);
+};
+
+/**
+ * Helper to attach related expense claims to duties
+ */
+const attachExpensesToDuties = async (duties) => {
+  if (!Array.isArray(duties) || duties.length === 0) return [];
+  const dutyIds = duties.map((d) => d._id);
+  const dutyCodes = duties.map((d) => d.dutyId).filter(Boolean);
+
+  const expenses = await Expense.find({
+    $or: [
+      { duty: { $in: dutyIds } },
+      ...(dutyCodes.length > 0 ? [{ relatedDuty: { $in: dutyCodes } }] : []),
+    ],
+  }).sort({ createdAt: -1 });
+
+  return duties.map((d) => {
+    const dObj = d.toObject ? d.toObject() : { ...d };
+    const matched = expenses.filter(
+      (e) =>
+        (e.duty && String(e.duty) === String(d._id)) ||
+        (d.dutyId && e.relatedDuty === d.dutyId)
+    );
+    dObj.expenses = matched;
+    dObj.totalExpenseAmount = matched.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
+    return dObj;
+  });
 };
 
 /**
@@ -511,8 +540,10 @@ export const getMyDuties = asyncHandler(async (req, res) => {
     Duty.countDocuments(filter),
   ]);
 
+  const enrichedDuties = await attachExpensesToDuties(duties);
+
   return ApiResponse.success(res, 200, 'Duty reports retrieved successfully', {
-    duties,
+    duties: enrichedDuties,
     pagination: {
       total,
       page,
@@ -549,7 +580,19 @@ export const getDutyById = asyncHandler(async (req, res) => {
     throw ApiError.forbidden('You are not authorized to view this duty report');
   }
 
-  return ApiResponse.success(res, 200, 'Duty report retrieved successfully', { duty });
+  // Find all expenses associated with this duty
+  const expenses = await Expense.find({
+    $or: [
+      { duty: duty._id },
+      ...(duty.dutyId ? [{ relatedDuty: duty.dutyId }] : []),
+    ],
+  }).sort({ createdAt: -1 });
+
+  const dutyObj = duty.toObject ? duty.toObject() : { ...duty };
+  dutyObj.expenses = expenses;
+  dutyObj.totalExpenseAmount = expenses.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
+
+  return ApiResponse.success(res, 200, 'Duty report retrieved successfully', { duty: dutyObj, expenses });
 });
 
 /**
@@ -791,8 +834,10 @@ export const getAllDuties = asyncHandler(async (req, res) => {
     Duty.countDocuments(filter),
   ]);
 
+  const enrichedDuties = await attachExpensesToDuties(duties);
+
   return ApiResponse.success(res, 200, 'Duty reports retrieved successfully', {
-    duties,
+    duties: enrichedDuties,
     pagination: {
       total,
       page,

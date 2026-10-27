@@ -113,6 +113,12 @@ const expenseSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    relatedDuty: {
+      type: String,
+      default: '',
+      trim: true,
+      index: true,
+    },
     generalDescription: {
       type: String,
       default: '',

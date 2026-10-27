@@ -492,6 +492,43 @@ export const exportDutiesToPDF = async ({
               `</div>`
             : '';
 
+        const expenseList = Array.isArray(d.expenses) ? d.expenses : [];
+        const totalExp = d.totalExpenseAmount !== undefined ? d.totalExpenseAmount : expenseList.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
+        let expensesHtml = '';
+        if (expenseList.length > 0 || totalExp > 0) {
+          expensesHtml = `
+            <div style="margin-top: 8px; padding: 8px; background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <strong style="color: #3730A3; font-size: 11px;">💰 Expenses & Claims (${expenseList.length} claim${expenseList.length !== 1 ? 's' : ''}):</strong>
+                <strong style="color: #4F46E5; font-size: 12px;">Total: ₹${Number(totalExp).toLocaleString('en-IN')}</strong>
+              </div>
+              ${expenseList.map((exp) => {
+                const itemsStr = (exp.items || []).map(it => {
+                  const calc = it.calculationMode === 'automatic'
+                    ? ` (${it.totalDistance || ((it.outboundDistance||0)+(it.returnDistance||0))} km @ ₹${it.ratePerUnit || 0}/km)`
+                    : '';
+                  const desc = it.description ? ` - ${escapeHtml(it.description)}` : '';
+                  const title = it.customTitle ? ` (${escapeHtml(it.customTitle)})` : '';
+                  return `• <strong>${escapeHtml(it.categoryName)}${title}</strong>: ₹${Number(it.amount||0).toLocaleString('en-IN')}${calc}${desc}`;
+                }).join('<br/>');
+
+                const expProofList = (exp.items || []).flatMap(it => it.attachments || []);
+                const expProofHtml = expProofList.slice(0, 4).map(att =>
+                  `<img src="${escapeHtml(typeof att === 'string' ? att : att.url)}" style="width: 50px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #c7d2fe; margin-right: 4px; margin-top: 3px;" loading="lazy" />`
+                ).join('');
+
+                return `
+                  <div style="font-size: 10px; color: #1e1b4b; padding: 4px 0; border-top: 1px dashed #c7d2fe;">
+                    <div style="font-weight: 700; color: #4338CA;">Claim #${escapeHtml(exp.expenseId || 'EXP')} • ₹${Number(exp.grandTotal||0).toLocaleString('en-IN')} ${expProofList.length > 0 ? `(${expProofList.length} receipt proof${expProofList.length !== 1 ? 's' : ''})` : ''}</div>
+                    <div style="padding-left: 6px; margin-top: 2px;">${itemsStr}</div>
+                    ${expProofHtml ? `<div style="margin-top: 3px; padding-left: 6px;">${expProofHtml}</div>` : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+        }
+
         return `
           <div class="duty-card">
             <div class="card-header">
@@ -526,6 +563,7 @@ export const exportDutiesToPDF = async ({
 
             ${featuresHtml}
             ${manpowerHtml}
+            ${expensesHtml}
 
             <div class="description-box">
               <strong>Work Performed / Observations:</strong><br/>
@@ -777,6 +815,11 @@ export const exportDutiesToExcel = async ({
       'Signature Timestamp',
       'Customer Signature URL',
       'Proof Photos URLs',
+      'Total Expenses (INR)',
+      'Expense Claims Count',
+      'Expense Items Breakdown',
+      'Expense Proof Photos Count',
+      'Expense Proof Photos URLs',
       'Record Created At (IST)',
     ];
 
@@ -886,6 +929,19 @@ export const exportDutiesToExcel = async ({
           })
         : '';
 
+      const expList = Array.isArray(d.expenses) ? d.expenses : [];
+      const totalExpAmt = d.totalExpenseAmount !== undefined ? d.totalExpenseAmount : expList.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
+      const expClaimsCount = expList.length;
+      const expItemsBreakdown = expList.flatMap((e) => (e.items || []).map((it) => {
+        const dist = it.calculationMode === 'automatic'
+          ? ` (${it.totalDistance || ((it.outboundDistance || 0) + (it.returnDistance || 0))}km @ Rs.${it.ratePerUnit || 0}/km)`
+          : '';
+        return `${it.categoryName}${it.customTitle ? ` - ${it.customTitle}` : ''}: Rs.${it.amount || 0}${dist}${it.description ? ` [${it.description}]` : ''}`;
+      })).join(' | ');
+      const expProofPhotos = expList.flatMap((e) => (e.items || []).flatMap((it) => (it.attachments || []).map((a) => (typeof a === 'string' ? a : a.url)))).filter(Boolean);
+      const expProofCount = expProofPhotos.length;
+      const expProofUrls = expProofPhotos.join(' | ');
+
       return [
         index + 1,
         escapeCsv(dutyId),
@@ -914,6 +970,11 @@ export const exportDutiesToExcel = async ({
         escapeCsv(sigTime),
         escapeCsv(signatureUrl),
         escapeCsv(photos),
+        totalExpAmt,
+        expClaimsCount,
+        escapeCsv(expItemsBreakdown),
+        expProofCount,
+        escapeCsv(expProofUrls),
         escapeCsv(createdAtIST),
       ].join(',');
     });
@@ -1706,14 +1767,22 @@ export const exportExpensesToPDF = async ({
   }
 
   try {
-    const totalAmount = expenses.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
-    const totalItemsCount = expenses.reduce((sum, e) => sum + (e.items?.length || 0), 0);
-    const totalProofPhotos = expenses.reduce(
-      (sum, e) =>
-        sum +
-        (e.items || []).reduce((itemSum, it) => itemSum + (it.attachments?.length || 0), 0),
-      0
-    );
+    const getExpTotal = (e) => Number(e.grandTotal ?? e.totalAmount ?? e.amount ?? 0);
+    const totalAmount = expenses.reduce((sum, e) => sum + getExpTotal(e), 0);
+    const totalItemsCount = expenses.reduce((sum, e) => sum + (e.items?.length || 1), 0);
+    const totalProofPhotos = expenses.reduce((sum, e) => {
+      const itemsList = e.items && e.items.length > 0 ? e.items : [e];
+      const itemsProofs = itemsList.reduce((iSum, it) => {
+        const count = Array.isArray(it.attachments)
+          ? it.attachments.length
+          : it.billProof
+          ? 1
+          : 0;
+        return iSum + count;
+      }, 0);
+      const globalProofs = Array.isArray(e.proofs) ? e.proofs.length : 0;
+      return sum + itemsProofs + globalProofs;
+    }, 0);
 
     const rowsHtml = expenses
       .map((e, index) => {
@@ -1738,25 +1807,37 @@ export const exportExpensesToPDF = async ({
         const machine = escapeHtml(e.duty?.machineName || '');
 
         // Items Breakdown
-        const itemsHtml = (e.items || [])
+        const rawItems = (e.items && e.items.length > 0) ? e.items : [
+          {
+            categoryName: e.category,
+            customTitle: e.customCategory,
+            amount: e.amount || e.totalAmount || 0,
+            description: e.description || '',
+            attachments: e.billProof ? [e.billProof] : (e.proofs || []),
+          }
+        ];
+
+        const itemsHtml = rawItems
           .map((it, iIdx) => {
-            const isOthers = it.categoryName === 'Others';
-            const customTitle = it.customTitle || it.customCategoryName || '';
-            const itemTitle = isOthers && customTitle ? `Others: ${customTitle}` : (customTitle ? `${it.categoryName} (${customTitle})` : it.categoryName || `Item #${iIdx + 1}`);
+            const isOthers = it.categoryName === 'Others' || it.category === 'other';
+            const customTitle = it.customTitle || it.customCategoryName || it.customCategory || '';
+            const rawCat = it.categoryName || it.category || `Item #${iIdx + 1}`;
+            const itemTitle = isOthers && customTitle ? `Others: ${customTitle}` : (customTitle ? `${rawCat} (${customTitle})` : rawCat);
 
             let calcText = '';
-            if (it.calculationMode === 'automatic') {
+            if (it.calculationMode === 'automatic' || (it.distanceKm && it.ratePerKm)) {
               const out = it.outboundDistance ?? it.outboundDistanceKm ?? 0;
               const ret = it.returnDistance ?? it.returnDistanceKm ?? 0;
-              const tot = it.totalDistance || it.quantity || (out + ret);
-              const rate = it.ratePerUnit || it.appliedRate || 0;
+              const tot = it.distanceKm || it.totalDistance || it.quantity || (out + ret);
+              const rate = it.ratePerKm || it.ratePerUnit || it.appliedRate || 0;
               const unit = it.unit || 'km';
-              calcText = `Outbound: ${out} km • Return: ${ret} km • Total: ${tot} ${unit} @ ₹${rate}/${unit}`;
+              calcText = tot && rate ? `Distance: ${tot} ${unit} @ ₹${rate}/${unit}` : '';
             }
 
             const itemDesc = it.description ? escapeHtml(it.description.trim()) : '';
-            const photoCount = Array.isArray(it.attachments) ? it.attachments.length : 0;
-            const amtStr = (it.amount || 0).toLocaleString('en-IN');
+            const proofUrl = it.billProof?.url || (typeof it.billProof === 'string' ? it.billProof : null);
+            const photoCount = Array.isArray(it.attachments) ? it.attachments.length : (proofUrl ? 1 : 0);
+            const amtStr = (Number(it.amount) || 0).toLocaleString('en-IN');
 
             return `
               <div class="item-row">
@@ -1773,7 +1854,7 @@ export const exportExpensesToPDF = async ({
           .join('');
 
         const generalDesc = e.generalDescription ? escapeHtml(e.generalDescription.trim()) : '';
-        const grandTotalStr = (e.grandTotal || 0).toLocaleString('en-IN');
+        const grandTotalStr = getExpTotal(e).toLocaleString('en-IN');
 
         return `
           <tr>
@@ -1802,12 +1883,13 @@ export const exportExpensesToPDF = async ({
             </td>
             <td style="text-align: right;">
               <strong style="font-size: 12.5px; color: #1e40af;">₹${grandTotalStr}</strong>
-              <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">${e.items?.length || 0} item(s)</div>
+              <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">${rawItems.length} item(s)</div>
             </td>
           </tr>
         `;
       })
       .join('');
+
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -2071,32 +2153,51 @@ export const exportExpensesToExcel = async ({
       const clientName = e.client?.clientName || e.client?.name || '';
       const clientPhone = e.client?.clientPhoneNumber || e.client?.phoneNumber || '';
       const dutyCode = e.duty?.dutyId || e.relatedDuty || '';
-      const totalPhotos = (e.items || []).reduce((acc, it) => acc + (it.attachments?.length || 0), 0);
+      const rawItems = (e.items && e.items.length > 0) ? e.items : [
+        {
+          categoryName: e.category,
+          customTitle: e.customCategory,
+          amount: e.amount || e.totalAmount || 0,
+          description: e.description || '',
+          attachments: e.billProof ? [e.billProof] : (e.proofs || []),
+        }
+      ];
 
-      const itemsBreakdownStr = (e.items || [])
+      const totalPhotos = rawItems.reduce((acc, it) => {
+        const count = Array.isArray(it.attachments)
+          ? it.attachments.length
+          : it.billProof
+          ? 1
+          : 0;
+        return acc + count;
+      }, 0) + (Array.isArray(e.proofs) ? e.proofs.length : 0);
+
+      const itemsBreakdownStr = rawItems
         .map((it, iIdx) => {
-          const isOthers = it.categoryName === 'Others';
-          const customTitle = it.customTitle || it.customCategoryName || '';
-          const cat = isOthers && customTitle ? `Others: ${customTitle}` : (customTitle ? `${it.categoryName} (${customTitle})` : it.categoryName);
+          const isOthers = it.categoryName === 'Others' || it.category === 'other';
+          const customTitle = it.customTitle || it.customCategoryName || it.customCategory || '';
+          const rawCat = it.categoryName || it.category || `Item #${iIdx + 1}`;
+          const cat = isOthers && customTitle ? `Others: ${customTitle}` : (customTitle ? `${rawCat} (${customTitle})` : rawCat);
 
           let calc = '';
-          if (it.calculationMode === 'automatic') {
+          if (it.calculationMode === 'automatic' || (it.distanceKm && it.ratePerKm)) {
             const out = it.outboundDistance ?? it.outboundDistanceKm ?? 0;
             const ret = it.returnDistance ?? it.returnDistanceKm ?? 0;
-            const tot = it.totalDistance || it.quantity || (out + ret);
-            const rate = it.ratePerUnit || it.appliedRate || 0;
+            const tot = it.distanceKm || it.totalDistance || it.quantity || (out + ret);
+            const rate = it.ratePerKm || it.ratePerUnit || it.appliedRate || 0;
             const unit = it.unit || 'km';
-            calc = ` (Out: ${out}km, Ret: ${ret}km, Total: ${tot}${unit} @ Rs.${rate}/${unit})`;
+            calc = tot && rate ? ` (Distance: ${tot}${unit} @ Rs.${rate}/${unit})` : '';
           }
-          const amt = it.amount || 0;
+          const amt = Number(it.amount) || 0;
           return `[#${iIdx + 1}] ${cat}${calc}: Rs.${amt}`;
         })
         .join(' | ');
 
-      const itemsNotesStr = (e.items || [])
+      const itemsNotesStr = rawItems
         .map((it, iIdx) => {
           const desc = it.description ? it.description.trim() : '';
-          const photoCount = it.attachments?.length || 0;
+          const proofUrl = it.billProof?.url || (typeof it.billProof === 'string' ? it.billProof : null);
+          const photoCount = Array.isArray(it.attachments) ? it.attachments.length : (proofUrl ? 1 : 0);
           const extras = [];
           if (desc) extras.push(`Note: "${desc}"`);
           if (photoCount > 0) extras.push(`${photoCount} photo(s)`);
@@ -2106,6 +2207,7 @@ export const exportExpensesToExcel = async ({
         .join(' | ');
 
       const submittedAtStr = e.createdAt ? `${formatDate(e.createdAt)} ${formatTimeIST(e.createdAt)}` : '';
+      const expTotal = Number(e.grandTotal ?? e.totalAmount ?? e.amount ?? 0);
 
       return [
         index + 1,
@@ -2120,12 +2222,12 @@ export const exportExpensesToExcel = async ({
         escapeCsv(clientName),
         escapeCsv(clientPhone),
         escapeCsv(dutyCode),
-        e.items?.length || 0,
+        rawItems.length,
         escapeCsv(itemsBreakdownStr),
         escapeCsv(itemsNotesStr),
         escapeCsv(e.generalDescription || ''),
         totalPhotos,
-        e.grandTotal || 0,
+        expTotal,
         escapeCsv(submittedAtStr),
       ].join(',');
     });

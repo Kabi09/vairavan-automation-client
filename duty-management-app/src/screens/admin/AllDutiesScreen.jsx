@@ -179,6 +179,15 @@ export const AllDutiesScreen = ({ route, navigation }) => {
     setPreviewModalVisible(true);
   };
 
+  const handleOpenExpensePhotoPreview = (url, itemName) => {
+    setPreviewImageUri(url);
+    setPreviewTitle(itemName ? `Expense Proof: ${itemName}` : 'Expense Bill / Proof');
+    setPreviewSubtitle(selectedDuty?.dutyId ? `Duty #${selectedDuty.dutyId}` : '');
+    setPreviewTimestamp('');
+    setPreviewIsSignature(false);
+    setPreviewModalVisible(true);
+  };
+
   // Load filter lists (employees and companies)
   const loadFilterData = useCallback(async () => {
     try {
@@ -451,6 +460,15 @@ export const AllDutiesScreen = ({ route, navigation }) => {
             <Ionicons name="time-outline" size={12} color={COLORS.textMuted} />{' '}
             {formatTime(item.inTime)} - {formatTime(item.outTime)}
           </Text>
+
+          {item.totalExpenseAmount > 0 ? (
+            <View style={styles.cardExpenseBadge}>
+              <Ionicons name="receipt" size={11} color="#047857" />
+              <Text style={styles.cardExpenseBadgeText}>
+                ₹{Number(item.totalExpenseAmount).toLocaleString('en-IN')}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Admin Quick Action Buttons */}
@@ -924,6 +942,90 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
+                </View>
+              )}
+
+              {/* Linked Expenses & Claims */}
+              {selectedDuty?.expenses && selectedDuty.expenses.length > 0 && (
+                <View style={styles.detailBlock}>
+                  <View style={styles.detailRowBetween}>
+                    <Text style={styles.blockLabel}>
+                      Expenses & Claims ({selectedDuty.expenses.length})
+                    </Text>
+                    <View style={styles.expenseTotalPill}>
+                      <Text style={styles.expenseTotalPillText}>
+                        Total: ₹{Number(selectedDuty.totalExpenseAmount || selectedDuty.expenses.reduce((s, e) => s + (Number(e.totalAmount) || Number(e.amount) || 0), 0)).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.dutyExpenseClaimsList}>
+                    {selectedDuty.expenses.map((exp, expIdx) => {
+                      const claimCode = exp.expenseId || `EXP-${expIdx + 1}`;
+                      const expDate = exp.expenseDate ? formatDate(exp.expenseDate) : '';
+                      const items = exp.items && exp.items.length > 0 ? exp.items : [
+                        {
+                          category: exp.category || 'other',
+                          customCategory: exp.customCategory || '',
+                          amount: exp.amount || exp.totalAmount || 0,
+                          description: exp.description || '',
+                          billProof: exp.billProof || null,
+                        }
+                      ];
+
+                      return (
+                        <View key={exp._id || `exp-${expIdx}`} style={styles.dutyExpenseCard}>
+                          <View style={styles.dutyExpenseCardHeader}>
+                            <View>
+                              <Text style={styles.dutyExpenseClaimId}>{claimCode}</Text>
+                              {expDate ? <Text style={styles.dutyExpenseClaimDate}>{expDate}</Text> : null}
+                            </View>
+                            <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                              <Text style={styles.dutyExpenseClaimAmt}>
+                                ₹{(Number(exp.totalAmount) || Number(exp.amount) || 0).toLocaleString('en-IN')}
+                              </Text>
+                              {exp.status ? <StatusBadge status={exp.status} /> : null}
+                            </View>
+                          </View>
+
+                          {/* Items breakdown */}
+                          <View style={{ gap: 6, marginTop: 4 }}>
+                            {items.map((it, itIdx) => {
+                              const itCat = it.customCategory || it.category || 'Expense';
+                              const calc = it.distanceKm && it.ratePerKm
+                                ? `${it.distanceKm} km × ₹${it.ratePerKm}/km`
+                                : null;
+                              const pImg = it.billProof?.url || (typeof it.billProof === 'string' ? it.billProof : null);
+
+                              return (
+                                <View key={`item-${itIdx}`} style={styles.dutyExpenseItemRow}>
+                                  <View style={{ flex: 1, paddingRight: 6 }}>
+                                    <Text style={styles.dutyExpenseItemTitle}>{itCat}</Text>
+                                    {calc ? <Text style={styles.dutyExpenseItemCalc}>{calc}</Text> : null}
+                                    {it.description ? <Text style={styles.dutyExpenseItemDesc}>{it.description}</Text> : null}
+                                  </View>
+                                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                                    <Text style={styles.dutyExpenseItemAmt}>
+                                      ₹{(Number(it.amount) || 0).toLocaleString('en-IN')}
+                                    </Text>
+                                    {pImg && (
+                                      <TouchableOpacity
+                                        onPress={() => handleOpenExpensePhotoPreview(pImg, itCat)}
+                                        activeOpacity={0.8}
+                                        style={styles.dutyExpenseProofThumb}
+                                      >
+                                        <Image source={{ uri: pImg }} style={{ width: 36, height: 36, borderRadius: 4 }} />
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               )}
 
@@ -1899,6 +2001,108 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.danger,
+  },
+  cardExpenseBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  cardExpenseBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  detailRowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  expenseTotalPill: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  expenseTotalPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  dutyExpenseClaimsList: {
+    gap: 8,
+    marginTop: 4,
+  },
+  dutyExpenseCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 8,
+  },
+  dutyExpenseCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingBottom: 4,
+    marginBottom: 4,
+  },
+  dutyExpenseClaimId: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  dutyExpenseClaimDate: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+  },
+  dutyExpenseClaimAmt: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  dutyExpenseItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 2,
+  },
+  dutyExpenseItemTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+    textTransform: 'capitalize',
+  },
+  dutyExpenseItemCalc: {
+    fontSize: 10,
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+  dutyExpenseItemDesc: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+  },
+  dutyExpenseItemAmt: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  dutyExpenseProofThumb: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginTop: 2,
   },
   modalActionFooter: {
     flexDirection: 'row',

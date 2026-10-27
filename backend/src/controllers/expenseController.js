@@ -4,6 +4,7 @@ import ExpenseCategory from '../models/ExpenseCategory.js';
 import User from '../models/User.js';
 import Company from '../models/Company.js';
 import Client from '../models/Client.js';
+import Duty from '../models/Duty.js';
 import Notification from '../models/Notification.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
@@ -29,9 +30,36 @@ export const createExpense = asyncHandler(async (req, res) => {
     items = [],
   } = req.body;
 
-  const targetCompanyId = companyId || company;
-  const targetClientId = clientId || client;
-  const targetDutyId = dutyId || duty || (mongoose.Types.ObjectId.isValid(relatedDuty) ? relatedDuty : null);
+  let targetCompanyId = companyId || company;
+  let targetClientId = clientId || client;
+  const rawDutyId = dutyId || duty;
+
+  let resolvedDutyId = null;
+  let resolvedRelatedDuty = (relatedDuty || '').trim();
+
+  if (rawDutyId && mongoose.Types.ObjectId.isValid(rawDutyId)) {
+    resolvedDutyId = rawDutyId;
+    const d = await Duty.findById(rawDutyId).select('dutyId company client');
+    if (d) {
+      if (!resolvedRelatedDuty && d.dutyId) resolvedRelatedDuty = d.dutyId;
+      if (!targetCompanyId && d.company) targetCompanyId = d.company;
+      if (!targetClientId && d.client) targetClientId = d.client;
+    }
+  } else if (rawDutyId || relatedDuty) {
+    const code = String(relatedDuty || rawDutyId).trim();
+    const d = await Duty.findOne({
+      $or: [
+        { dutyId: code },
+        ...(mongoose.Types.ObjectId.isValid(code) ? [{ _id: code }] : []),
+      ],
+    }).select('_id dutyId company client');
+    if (d) {
+      resolvedDutyId = d._id;
+      resolvedRelatedDuty = d.dutyId || code;
+      if (!targetCompanyId && d.company) targetCompanyId = d.company;
+      if (!targetClientId && d.client) targetClientId = d.client;
+    }
+  }
 
   if (!Array.isArray(items) || items.length === 0) {
     throw ApiError.badRequest('Please add at least one expense item');
@@ -144,7 +172,8 @@ export const createExpense = asyncHandler(async (req, res) => {
     expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
     company: validatedCompany ? validatedCompany._id : null,
     client: validatedClient ? validatedClient._id : null,
-    duty: targetDutyId,
+    duty: resolvedDutyId,
+    relatedDuty: resolvedRelatedDuty,
     generalDescription: generalDescription ? generalDescription.trim() : '',
     items: processedItems,
     grandTotal,
@@ -153,7 +182,8 @@ export const createExpense = asyncHandler(async (req, res) => {
   const populatedExpense = await Expense.findById(expense._id)
     .populate('employee', 'employeeName employeeId email designation avatar')
     .populate('company', 'companyName location companyPhoneNumber companyType')
-    .populate('client', 'clientName clientPhoneNumber status');
+    .populate('client', 'clientName clientPhoneNumber status')
+    .populate('duty', 'dutyId machineName workType dutyDate');
 
   // 5. Notify administrators
   const formattedTotal = Number(grandTotal).toLocaleString('en-IN', {
@@ -204,9 +234,21 @@ export const getMyExpenses = asyncHandler(async (req, res) => {
   const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit || '20', 10)));
   const skip = (page - 1) * limit;
 
-  const { category, startDate, endDate, search, companyId } = req.query;
+  const { category, startDate, endDate, search, companyId, dutyId } = req.query;
+  const targetDutyId = dutyId || req.query.duty || req.query.relatedDuty;
 
   const filter = { employee: req.user._id };
+
+  if (targetDutyId && targetDutyId !== 'all') {
+    if (mongoose.Types.ObjectId.isValid(targetDutyId)) {
+      filter.$or = [
+        { duty: new mongoose.Types.ObjectId(targetDutyId) },
+        { relatedDuty: targetDutyId },
+      ];
+    } else {
+      filter.relatedDuty = targetDutyId;
+    }
+  }
 
   if (companyId && companyId !== 'all') {
     filter.company = companyId;
@@ -258,7 +300,8 @@ export const getMyExpenses = asyncHandler(async (req, res) => {
       .skip(skip)
       .limit(limit)
       .populate('company', 'companyName location companyPhoneNumber companyType')
-      .populate('client', 'clientName clientPhoneNumber status'),
+      .populate('client', 'clientName clientPhoneNumber status')
+      .populate('duty', 'dutyId machineName workType dutyDate'),
     Expense.countDocuments(filter),
     Expense.aggregate([
       { $match: { employee: req.user._id } },
@@ -328,12 +371,13 @@ export const getAllExpenses = asyncHandler(async (req, res) => {
   const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit || '20', 10)));
   const skip = (page - 1) * limit;
 
-  const { employeeId, companyId, clientId, category, startDate, endDate, search } = req.query;
+  const { employeeId, companyId, clientId, category, startDate, endDate, search, dutyId } = req.query;
 
   const targetEmployeeId = employeeId || req.query.employee;
   const targetCompanyId = companyId || req.query.company;
   const targetClientId = clientId || req.query.client;
   const targetCategory = category || req.query.categoryId;
+  const targetDutyId = dutyId || req.query.duty || req.query.relatedDuty;
 
   const filter = {};
 
@@ -345,6 +389,19 @@ export const getAllExpenses = asyncHandler(async (req, res) => {
   }
   if (targetClientId && targetClientId !== 'all') {
     filter.client = targetClientId;
+  }
+  if (targetDutyId && targetDutyId !== 'all') {
+    if (mongoose.Types.ObjectId.isValid(targetDutyId)) {
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { duty: new mongoose.Types.ObjectId(targetDutyId) },
+          { relatedDuty: targetDutyId },
+        ],
+      });
+    } else {
+      filter.relatedDuty = targetDutyId;
+    }
   }
 
   if (targetCategory && targetCategory !== 'all') {
@@ -472,7 +529,7 @@ export const getAllExpenses = asyncHandler(async (req, res) => {
       .populate('employee', 'employeeName employeeId email designation avatar phoneNumber')
       .populate('company', 'companyName location companyPhoneNumber companyType')
       .populate('client', 'clientName clientPhoneNumber status')
-      .populate('duty', 'dutyId machineName workType'),
+      .populate('duty', 'dutyId machineName workType dutyDate'),
     Expense.countDocuments(filter),
     Expense.aggregate([
       {
