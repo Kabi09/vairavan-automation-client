@@ -192,6 +192,20 @@ export const NotificationsScreen = ({ navigation }) => {
     }
 
     if (
+      notifType === 'expense_submitted' ||
+      notifType.includes('expense') ||
+      item.data?.expenseId
+    ) {
+      const targetExpenseId = item.data?.expenseId;
+      if (isAdmin) {
+        navigation.navigate('AdminExpenses', { expenseId: targetExpenseId });
+      } else {
+        navigation.navigate('MyExpenses', { expenseId: targetExpenseId });
+      }
+      return;
+    }
+
+    if (
       notifType.includes('duty') ||
       notifType.includes('work') ||
       item.data?.dutyId ||
@@ -213,6 +227,10 @@ export const NotificationsScreen = ({ navigation }) => {
     const isHoliday = item.type === 'holiday' || item.type === 'holiday_created';
     const isLeave = item.type === 'leave_request' || item.type === 'leave_reviewed';
     const isMessage = item.type === 'message';
+    const isExpense =
+      item.type === 'expense_submitted' ||
+      (item.type || '').includes('expense') ||
+      Boolean(item.data?.expenseId);
     const leaveData = item.data || {};
     const leaveStatus = leaveData.status || 'pending';
     const isPending = leaveStatus === 'pending';
@@ -239,6 +257,8 @@ export const NotificationsScreen = ({ navigation }) => {
                     ? styles.dotMessage
                     : isHoliday
                     ? styles.dotHoliday
+                    : isExpense
+                    ? styles.dotExpense
                     : item.type === 'leave_request'
                     ? styles.dotWarning
                     : leaveStatus === 'approved'
@@ -261,6 +281,11 @@ export const NotificationsScreen = ({ navigation }) => {
           {Boolean(isMessage) ? (
             <View style={styles.messageBadgePill}>
               <Text style={styles.messageBadgePillText}>Message 💬</Text>
+            </View>
+          ) : null}
+          {Boolean(isExpense) ? (
+            <View style={styles.expenseBadgePill}>
+              <Text style={styles.expenseBadgePillText}>Expense 💰</Text>
             </View>
           ) : null}
         </View>
@@ -415,6 +440,38 @@ export const NotificationsScreen = ({ navigation }) => {
             <View style={styles.tapToViewRow}>
               <Text style={styles.tapToViewText}>Tap to view leave details</Text>
               <Ionicons name="arrow-forward" size={12} color="#2563EB" />
+            </View>
+          </View>
+        ) : null}
+
+        {/* Expense Details */}
+        {Boolean(isExpense) ? (
+          <View style={styles.expenseDetailsBox}>
+            {item.data?.grandTotal != null ? (
+              <View style={styles.detailRow}>
+                <Ionicons name="wallet-outline" size={15} color={COLORS.primary} />
+                <Text style={styles.detailLabel}>Amount:</Text>
+                <Text style={[styles.detailValue, { fontWeight: '700', color: COLORS.primary }]}>
+                  ₹{Number(item.data.grandTotal || 0).toLocaleString('en-IN')}
+                </Text>
+              </View>
+            ) : null}
+
+            {item.message ? (
+              <View style={[styles.detailRow, { alignItems: 'flex-start' }]}>
+                <Ionicons name="document-text-outline" size={15} color={COLORS.textSecondary} style={{ marginTop: 2 }} />
+                <Text style={styles.detailLabel}>Details:</Text>
+                <Text style={[styles.detailValue, styles.reasonText]} numberOfLines={2}>
+                  {item.message}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.tapToViewRow}>
+              <Text style={[styles.tapToViewText, { color: COLORS.primary }]}>
+                Tap to view expense claim
+              </Text>
+              <Ionicons name="arrow-forward" size={12} color={COLORS.primary} />
             </View>
           </View>
         ) : null}
@@ -850,6 +907,30 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: '#BAE6FD',
+  },
+  dotExpense: {
+    backgroundColor: '#059669',
+  },
+  expenseBadgePill: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  expenseBadgePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  expenseDetailsBox: {
+    marginTop: SPACING.xs,
+    padding: SPACING.md,
+    backgroundColor: '#F0FDF4',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
   },
 });
 

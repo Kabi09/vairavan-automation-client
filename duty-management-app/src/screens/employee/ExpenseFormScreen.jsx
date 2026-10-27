@@ -633,11 +633,18 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
 
         if (item.localAttachments && item.localAttachments.length > 0) {
           const uploadRes = await uploadApi.uploadProofPhotos(item.localAttachments);
-          if (uploadRes.success && uploadRes.photos) {
+          const photoList =
+            uploadRes?.data?.photos ||
+            uploadRes?.photos ||
+            (Array.isArray(uploadRes?.data) ? uploadRes.data : []) ||
+            (Array.isArray(uploadRes) ? uploadRes : []);
+
+          if (photoList && photoList.length > 0) {
             uploadedAttachments = [
               ...uploadedAttachments,
-              ...uploadRes.photos.map((p) => ({
-                url: p.url,
+              ...photoList.map((p) => ({
+                url: typeof p === 'string' ? p : p.url,
+                key: p.key || p.publicId || '',
                 originalName: p.originalName || 'receipt.jpg',
                 size: p.size || 0,
               })),
@@ -715,7 +722,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
               if (navigation.canGoBack()) {
                 navigation.goBack();
               } else {
-                navigation.navigate('EmployeeMainTabs', { screen: 'ExpensesTab' });
+                navigation.navigate('MyExpenses');
               }
             },
           },

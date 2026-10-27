@@ -82,6 +82,38 @@
 
 ## Change History
 
+### 2026-10-27
+#### Expense Dashboard Metrics, Notification Deep-Link Navigation & Proof Photos Attachment Fix
+- What was changed:
+  - **Expense Dashboard Metrics Harmonization (`expenseController.js`, `AdminExpensesScreen.jsx`, `MyExpensesScreen.jsx`)**:
+    - Backend `getAllExpenses` and `getMyExpenses` updated with IST-aware boundary calculations (`startOfMonth`, `startOfDay`).
+    - Backend now provides dual aliases for metrics: both standard names (`totalExpensesSubmitted`, `totalExpenseAmount`, `totalExpensesTodayAmount`, `totalExpensesTodayCount`, `totalExpensesThisMonthAmount`, `totalExpensesThisMonthCount`) and frontend-expected names (`totalExpensesCount`, `totalExpensesAmount`, `todayExpensesAmount`, `todayExpensesCount`, `monthExpensesAmount`, `monthExpensesCount`).
+    - Frontend `AdminExpensesScreen.jsx` and `MyExpensesScreen.jsx` updated to use nullish coalescing fallbacks across both naming conventions (`totalExpensesCount ?? totalExpensesSubmitted`, etc.), resolving cards displaying `0`.
+  - **Expense Notification Deep-Link Navigation (`NotificationsScreen.jsx`, `NotificationContext.jsx`, `AdminExpensesScreen.jsx`, `MyExpensesScreen.jsx`)**:
+    - `NotificationsScreen.jsx`: Added handler for `expense_submitted` and `item.data?.expenseId` to navigate admins to `AdminExpenses` and employees to `MyExpenses`.
+    - Added visual pill badge (`Expense 💰`), card dot indicator (`dotExpense`), item details container, and "Tap to view expense claim" prompt.
+    - `NotificationContext.jsx`: Updated `onNotificationTapped` to detect expense push notification payloads and deep-link directly to `AdminExpenses` / `MyExpenses`.
+    - `AdminExpensesScreen.jsx` & `MyExpensesScreen.jsx`: Accepted `route` prop and implemented auto-selection and details modal opening via `route?.params?.expenseId` with a ref guard preventing unwanted re-openings.
+  - **Proof Photos Upload & Display Fix (`ExpenseFormScreen.jsx`, `AdminExpensesScreen.jsx`, `MyExpensesScreen.jsx`)**:
+    - `ExpenseFormScreen.jsx`: Fixed response unwrapping when uploading proof photos via `uploadApi.uploadProofPhotos` (`uploadRes.data?.photos || uploadRes.photos`), ensuring photos are saved into `uploadedAttachments` and submitted to the backend.
+    - Updated post-submission fallback navigation to point to `MyExpenses`.
+    - `AdminExpensesScreen.jsx` and `MyExpensesScreen.jsx`: Normalized attachment image previews to support both `{ url }` objects and raw URL strings (`const imgUri = typeof att === 'string' ? att : att?.url`).
+- Files changed:
+  - `backend/src/controllers/expenseController.js`
+  - `backend/tests/expense.test.js`
+  - `duty-management-app/src/screens/admin/AdminExpensesScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyExpensesScreen.jsx`
+  - `duty-management-app/src/screens/employee/ExpenseFormScreen.jsx`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+  - `duty-management-app/src/context/NotificationContext.jsx`
+  - `project.md`
+- Logic changed:
+  - Photo upload responses are properly extracted from `res.data.photos`.
+  - Expense notification clicks open the corresponding expense claim details directly.
+  - Dashboard stat cards accurately display current month and today metrics in IST.
+- Reason: User reported: "expense adede but not show month,etc..; also notification expensereveviedclick not navigate to xpense; also aded prooft photo also not show fix;;".
+- Impact: Accurate real-time expense analytics on Admin and Employee dashboards, seamless 1-tap notification deep-linking to expense claims, and reliable receipt and proof document uploads and lightbox viewing.
+
 ### 2026-10-15
 #### Frontend Developer Admin Filtering & User Selection (Role-Based Visibility)
 - What was changed:

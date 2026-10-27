@@ -241,10 +241,16 @@ export const getMyExpenses = asyncHandler(async (req, res) => {
     ];
   }
 
-  // Calculate monthly & total metrics for employee
+  // Calculate monthly & total metrics for employee (IST-aware date boundaries)
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(now.getTime() + istOffset);
+  const istYear = istDate.getUTCFullYear();
+  const istMonth = istDate.getUTCMonth();
+  const istDay = istDate.getUTCDate();
+
+  const startOfMonth = new Date(Date.UTC(istYear, istMonth, 1) - istOffset);
+  const startOfDay = new Date(Date.UTC(istYear, istMonth, istDay) - istOffset);
 
   const [expenses, total, stats] = await Promise.all([
     Expense.find(filter)
@@ -266,9 +272,19 @@ export const getMyExpenses = asyncHandler(async (req, res) => {
               $cond: [{ $gte: ['$expenseDate', startOfMonth] }, '$grandTotal', 0],
             },
           },
+          thisMonthCount: {
+            $sum: {
+              $cond: [{ $gte: ['$expenseDate', startOfMonth] }, 1, 0],
+            },
+          },
           todayAmount: {
             $sum: {
               $cond: [{ $gte: ['$expenseDate', startOfDay] }, '$grandTotal', 0],
+            },
+          },
+          todayCount: {
+            $sum: {
+              $cond: [{ $gte: ['$expenseDate', startOfDay] }, 1, 0],
             },
           },
         },
@@ -276,11 +292,16 @@ export const getMyExpenses = asyncHandler(async (req, res) => {
     ]),
   ]);
 
-  const summary = stats[0] || {
-    totalAmount: 0,
-    totalCount: 0,
-    thisMonthAmount: 0,
-    todayAmount: 0,
+  const rawStats = stats[0] || {};
+  const summary = {
+    totalAmount: rawStats.totalAmount || 0,
+    totalCount: rawStats.totalCount || 0,
+    thisMonthAmount: rawStats.thisMonthAmount || 0,
+    monthAmount: rawStats.thisMonthAmount || 0,
+    thisMonthCount: rawStats.thisMonthCount || 0,
+    monthCount: rawStats.thisMonthCount || 0,
+    todayAmount: rawStats.todayAmount || 0,
+    todayCount: rawStats.todayCount || 0,
   };
 
   return ApiResponse.success(res, 200, 'My expenses retrieved successfully', {
@@ -362,13 +383,19 @@ export const getAllExpenses = asyncHandler(async (req, res) => {
   }
 
   // Calculate Admin Expense Dashboard Metrics:
-  // - Total Expenses Submitted
-  // - Total Expense Amount
-  // - Total Expenses Today
-  // - Total Expenses This Month
+  // - Total Expenses Submitted (and totalExpensesCount)
+  // - Total Expense Amount (and totalExpensesAmount)
+  // - Total Expenses Today (and todayExpensesAmount, todayExpensesCount)
+  // - Total Expenses This Month (and monthExpensesAmount, monthExpensesCount)
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(now.getTime() + istOffset);
+  const istYear = istDate.getUTCFullYear();
+  const istMonth = istDate.getUTCMonth();
+  const istDay = istDate.getUTCDate();
+
+  const startOfMonth = new Date(Date.UTC(istYear, istMonth, 1) - istOffset);
+  const startOfDay = new Date(Date.UTC(istYear, istMonth, istDay) - istOffset);
 
   const [expenses, total, stats] = await Promise.all([
     Expense.find(filter)
@@ -406,13 +433,22 @@ export const getAllExpenses = asyncHandler(async (req, res) => {
     ]),
   ]);
 
-  const dashboardMetrics = stats[0] || {
-    totalExpensesSubmitted: 0,
-    totalExpenseAmount: 0,
-    totalExpensesTodayCount: 0,
-    totalExpensesTodayAmount: 0,
-    totalExpensesThisMonthCount: 0,
-    totalExpensesThisMonthAmount: 0,
+  const rawMetrics = stats[0] || {};
+  const dashboardMetrics = {
+    totalExpensesSubmitted: rawMetrics.totalExpensesSubmitted || 0,
+    totalExpenseAmount: rawMetrics.totalExpenseAmount || 0,
+    totalExpensesTodayCount: rawMetrics.totalExpensesTodayCount || 0,
+    totalExpensesTodayAmount: rawMetrics.totalExpensesTodayAmount || 0,
+    totalExpensesThisMonthCount: rawMetrics.totalExpensesThisMonthCount || 0,
+    totalExpensesThisMonthAmount: rawMetrics.totalExpensesThisMonthAmount || 0,
+
+    // Frontend-expected aliases (AdminExpensesScreen)
+    totalExpensesCount: rawMetrics.totalExpensesSubmitted || 0,
+    totalExpensesAmount: rawMetrics.totalExpenseAmount || 0,
+    todayExpensesCount: rawMetrics.totalExpensesTodayCount || 0,
+    todayExpensesAmount: rawMetrics.totalExpensesTodayAmount || 0,
+    monthExpensesCount: rawMetrics.totalExpensesThisMonthCount || 0,
+    monthExpensesAmount: rawMetrics.totalExpensesThisMonthAmount || 0,
   };
 
   return ApiResponse.success(res, 200, 'Expense dashboard data retrieved successfully', {

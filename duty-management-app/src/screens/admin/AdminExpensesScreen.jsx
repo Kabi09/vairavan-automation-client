@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -34,7 +34,7 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportExpensesToPDF, exportExpensesToExcel } from '../../utils/exportUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
-export const AdminExpensesScreen = ({ navigation }) => {
+export const AdminExpensesScreen = ({ navigation, route }) => {
   const [expenses, setExpenses] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -79,6 +79,37 @@ export const AdminExpensesScreen = ({ navigation }) => {
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [previewImageUri, setPreviewImageUri] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
+
+  // Auto-open target expense if navigated with route.params.expenseId
+  const targetExpenseId = route?.params?.expenseId;
+  const handledExpenseIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!targetExpenseId) return;
+    if (handledExpenseIdRef.current === targetExpenseId) return;
+
+    const found = expenses.find(
+      (e) => String(e._id) === String(targetExpenseId) || String(e.expenseId) === String(targetExpenseId)
+    );
+
+    if (found) {
+      handledExpenseIdRef.current = targetExpenseId;
+      setSelectedExpense(found);
+    } else {
+      expenseApi
+        .getExpenseById(targetExpenseId)
+        .then((res) => {
+          const exp = res?.data?.expense || res?.data;
+          if (exp && (exp._id || exp.expenseId)) {
+            handledExpenseIdRef.current = targetExpenseId;
+            setSelectedExpense(exp);
+          }
+        })
+        .catch((e) => {
+          console.warn('[AdminExpensesScreen] Could not fetch target expense:', e.message);
+        });
+    }
+  }, [targetExpenseId, expenses]);
 
   // Fetch all initial data
   const fetchData = async () => {
@@ -346,14 +377,16 @@ export const AdminExpensesScreen = ({ navigation }) => {
           <View style={styles.metricsGrid}>
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>Total Submitted</Text>
-              <Text style={styles.metricValue}>{metrics.totalExpensesCount || 0}</Text>
+              <Text style={styles.metricValue}>
+                {metrics.totalExpensesCount ?? metrics.totalExpensesSubmitted ?? 0}
+              </Text>
               <Text style={styles.metricSub}>Claims Recorded</Text>
             </View>
 
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>Total Expense Amount</Text>
               <Text style={styles.metricValue}>
-                ₹{(metrics.totalExpensesAmount || 0).toLocaleString('en-IN')}
+                ₹{(metrics.totalExpensesAmount ?? metrics.totalExpenseAmount ?? 0).toLocaleString('en-IN')}
               </Text>
               <Text style={styles.metricSub}>Cumulative Amount</Text>
             </View>
@@ -361,17 +394,21 @@ export const AdminExpensesScreen = ({ navigation }) => {
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>Expenses Today</Text>
               <Text style={styles.metricValue}>
-                ₹{(metrics.todayExpensesAmount || 0).toLocaleString('en-IN')}
+                ₹{(metrics.todayExpensesAmount ?? metrics.totalExpensesTodayAmount ?? 0).toLocaleString('en-IN')}
               </Text>
-              <Text style={styles.metricSub}>{metrics.todayExpensesCount || 0} today</Text>
+              <Text style={styles.metricSub}>
+                {(metrics.todayExpensesCount ?? metrics.totalExpensesTodayCount ?? 0)} today
+              </Text>
             </View>
 
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>Expenses This Month</Text>
               <Text style={styles.metricValue}>
-                ₹{(metrics.monthExpensesAmount || 0).toLocaleString('en-IN')}
+                ₹{(metrics.monthExpensesAmount ?? metrics.totalExpensesThisMonthAmount ?? 0).toLocaleString('en-IN')}
               </Text>
-              <Text style={styles.metricSub}>{metrics.monthExpensesCount || 0} this month</Text>
+              <Text style={styles.metricSub}>
+                {(metrics.monthExpensesCount ?? metrics.totalExpensesThisMonthCount ?? 0)} this month
+              </Text>
             </View>
           </View>
         ) : null}
@@ -608,19 +645,23 @@ export const AdminExpensesScreen = ({ navigation }) => {
                       <View style={styles.itemAttachContainer}>
                         <Text style={styles.itemAttachTitle}>Proof Attachments:</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
-                          {item.attachments.map((att, aIdx) => (
-                            <TouchableOpacity
-                              key={aIdx}
-                              onPress={() => {
-                                setPreviewImageUri(att.url);
-                                setPreviewTitle(`Proof - ${item.categoryName}`);
-                                setPreviewModalVisible(true);
-                              }}
-                              style={styles.itemAttachThumbWrap}
-                            >
-                              <Image source={{ uri: att.url }} style={styles.itemAttachThumb} />
-                            </TouchableOpacity>
-                          ))}
+                          {item.attachments.map((att, aIdx) => {
+                            const imgUri = typeof att === 'string' ? att : att?.url;
+                            if (!imgUri) return null;
+                            return (
+                              <TouchableOpacity
+                                key={aIdx}
+                                onPress={() => {
+                                  setPreviewImageUri(imgUri);
+                                  setPreviewTitle(`Proof - ${item.categoryName || 'Receipt'}`);
+                                  setPreviewModalVisible(true);
+                                }}
+                                style={styles.itemAttachThumbWrap}
+                              >
+                                <Image source={{ uri: imgUri }} style={styles.itemAttachThumb} />
+                              </TouchableOpacity>
+                            );
+                          })}
                         </ScrollView>
                       </View>
                     ) : null}

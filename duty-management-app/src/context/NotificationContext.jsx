@@ -46,9 +46,26 @@ export const NotificationProvider = ({ children, navigationRef }) => {
         onNotificationReceived: () => {
           fetchNotifications(true);
         },
-        onNotificationTapped: () => {
+        onNotificationTapped: (response) => {
           fetchNotifications(true);
+          const data =
+            response?.notification?.request?.content?.data ||
+            response?.notification?.data ||
+            {};
           if (navigationRef?.current) {
+            const notifType = data.type || '';
+            const expenseId = data.expenseId;
+            if (notifType.includes('expense') || expenseId) {
+              try {
+                navigationRef.current.navigate('AdminExpenses', { expenseId });
+                return;
+              } catch {
+                try {
+                  navigationRef.current.navigate('MyExpenses', { expenseId });
+                  return;
+                } catch {}
+              }
+            }
             navigationRef.current.navigate('Notifications');
           }
         },

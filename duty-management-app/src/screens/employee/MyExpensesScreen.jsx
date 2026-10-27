@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,7 +25,7 @@ import { formatDate } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
-export const MyExpensesScreen = ({ navigation }) => {
+export const MyExpensesScreen = ({ navigation, route }) => {
   const [expenses, setExpenses] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -40,6 +40,35 @@ export const MyExpensesScreen = ({ navigation }) => {
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [previewImageUri, setPreviewImageUri] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
+
+  // Auto-open target expense if navigated with route.params.expenseId
+  const targetExpenseId = route?.params?.expenseId;
+  const handledExpenseIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!targetExpenseId) return;
+    if (handledExpenseIdRef.current === targetExpenseId) return;
+
+    const found = expenses.find(
+      (e) => String(e._id) === String(targetExpenseId) || String(e.expenseId) === String(targetExpenseId)
+    );
+
+    if (found) {
+      handledExpenseIdRef.current = targetExpenseId;
+      setSelectedExpense(found);
+    } else {
+      expenseApi
+        .getExpenseById(targetExpenseId)
+        .then((res) => {
+          const exp = res?.data?.expense || res?.data;
+          if (exp && (exp._id || exp.expenseId)) {
+            handledExpenseIdRef.current = targetExpenseId;
+            setSelectedExpense(exp);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [targetExpenseId, expenses]);
 
   const fetchExpenses = async () => {
     try {
@@ -177,16 +206,20 @@ export const MyExpensesScreen = ({ navigation }) => {
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>This Month</Text>
               <Text style={styles.metricValue}>
-                ₹{(summary.monthAmount || 0).toLocaleString('en-IN')}
+                ₹{((summary.monthAmount ?? summary.thisMonthAmount) || 0).toLocaleString('en-IN')}
               </Text>
-              <Text style={styles.metricSub}>{summary.monthCount || 0} claims</Text>
+              <Text style={styles.metricSub}>
+                {(summary.monthCount ?? summary.thisMonthCount ?? 0)} claims
+              </Text>
             </View>
             <View style={styles.metricCard}>
               <Text style={styles.metricLabel}>Today</Text>
               <Text style={styles.metricValue}>
                 ₹{(summary.todayAmount || 0).toLocaleString('en-IN')}
               </Text>
-              <Text style={styles.metricSub}>{summary.todayCount || 0} claims</Text>
+              <Text style={styles.metricSub}>
+                {(summary.todayCount ?? summary.todayExpensesTodayCount ?? 0)} claims
+              </Text>
             </View>
           </View>
         ) : null}
@@ -339,19 +372,23 @@ export const MyExpensesScreen = ({ navigation }) => {
                       <View style={styles.itemAttachContainer}>
                         <Text style={styles.itemAttachTitle}>Proof Attachments:</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
-                          {item.attachments.map((att, aIdx) => (
-                            <TouchableOpacity
-                              key={aIdx}
-                              onPress={() => {
-                                setPreviewImageUri(att.url);
-                                setPreviewTitle(`Proof - ${item.categoryName}`);
-                                setPreviewModalVisible(true);
-                              }}
-                              style={styles.itemAttachThumbWrap}
-                            >
-                              <Image source={{ uri: att.url }} style={styles.itemAttachThumb} />
-                            </TouchableOpacity>
-                          ))}
+                          {item.attachments.map((att, aIdx) => {
+                            const imgUri = typeof att === 'string' ? att : att?.url;
+                            if (!imgUri) return null;
+                            return (
+                              <TouchableOpacity
+                                key={aIdx}
+                                onPress={() => {
+                                  setPreviewImageUri(imgUri);
+                                  setPreviewTitle(`Proof - ${item.categoryName || 'Receipt'}`);
+                                  setPreviewModalVisible(true);
+                                }}
+                                style={styles.itemAttachThumbWrap}
+                              >
+                                <Image source={{ uri: imgUri }} style={styles.itemAttachThumb} />
+                              </TouchableOpacity>
+                            );
+                          })}
                         </ScrollView>
                       </View>
                     ) : null}

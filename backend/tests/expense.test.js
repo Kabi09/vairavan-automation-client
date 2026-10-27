@@ -161,6 +161,11 @@ describe('Expense Management Tests', () => {
     assert.equal(adminRes.body.data.metrics.totalExpensesSubmitted, 2);
     assert.equal(adminRes.body.data.metrics.totalExpenseAmount, 1500);
     assert.equal(adminRes.body.data.metrics.totalExpensesTodayAmount, 1500);
+    // Verify frontend aliases:
+    assert.equal(adminRes.body.data.metrics.totalExpensesCount, 2);
+    assert.equal(adminRes.body.data.metrics.totalExpensesAmount, 1500);
+    assert.equal(adminRes.body.data.metrics.todayExpensesAmount, 1500);
+    assert.equal(adminRes.body.data.metrics.monthExpensesAmount, 1500);
 
     // Employee1 should only see their own expense (1 record, ₹500)
     const empRes = await request(app)
@@ -170,5 +175,6 @@ describe('Expense Management Tests', () => {
     assert.equal(empRes.status, 200);
     assert.equal(empRes.body.data.expenses.length, 1);
     assert.equal(empRes.body.data.summary.totalAmount, 500);
+    assert.equal(empRes.body.data.summary.monthAmount, 500);
   });
 });
