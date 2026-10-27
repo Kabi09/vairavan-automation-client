@@ -2336,13 +2336,40 @@
 - Reason: User requested: "i want check in done automattically navigate to dashboad;;; manpower->add member- add description feild;;; bug ->add expense -company required incase office have dont client another- cleent company-cleient,compay required;work listout with date like oct 3and select;;; also not working to expense form fix;;".
 - Impact: Streamlined check-in flow, thorough manpower logging, robust expense submission without errors, strict business rule enforcement for Office vs Client expenses, and seamless one-tap duty linking.
 
+### 2026-10-27
+#### Expense Dual Entry Mode ("By Work / Duty" vs "By Company / Client"), Auto-Assignment Bug Fix, and Direct Work Expense Shortcuts
+- What was changed:
+  - **Expense Form Dual Tabs ("By Work / Duty" vs "By Company / Client")**:
+    - Introduced a top-level segmented mode switcher at the top of `ExpenseFormScreen.jsx`:
+      - **Tab 1: By Work / Duty**: Designed specifically for logging expenses tied to a service visit. Features a searchable duty picker with short dates ("Oct 3 • WORK-1001...") and a dedicated, high-visibility "Assigned Work Details" summary card displaying the auto-assigned company, client contact, work date, and machine/service info.
+      - **Tab 2: By Company / Client**: For logging routine office expenses or client visits not linked to a work order. Provides clean Category toggle (`Internal Office` vs `Client Company`), company dropdown, and client contact person picker (required for client company, hidden for office).
+  - **Fixed Auto-Assignment Bug**:
+    - Eliminated the race condition where `useEffect` fetching clients cleared `selectedClientId`.
+    - Auto-injects `duty.company` and `duty.client` directly into state collections so they are immediately recognized and never reset.
+    - Added resilient `selectedCompanyObj` and `selectedClientObj` memos that reliably fall back to populated duty properties and support custom customer names seamlessly.
+  - **Direct Expense Shortcuts**:
+    - Added `+ Add Expense for this Work` action button in `DutyDetailsScreen.jsx`.
+    - Added quick `+ Expense` shortcut button on every duty card in `MyDutiesScreen.jsx`.
+- Files changed:
+  - `duty-management-app/src/screens/employee/ExpenseFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyDutiesScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Selecting a work duty now 100% reliably binds Company and Client without risk of being wiped by asynchronous client fetching.
+  - Users can toggle between duty-centric expense claims and direct company/office expense claims with zero layout ambiguity.
+- Reason: User requested: "expense - small bug there -i want to work click- automattically data asign the comapny,client; also another tab to comapny,client to add expense ; fix user friendly;fix;;".
+- Impact: Highly polished, user-friendly expense entry workflow, zero data loss on work selection, and convenient quick shortcuts across duty views.
+
 ## Current Progress
 - Completed:
   - Check-in auto-navigation to Dashboard tab upon successful check-in.
   - Description / task details input field added to Manpower modal and displayed in team cards.
-  - Expense Form completely overhauled with Internal Office vs Client Company toggle.
+  - Dual entry mode tabs in `ExpenseFormScreen.jsx`: "By Work / Duty" vs "By Company / Client".
+  - Reliable, race-condition-free auto-assignment of Company, Client, and Date upon selecting a work duty.
+  - High-visibility "Assigned Work Details" card in duty mode with quick change and deselect actions.
+  - Quick "+ Add Expense for this Work" in `DutyDetailsScreen.jsx` and "+ Expense" on duty cards in `MyDutiesScreen.jsx`.
   - Strict validation: Office requires company only; Client Company strictly requires both company and client contact person.
-  - Related Duty dropdown with short dates ("Oct 3 • WORK-1001...") and auto-fill of company/client/date.
   - Fixed `expenseApi.createExpense` and `clientApi.getClientsByCompany`.
   - Resilient response parsing for categories, companies, clients, and duties.
   - 49/49 backend unit & integration tests passing.

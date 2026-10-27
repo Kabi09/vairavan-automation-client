@@ -266,15 +266,26 @@ export const MyDutiesScreen = ({ navigation }) => {
             </Text>
           </View>
 
-          {/* Employee Edit Action */}
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={() => navigation.navigate('DutyForm', { dutyToEdit: item })}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="create-outline" size={14} color={COLORS.primary} />
-            <Text style={styles.editBtnText}>Edit</Text>
-          </TouchableOpacity>
+          {/* Card Actions */}
+          <View style={styles.cardActionsRow}>
+            <TouchableOpacity
+              style={styles.expenseQuickBtn}
+              onPress={() => navigation.navigate('ExpenseForm', { duty: item })}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="receipt-outline" size={13} color="#0284C7" />
+              <Text style={styles.expenseQuickBtnText}>+ Expense</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.editBtn}
+              onPress={() => navigation.navigate('DutyForm', { dutyToEdit: item })}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create-outline" size={14} color={COLORS.primary} />
+              <Text style={styles.editBtnText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Card>
     );
@@ -911,6 +922,27 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 12,
     color: COLORS.textMuted,
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  expenseQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  expenseQuickBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284C7',
   },
   editBtn: {
     flexDirection: 'row',

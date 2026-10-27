@@ -82,6 +82,9 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // Top-Level Entry Mode: 'duty' (By Work / Duty) vs 'company' (By Company & Client)
+  const [entryMode, setEntryMode] = useState(() => (routeDuty ? 'duty' : 'duty'));
+
   // Dropdown options
   const [categories, setCategories] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -104,16 +107,16 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     return formatISODateOnly();
   });
   const [selectedCompanyId, setSelectedCompanyId] = useState(() => {
-    return routeDuty?.company?._id || routeDuty?.company || '';
+    return routeDuty?.company?._id ? String(routeDuty.company._id) : (routeDuty?.company ? String(routeDuty.company) : '');
   });
   const [selectedClientId, setSelectedClientId] = useState(() => {
-    return routeDuty?.client?._id || routeDuty?.client || '';
+    return routeDuty?.client?._id ? String(routeDuty.client._id) : (routeDuty?.client ? String(routeDuty.client) : '');
   });
   const [selectedDutyId, setSelectedDutyId] = useState(() => {
-    return routeDuty?._id || '';
+    return routeDuty?._id ? String(routeDuty._id) : '';
   });
   const [relatedDutyId, setRelatedDutyId] = useState(() => {
-    return routeDuty?.dutyId || routeDuty?._id || '';
+    return routeDuty?.dutyId || (routeDuty?._id ? String(routeDuty._id) : '');
   });
   const [generalDescription, setGeneralDescription] = useState('');
 
@@ -157,11 +160,14 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         setCompanies(allComps);
         setDuties(allDuties);
 
-        // Pre-select office company if in office mode and not set
-        if (companyCategory === 'office' && !selectedCompanyId) {
+        // If route duty was passed, perform full auto-assignment
+        if (routeDuty) {
+          const dutyMatch = allDuties.find((d) => String(d._id) === String(routeDuty._id)) || routeDuty;
+          applyDutyToState(dutyMatch, allComps);
+        } else if (companyCategory === 'office' && !selectedCompanyId) {
           const defaultOffice = allComps.find(isOfficeCompany);
           if (defaultOffice) {
-            setSelectedCompanyId(defaultOffice._id);
+            setSelectedCompanyId(String(defaultOffice._id));
           }
         }
 
@@ -202,12 +208,19 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         const res = await clientApi.getClientsByCompany(selectedCompanyId);
         if (isMounted) {
           const clientList = extractArray(res, 'clients');
-          setClients(clientList);
 
-          // Reset selected client if not belonging to this company
-          if (selectedClientId && !clientList.some((c) => c._id === selectedClientId)) {
-            setSelectedClientId('');
-          }
+          setClients((prev) => {
+            const merged = [...clientList];
+            // Preserve currently selected client if it was already selected or from the duty
+            const currentSelected = prev.find((c) => String(c._id) === String(selectedClientId));
+            if (
+              currentSelected &&
+              !merged.some((c) => String(c._id) === String(currentSelected._id))
+            ) {
+              merged.unshift(currentSelected);
+            }
+            return merged;
+          });
         }
       } catch (err) {
         if (isMounted) {
@@ -222,43 +235,98 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     };
   }, [selectedCompanyId, companyCategory]);
 
-  // Handle duty selection from the dropdown with date like "Oct 3"
-  const handleSelectDuty = (dutyId) => {
-    const duty = duties.find((d) => d._id === dutyId);
+  // Core helper to assign company, client, date, and category from a duty
+  const applyDutyToState = (duty, existingComps = companies) => {
     if (!duty) return;
 
-    setSelectedDutyId(duty._id);
-    setRelatedDutyId(duty.dutyId || duty._id);
+    setSelectedDutyId(String(duty._id));
+    setRelatedDutyId(duty.dutyId || String(duty._id));
 
-    // Sync expense date to duty date if available
+    // 1. Sync expense date
     if (duty.dutyDate) {
       setExpenseDate(formatISODateOnly(duty.dutyDate));
     }
 
-    // Determine category based on duty
+    // 2. Determine Office vs Client mode
     const isOffice =
-      duty.dutyType === 'office' || (duty.company && isOfficeCompany(duty.company));
+      duty.dutyType === 'office' ||
+      (duty.company && isOfficeCompany(duty.company)) ||
+      (duty.customerName && duty.customerName.toLowerCase() === 'office');
     setCompanyCategory(isOffice ? 'office' : 'client');
 
-    // Auto-select company
+    // 3. Auto-assign Company and ensure it's in companies state
     if (duty.company) {
-      const compId = duty.company._id || duty.company;
-      setSelectedCompanyId(compId);
+      if (typeof duty.company === 'object') {
+        const comp = duty.company;
+        const compId = String(comp._id);
+        setSelectedCompanyId(compId);
+        setCompanies((prev) => {
+          if (!prev.some((c) => String(c._id) === compId)) {
+            return [comp, ...prev];
+          }
+          return prev;
+        });
+      } else {
+        setSelectedCompanyId(String(duty.company));
+      }
     }
 
-    // Auto-select client if client duty
-    if (duty.client) {
-      const cliId = duty.client._id || duty.client;
-      setSelectedClientId(cliId);
+    // 4. Auto-assign Client and ensure it's visible in clients state
+    if (!isOffice) {
+      if (duty.client) {
+        if (typeof duty.client === 'object') {
+          const cli = duty.client;
+          const cliId = String(cli._id);
+          setSelectedClientId(cliId);
+          setClients((prev) => {
+            if (!prev.some((c) => String(c._id) === cliId)) {
+              return [cli, ...prev];
+            }
+            return prev;
+          });
+        } else {
+          setSelectedClientId(String(duty.client));
+        }
+      } else if (duty.customerName && duty.customerName !== 'Office') {
+        // Customer name was entered on the duty without a registered client ID
+        const customClientObj = {
+          _id: `custom_${duty._id}`,
+          clientName: duty.customerName,
+          name: duty.customerName,
+          clientPhoneNumber: duty.customerPhoneNumber || '',
+          phoneNumber: duty.customerPhoneNumber || '',
+        };
+        setSelectedClientId(customClientObj._id);
+        setClients((prev) => [customClientObj, ...prev.filter((c) => c._id !== customClientObj._id)]);
+      } else {
+        setSelectedClientId('');
+      }
     } else {
       setSelectedClientId('');
     }
+  };
+
+  // Handle duty selection from the dropdown with date like "Oct 3"
+  const handleSelectDuty = (dutyId) => {
+    const duty = duties.find((d) => String(d._id) === String(dutyId));
+    if (!duty) return;
+    applyDutyToState(duty);
+    setDutyPickerVisible(false);
   };
 
   // Clear selected duty
   const handleClearDuty = () => {
     setSelectedDutyId('');
     setRelatedDutyId('');
+  };
+
+  // Switch between "By Work / Duty" and "By Company & Client"
+  const handleChangeEntryMode = (newMode) => {
+    setEntryMode(newMode);
+    if (newMode === 'company') {
+      setSelectedDutyId('');
+      setRelatedDutyId('');
+    }
   };
 
   // Handle Category selection for a specific item
@@ -430,30 +498,80 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     return clientsList.length > 0 ? clientsList : companies;
   }, [companies, companyCategory]);
 
-  const selectedCompanyObj = companies.find((c) => c._id === selectedCompanyId);
-  const selectedClientObj = clients.find((c) => c._id === selectedClientId);
-  const selectedDutyObj = duties.find((d) => d._id === selectedDutyId);
+  // Selected duty object
+  const selectedDutyObj = useMemo(() => {
+    if (!selectedDutyId) return null;
+    return duties.find((d) => String(d._id) === String(selectedDutyId)) || null;
+  }, [duties, selectedDutyId]);
+
+  // Resilient selected company resolution
+  const selectedCompanyObj = useMemo(() => {
+    if (!selectedCompanyId) return null;
+    const found = companies.find((c) => String(c._id) === String(selectedCompanyId));
+    if (found) return found;
+    if (selectedDutyObj?.company && typeof selectedDutyObj.company === 'object') {
+      return selectedDutyObj.company;
+    }
+    return null;
+  }, [companies, selectedCompanyId, selectedDutyObj]);
+
+  // Resilient selected client resolution
+  const selectedClientObj = useMemo(() => {
+    if (!selectedClientId) {
+      if (selectedDutyObj?.customerName && selectedDutyObj.customerName !== 'Office') {
+        return {
+          _id: `custom_${selectedDutyObj._id}`,
+          clientName: selectedDutyObj.customerName,
+          name: selectedDutyObj.customerName,
+          clientPhoneNumber: selectedDutyObj.customerPhoneNumber || '',
+          phoneNumber: selectedDutyObj.customerPhoneNumber || '',
+        };
+      }
+      return null;
+    }
+    const found = clients.find((c) => String(c._id) === String(selectedClientId));
+    if (found) return found;
+    if (selectedDutyObj?.client && typeof selectedDutyObj.client === 'object') {
+      return selectedDutyObj.client;
+    }
+    return null;
+  }, [clients, selectedClientId, selectedDutyObj]);
 
   // Validation & Submission
   const handleSubmit = async () => {
     if (submitting) return;
 
-    // 1. Company & Client category validation rules
-    if (companyCategory === 'office') {
-      if (!selectedCompanyId) {
-        Alert.alert('Office Required', 'Please select the Office location/company.');
+    // 1. Validate Work / Company / Client according to Entry Mode
+    if (entryMode === 'duty') {
+      if (!selectedDutyId && !relatedDutyId) {
+        Alert.alert('Work Duty Required', 'Please select a Work / Duty from the list.');
         return;
       }
-      // Note: In office mode, client is NOT required (no client for internal office)
+      if (!selectedCompanyId && !selectedCompanyObj) {
+        Alert.alert('Company Required', 'The selected work duty is missing company information.');
+        return;
+      }
+      if (companyCategory === 'client' && !selectedClientId && !selectedClientObj) {
+        Alert.alert('Client Required', 'The selected work duty is missing client contact information.');
+        return;
+      }
     } else {
-      // Client Company mode: Both Company and Client are strictly required!
-      if (!selectedCompanyId) {
-        Alert.alert('Company Required', 'Please select a Client Company.');
-        return;
-      }
-      if (!selectedClientId) {
-        Alert.alert('Client Contact Required', 'Please select a Client Contact Person.');
-        return;
+      // Direct Company / Office mode
+      if (companyCategory === 'office') {
+        if (!selectedCompanyId && !selectedCompanyObj) {
+          Alert.alert('Office Required', 'Please select an Office Location/Company.');
+          return;
+        }
+      } else {
+        // Client Company mode
+        if (!selectedCompanyId && !selectedCompanyObj) {
+          Alert.alert('Company Required', 'Please select a Client Company.');
+          return;
+        }
+        if (!selectedClientId && !selectedClientObj) {
+          Alert.alert('Client Contact Required', 'Please select a Client Contact Person.');
+          return;
+        }
       }
     }
 
@@ -552,16 +670,33 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         });
       }
 
-      // Step 2: Submit Expense payload
+      // Step 2: Prepare Company & Client ID
+      const targetCompId =
+        selectedCompanyId ||
+        (selectedCompanyObj?._id ? String(selectedCompanyObj._id) : undefined);
+
+      let targetClientId = undefined;
+      if (companyCategory === 'client') {
+        if (selectedClientId && !String(selectedClientId).startsWith('custom_')) {
+          targetClientId = String(selectedClientId);
+        } else if (
+          selectedClientObj?._id &&
+          !String(selectedClientObj._id).startsWith('custom_')
+        ) {
+          targetClientId = String(selectedClientObj._id);
+        }
+      }
+
+      // Step 3: Submit Expense payload
       const payload = {
         expenseDate,
-        company: selectedCompanyId,
-        companyId: selectedCompanyId,
-        client: companyCategory === 'client' ? (selectedClientId || undefined) : undefined,
-        clientId: companyCategory === 'client' ? (selectedClientId || undefined) : undefined,
+        company: targetCompId,
+        companyId: targetCompId,
+        client: targetClientId,
+        clientId: targetClientId,
         relatedDuty: selectedDutyObj?.dutyId || relatedDutyId?.trim() || undefined,
-        duty: selectedDutyObj?._id || undefined,
-        dutyId: selectedDutyObj?._id || undefined,
+        duty: selectedDutyObj?._id ? String(selectedDutyObj._id) : undefined,
+        dutyId: selectedDutyObj?._id ? String(selectedDutyObj._id) : undefined,
         generalDescription: generalDescription?.trim() || undefined,
         items: preparedItems,
       };
@@ -619,242 +754,405 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       >
         <ErrorMessage message={error} />
 
-        {/* 1. Basic Details Card */}
-        <Card style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Ionicons name="receipt-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.cardTitle}>Basic Expense Details</Text>
-          </View>
-
-          {/* Expense Date */}
-          <Text style={styles.inputLabel}>Expense Date *</Text>
+        {/* Top-Level Mode Tab Switcher: "By Work / Duty" vs "By Company & Client" */}
+        <View style={styles.entryModeTabBar}>
           <TouchableOpacity
-            style={styles.pickerTrigger}
-            onPress={() => setDatePickerVisible(true)}
+            style={[
+              styles.entryModeTab,
+              entryMode === 'duty' && styles.entryModeTabActive,
+            ]}
+            onPress={() => handleChangeEntryMode('duty')}
             activeOpacity={0.8}
           >
-            <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
-            <Text style={styles.pickerTriggerText}>{formatDate(expenseDate)}</Text>
+            <Ionicons
+              name="briefcase"
+              size={17}
+              color={entryMode === 'duty' ? '#FFFFFF' : COLORS.primary}
+            />
+            <Text
+              style={[
+                styles.entryModeTabText,
+                entryMode === 'duty' && styles.entryModeTabTextActive,
+              ]}
+            >
+              By Work / Duty
+            </Text>
           </TouchableOpacity>
 
-          {/* Related Work / Duty (Dropdown with Dates e.g. "Oct 3") */}
-          <Text style={styles.inputLabel}>Related Work / Duty (Optional)</Text>
           <TouchableOpacity
-            style={styles.pickerTrigger}
-            onPress={() => setDutyPickerVisible(true)}
+            style={[
+              styles.entryModeTab,
+              entryMode === 'company' && styles.entryModeTabActive,
+            ]}
+            onPress={() => handleChangeEntryMode('company')}
             activeOpacity={0.8}
           >
-            <Ionicons name="briefcase-outline" size={18} color={COLORS.primary} />
-            <View style={{ flex: 1 }}>
-              {selectedDutyObj ? (
-                <View>
+            <Ionicons
+              name="business"
+              size={17}
+              color={entryMode === 'company' ? '#FFFFFF' : COLORS.primary}
+            />
+            <Text
+              style={[
+                styles.entryModeTabText,
+                entryMode === 'company' && styles.entryModeTabTextActive,
+              ]}
+            >
+              By Company / Client
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* TAB 1: BY WORK / DUTY */}
+        {entryMode === 'duty' ? (
+          <Card style={styles.card}>
+            <View style={styles.cardHeaderRow}>
+              <Ionicons name="briefcase-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Link to Work / Duty</Text>
+            </View>
+            <Text style={styles.cardSubNotice}>
+              Select your service visit to automatically assign Company, Client & Date.
+            </Text>
+
+            {/* Select Work / Duty Trigger */}
+            <Text style={styles.inputLabel}>Select Work / Duty *</Text>
+            <TouchableOpacity
+              style={[
+                styles.pickerTrigger,
+                selectedDutyObj && styles.pickerTriggerSelected,
+              ]}
+              onPress={() => setDutyPickerVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+              <View style={{ flex: 1 }}>
+                {selectedDutyObj ? (
                   <Text style={styles.pickerTriggerText} numberOfLines={1}>
                     {formatDutyShortDate(selectedDutyObj.dutyDate)} • {selectedDutyObj.dutyId || 'Work'} -{' '}
                     {selectedDutyObj.machineName || selectedDutyObj.workType || 'Duty'}
                   </Text>
-                  <Text style={styles.pickerSubText} numberOfLines={1}>
-                    {selectedDutyObj.company?.companyName ||
-                      (selectedDutyObj.dutyType === 'office' ? 'Office' : 'Company')}{' '}
-                    • {selectedDutyObj.customerName || 'General'}
+                ) : (
+                  <Text style={[styles.pickerTriggerText, styles.pickerPlaceholder]}>
+                    Tap to Select Work Duty (e.g. Oct 3)...
+                  </Text>
+                )}
+              </View>
+              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Highlighted Auto-Assigned Details Box */}
+            {selectedDutyObj ? (
+              <View style={styles.assignedDetailsBox}>
+                <View style={styles.assignedBoxHeader}>
+                  <View style={styles.assignedBadge}>
+                    <Ionicons name="checkmark-circle" size={14} color="#059669" />
+                    <Text style={styles.assignedBadgeText}>
+                      {selectedDutyObj.dutyId || 'Work Selected'}
+                    </Text>
+                  </View>
+                  <Text style={styles.assignedBoxDate}>
+                    {formatDate(selectedDutyObj.dutyDate || expenseDate)}
                   </Text>
                 </View>
-              ) : relatedDutyId ? (
-                <Text style={styles.pickerTriggerText} numberOfLines={1}>
-                  Duty ID: {relatedDutyId}
-                </Text>
-              ) : (
-                <Text style={[styles.pickerTriggerText, styles.pickerPlaceholder]}>
-                  Select from your duties (e.g. Oct 3) or leave blank
-                </Text>
-              )}
-            </View>
-            {selectedDutyObj || relatedDutyId ? (
-              <TouchableOpacity
-                onPress={handleClearDuty}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
-              </TouchableOpacity>
-            ) : (
-              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-            )}
-          </TouchableOpacity>
 
-          {/* Category Toggle: Office vs Client Company */}
-          <Text style={[styles.inputLabel, { marginTop: SPACING.sm }]}>
-            Company Category *
-          </Text>
-          <View style={styles.typeSelectorRow}>
-            <TouchableOpacity
-              style={[
-                styles.typePill,
-                companyCategory === 'office' && styles.typePillActive,
-              ]}
-              onPress={() => {
-                setCompanyCategory('office');
-                const defaultOffice = companies.find(isOfficeCompany);
-                if (defaultOffice) {
-                  setSelectedCompanyId(defaultOffice._id);
-                }
-                setSelectedClientId('');
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name="business"
-                size={16}
-                color={companyCategory === 'office' ? '#FFFFFF' : COLORS.primary}
-              />
-              <Text
-                style={[
-                  styles.typePillText,
-                  companyCategory === 'office' && styles.typePillTextActive,
-                ]}
-              >
-                Internal Office
-              </Text>
-            </TouchableOpacity>
+                {/* Company Row */}
+                <View style={styles.assignedRow}>
+                  <Ionicons
+                    name={companyCategory === 'office' ? 'business' : 'storefront'}
+                    size={16}
+                    color={COLORS.primary}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.assignedLabel}>Auto-Assigned Company</Text>
+                    <Text style={styles.assignedValue} numberOfLines={1}>
+                      {selectedCompanyObj?.companyName ||
+                        (companyCategory === 'office' ? 'Internal Office' : 'Company')}
+                      {selectedCompanyObj?.location ? ` (${selectedCompanyObj.location})` : ''}
+                    </Text>
+                  </View>
+                </View>
 
-            <TouchableOpacity
-              style={[
-                styles.typePill,
-                companyCategory === 'client' && styles.typePillActive,
-              ]}
-              onPress={() => {
-                setCompanyCategory('client');
-                const current = companies.find((c) => c._id === selectedCompanyId);
-                if (!current || isOfficeCompany(current)) {
-                  setSelectedCompanyId('');
-                  setSelectedClientId('');
-                }
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name="storefront"
-                size={16}
-                color={companyCategory === 'client' ? '#FFFFFF' : COLORS.primary}
-              />
-              <Text
-                style={[
-                  styles.typePillText,
-                  companyCategory === 'client' && styles.typePillTextActive,
-                ]}
-              >
-                Client Company
-              </Text>
-            </TouchableOpacity>
-          </View>
+                {/* Client Row */}
+                {companyCategory === 'client' ? (
+                  <View style={styles.assignedRow}>
+                    <Ionicons name="person" size={16} color={COLORS.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.assignedLabel}>Auto-Assigned Client Contact</Text>
+                      <Text style={styles.assignedValue} numberOfLines={1}>
+                        {selectedClientObj?.clientName ||
+                          selectedDutyObj.customerName ||
+                          'Client Contact'}
+                        {selectedClientObj?.clientPhoneNumber ||
+                        selectedDutyObj.customerPhoneNumber
+                          ? ` • ${selectedClientObj?.clientPhoneNumber || selectedDutyObj.customerPhoneNumber}`
+                          : ''}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.assignedRow}>
+                    <Ionicons name="information-circle-outline" size={16} color="#0284C7" />
+                    <Text style={styles.assignedOfficeNotice}>
+                      Internal Office Duty — No client contact required.
+                    </Text>
+                  </View>
+                )}
 
-          {/* Company Picker */}
-          <Text style={styles.inputLabel}>
-            {companyCategory === 'office' ? 'Office Location / Company *' : 'Client Company *'}
-          </Text>
-          <TouchableOpacity
-            style={styles.pickerTrigger}
-            onPress={() => setCompanyPickerVisible(true)}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={companyCategory === 'office' ? 'business-outline' : 'storefront-outline'}
-              size={18}
-              color={COLORS.primary}
+                {/* Machine / Work Row */}
+                {selectedDutyObj.machineName ? (
+                  <View style={styles.assignedRow}>
+                    <Ionicons name="hardware-chip-outline" size={16} color={COLORS.textSecondary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.assignedLabel}>Machine / Service</Text>
+                      <Text style={styles.assignedMutedValue} numberOfLines={1}>
+                        {selectedDutyObj.machineName} (
+                        {selectedDutyObj.workType || 'Maintenance'})
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Action Buttons for Assigned Box */}
+                <View style={styles.assignedBoxActions}>
+                  <TouchableOpacity
+                    style={styles.changeWorkBtn}
+                    onPress={() => setDutyPickerVisible(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="swap-horizontal" size={14} color={COLORS.primary} />
+                    <Text style={styles.changeWorkBtnText}>Change Work</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.clearWorkBtn}
+                    onPress={handleClearDuty}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-circle-outline" size={14} color={COLORS.danger} />
+                    <Text style={styles.clearWorkBtnText}>Deselect</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+
+            {/* General Description */}
+            <TextInputField
+              label="General Description (Optional)"
+              placeholder="Brief overview of visit, travel or purpose"
+              value={generalDescription}
+              onChangeText={setGeneralDescription}
+              multiline
+              numberOfLines={2}
+              style={{ marginTop: SPACING.xs }}
             />
-            <Text
-              style={[
-                styles.pickerTriggerText,
-                !selectedCompanyObj && styles.pickerPlaceholder,
-              ]}
-            >
-              {selectedCompanyObj
-                ? `${selectedCompanyObj.companyName}${selectedCompanyObj.location ? ` (${selectedCompanyObj.location})` : ''}`
-                : companyCategory === 'office'
-                ? 'Select Office Location *'
-                : 'Select Client Company *'}
-            </Text>
-            {selectedCompanyObj ? (
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedCompanyId('');
-                  setSelectedClientId('');
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
-              </TouchableOpacity>
-            ) : (
-              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-            )}
-          </TouchableOpacity>
-
-          {/* Client Contact Person */}
-          {companyCategory === 'office' ? (
-            <View style={styles.officeClientNotice}>
-              <Ionicons name="information-circle-outline" size={16} color="#0284C7" />
-              <Text style={styles.officeClientNoticeText}>
-                Office expenses do not require an external client contact.
-              </Text>
+          </Card>
+        ) : (
+          /* TAB 2: BY COMPANY & CLIENT (DIRECT) */
+          <Card style={styles.card}>
+            <View style={styles.cardHeaderRow}>
+              <Ionicons name="business-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Company & Client Details</Text>
             </View>
-          ) : (
-            <>
-              <Text style={styles.inputLabel}>Client Contact Person *</Text>
+            <Text style={styles.cardSubNotice}>
+              Log expenses directly for the office or a client company without a work order.
+            </Text>
+
+            {/* Expense Date */}
+            <Text style={styles.inputLabel}>Expense Date *</Text>
+            <TouchableOpacity
+              style={styles.pickerTrigger}
+              onPress={() => setDatePickerVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.pickerTriggerText}>{formatDate(expenseDate)}</Text>
+            </TouchableOpacity>
+
+            {/* Category Toggle: Office vs Client Company */}
+            <Text style={[styles.inputLabel, { marginTop: SPACING.sm }]}>
+              Company Category *
+            </Text>
+            <View style={styles.typeSelectorRow}>
               <TouchableOpacity
                 style={[
-                  styles.pickerTrigger,
-                  !selectedCompanyId && styles.pickerTriggerDisabled,
+                  styles.typePill,
+                  companyCategory === 'office' && styles.typePillActive,
                 ]}
                 onPress={() => {
-                  if (!selectedCompanyId) {
-                    Alert.alert('Company Required', 'Please select a Client Company first.');
-                    return;
+                  setCompanyCategory('office');
+                  const defaultOffice = companies.find(isOfficeCompany);
+                  if (defaultOffice) {
+                    setSelectedCompanyId(String(defaultOffice._id));
                   }
-                  setClientPickerVisible(true);
+                  setSelectedClientId('');
                 }}
                 activeOpacity={0.8}
-                disabled={!selectedCompanyId}
               >
                 <Ionicons
-                  name="person-outline"
-                  size={18}
-                  color={selectedCompanyId ? COLORS.primary : COLORS.textMuted}
+                  name="business"
+                  size={16}
+                  color={companyCategory === 'office' ? '#FFFFFF' : COLORS.primary}
                 />
                 <Text
                   style={[
-                    styles.pickerTriggerText,
-                    !selectedClientObj && styles.pickerPlaceholder,
+                    styles.typePillText,
+                    companyCategory === 'office' && styles.typePillTextActive,
                   ]}
                 >
-                  {selectedClientObj
-                    ? `${selectedClientObj.clientName || selectedClientObj.name} (${selectedClientObj.clientPhoneNumber || selectedClientObj.phoneNumber || 'No phone'})`
-                    : selectedCompanyId
-                    ? 'Select Client Contact Person *'
-                    : 'Select Company first to choose client'}
+                  Internal Office
                 </Text>
-                {selectedClientObj ? (
-                  <TouchableOpacity
-                    onPress={() => setSelectedClientId('')}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
-                  </TouchableOpacity>
-                ) : (
-                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-                )}
               </TouchableOpacity>
-            </>
-          )}
 
-          {/* General Description */}
-          <TextInputField
-            label="General Description (Optional)"
-            placeholder="Brief overview of visit, destination, or purpose"
-            value={generalDescription}
-            onChangeText={setGeneralDescription}
-            multiline
-            numberOfLines={2}
-            style={{ marginTop: SPACING.xs }}
-          />
-        </Card>
+              <TouchableOpacity
+                style={[
+                  styles.typePill,
+                  companyCategory === 'client' && styles.typePillActive,
+                ]}
+                onPress={() => {
+                  setCompanyCategory('client');
+                  const current = companies.find((c) => String(c._id) === String(selectedCompanyId));
+                  if (!current || isOfficeCompany(current)) {
+                    setSelectedCompanyId('');
+                    setSelectedClientId('');
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="storefront"
+                  size={16}
+                  color={companyCategory === 'client' ? '#FFFFFF' : COLORS.primary}
+                />
+                <Text
+                  style={[
+                    styles.typePillText,
+                    companyCategory === 'client' && styles.typePillTextActive,
+                  ]}
+                >
+                  Client Company
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Company Picker */}
+            <Text style={styles.inputLabel}>
+              {companyCategory === 'office'
+                ? 'Office Location / Company *'
+                : 'Client Company *'}
+            </Text>
+            <TouchableOpacity
+              style={styles.pickerTrigger}
+              onPress={() => setCompanyPickerVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={
+                  companyCategory === 'office'
+                    ? 'business-outline'
+                    : 'storefront-outline'
+                }
+                size={18}
+                color={COLORS.primary}
+              />
+              <Text
+                style={[
+                  styles.pickerTriggerText,
+                  !selectedCompanyObj && styles.pickerPlaceholder,
+                ]}
+              >
+                {selectedCompanyObj
+                  ? `${selectedCompanyObj.companyName}${selectedCompanyObj.location ? ` (${selectedCompanyObj.location})` : ''}`
+                  : companyCategory === 'office'
+                  ? 'Select Office Location *'
+                  : 'Select Client Company *'}
+              </Text>
+              {selectedCompanyObj ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedCompanyId('');
+                    setSelectedClientId('');
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              ) : (
+                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+              )}
+            </TouchableOpacity>
+
+            {/* Client Contact Person */}
+            {companyCategory === 'office' ? (
+              <View style={styles.officeClientNotice}>
+                <Ionicons name="information-circle-outline" size={16} color="#0284C7" />
+                <Text style={styles.officeClientNoticeText}>
+                  Office expenses do not require an external client contact.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.inputLabel}>Client Contact Person *</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.pickerTrigger,
+                    !selectedCompanyId && styles.pickerTriggerDisabled,
+                  ]}
+                  onPress={() => {
+                    if (!selectedCompanyId) {
+                      Alert.alert(
+                        'Company Required',
+                        'Please select a Client Company first.'
+                      );
+                      return;
+                    }
+                    setClientPickerVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                  disabled={!selectedCompanyId}
+                >
+                  <Ionicons
+                    name="person-outline"
+                    size={18}
+                    color={selectedCompanyId ? COLORS.primary : COLORS.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.pickerTriggerText,
+                      !selectedClientObj && styles.pickerPlaceholder,
+                    ]}
+                  >
+                    {selectedClientObj
+                      ? `${selectedClientObj.clientName || selectedClientObj.name} (${selectedClientObj.clientPhoneNumber || selectedClientObj.phoneNumber || 'No phone'})`
+                      : selectedCompanyId
+                      ? 'Select Client Contact Person *'
+                      : 'Select Company first to choose client'}
+                  </Text>
+                  {selectedClientObj ? (
+                    <TouchableOpacity
+                      onPress={() => setSelectedClientId('')}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+                    </TouchableOpacity>
+                  ) : (
+                    <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* General Description */}
+            <TextInputField
+              label="General Description (Optional)"
+              placeholder="Brief overview of visit, destination, or purpose"
+              value={generalDescription}
+              onChangeText={setGeneralDescription}
+              multiline
+              numberOfLines={2}
+              style={{ marginTop: SPACING.xs }}
+            />
+          </Card>
+        )}
 
         {/* 2. Multiple Expense Items */}
         <View style={styles.sectionHeaderRow}>
@@ -1117,14 +1415,13 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
           return {
             label: `${dateStr} • ${code} - ${title}${comp ? ` (${comp})` : ''}`,
             subtitle: `${comp ? `${comp} • ` : ''}${d.customerName || 'General'}`,
-            value: d._id,
+            value: String(d._id),
             raw: d,
           };
         })}
         selectedValue={selectedDutyId}
         onSelect={(val) => {
           handleSelectDuty(val);
-          setDutyPickerVisible(false);
         }}
         title="Select Related Work / Duty"
         showAllOption={false}
@@ -1138,7 +1435,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         items={filteredCompanies.map((c) => ({
           label: c.companyName + (c.location ? ` (${c.location})` : ''),
           subtitle: c.companyType === 'office' ? 'Internal Office' : 'Client Site',
-          value: c._id,
+          value: String(c._id),
         }))}
         selectedValue={selectedCompanyId}
         onSelect={(val) => {
@@ -1157,7 +1454,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         items={clients.map((c) => ({
           label: `${c.clientName || c.name}${c.clientPhoneNumber || c.phoneNumber ? ` (${c.clientPhoneNumber || c.phoneNumber})` : ''}`,
           subtitle: c.designation || 'Client Contact',
-          value: c._id,
+          value: String(c._id),
         }))}
         selectedValue={selectedClientId}
         onSelect={(val) => {
@@ -1211,6 +1508,35 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     paddingBottom: SPACING.xl * 2,
   },
+  entryModeTabBar: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+    backgroundColor: '#E2E8F0',
+    padding: 4,
+    borderRadius: RADIUS.lg,
+  },
+  entryModeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+  },
+  entryModeTabActive: {
+    backgroundColor: COLORS.primary,
+    ...SHADOWS.sm,
+  },
+  entryModeTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  entryModeTabTextActive: {
+    color: '#FFFFFF',
+  },
   card: {
     marginBottom: SPACING.md,
   },
@@ -1218,12 +1544,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: SPACING.sm,
+    marginBottom: 4,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: COLORS.text,
+  },
+  cardSubNotice: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.sm,
   },
   inputLabel: {
     fontSize: 13,
@@ -1231,6 +1562,107 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: 6,
     marginTop: 8,
+  },
+  assignedDetailsBox: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginTop: 6,
+    marginBottom: SPACING.sm,
+  },
+  assignedBoxHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#BBF7D0',
+  },
+  assignedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+  },
+  assignedBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  assignedBoxDate: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  assignedRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginVertical: 4,
+  },
+  assignedLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  assignedValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  assignedMutedValue: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  assignedOfficeNotice: {
+    fontSize: 12,
+    color: '#0369A1',
+    fontWeight: '600',
+    flex: 1,
+  },
+  assignedBoxActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#BBF7D0',
+  },
+  changeWorkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    backgroundColor: '#EEF2FF',
+  },
+  changeWorkBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  clearWorkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    backgroundColor: '#FEE2E2',
+  },
+  clearWorkBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.danger,
   },
   typeSelectorRow: {
     flexDirection: 'row',
@@ -1293,6 +1725,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: SPACING.xs,
   },
+  pickerTriggerSelected: {
+    borderColor: '#86EFAC',
+    backgroundColor: '#F0FDF4',
+  },
   pickerTriggerDisabled: {
     backgroundColor: '#F8FAFC',
     borderColor: '#E2E8F0',
@@ -1303,11 +1739,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text,
     fontWeight: '600',
-  },
-  pickerSubText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 2,
   },
   pickerPlaceholder: {
     color: COLORS.textMuted,

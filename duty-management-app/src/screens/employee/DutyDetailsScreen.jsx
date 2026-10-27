@@ -512,6 +512,16 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           </Card>
         ) : null}
 
+        {/* Quick Add Expense for this Work */}
+        <TouchableOpacity
+          style={styles.addExpenseBtn}
+          onPress={() => navigation.navigate('ExpenseForm', { duty })}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="receipt-outline" size={18} color="#FFFFFF" />
+          <Text style={styles.addExpenseBtnText}>+ Add Expense for this Work</Text>
+        </TouchableOpacity>
+
         {/* Action Buttons: Admin has Edit + Delete, Employee has Edit */}
         {(canEdit || canDelete) && (
           <View style={styles.actionRow}>
@@ -824,10 +834,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderColor: '#E2E8F0',
   },
+  addExpenseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0284C7',
+    paddingVertical: 14,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  addExpenseBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
   actionRow: {
     flexDirection: 'row',
     gap: SPACING.md,
-    marginTop: SPACING.lg,
+    marginTop: SPACING.sm,
     marginBottom: SPACING.xl,
   },
   actionBtn: {
