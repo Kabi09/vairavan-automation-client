@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import expenseApi from '../../api/expenseApi';
 import companyApi from '../../api/companyApi';
 import clientApi from '../../api/clientApi';
+import dutyApi from '../../api/dutyApi';
 import uploadApi from '../../api/uploadApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
@@ -30,6 +31,33 @@ import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
+// Helper to determine if a company represents internal office
+const isOfficeCompany = (c) => {
+  if (!c) return false;
+  const type = String(c.companyType || '').trim().toLowerCase();
+  const name = String(c.companyName || '').trim().toLowerCase();
+  return type === 'office' || name.includes('office');
+};
+
+// Helper to format date nicely as "Oct 3"
+const formatDutyShortDate = (dateVal) => {
+  if (!dateVal) return '';
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return String(dateVal);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+// Safe helper to extract arrays from various response shapes
+const extractArray = (res, key) => {
+  if (!res) return [];
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res[key])) return res[key];
+  if (res.data && Array.isArray(res.data[key])) return res.data[key];
+  if (res.data?.data && Array.isArray(res.data.data[key])) return res.data.data[key];
+  if (Array.isArray(res.data)) return res.data;
+  return [];
+};
+
 const createEmptyItem = (defaultCategory) => ({
   id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
   categoryId: defaultCategory?._id || '',
@@ -43,25 +71,50 @@ const createEmptyItem = (defaultCategory) => ({
   totalQuantity: '',
   amount: '',
   description: '',
-  localAttachments: [], // array of local URIs
-  uploadedAttachments: [], // array of { url, originalName, size }
+  localAttachments: [],
+  uploadedAttachments: [],
 });
 
 export const ExpenseFormScreen = ({ navigation, route }) => {
+  const routeDuty = route?.params?.duty || route?.params?.dutyToEdit;
+
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Dropdown data
+  // Dropdown options
   const [categories, setCategories] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [clients, setClients] = useState([]);
+  const [duties, setDuties] = useState([]);
+
+  // Company Category: 'office' (Internal Office) vs 'client' (Client Company)
+  const [companyCategory, setCompanyCategory] = useState(() => {
+    if (routeDuty) {
+      return routeDuty.dutyType === 'office' ? 'office' : 'client';
+    }
+    return 'client';
+  });
 
   // Form Fields - Basic Details
-  const [expenseDate, setExpenseDate] = useState(formatISODateOnly());
-  const [selectedCompanyId, setSelectedCompanyId] = useState('');
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [relatedDutyId, setRelatedDutyId] = useState('');
+  const [expenseDate, setExpenseDate] = useState(() => {
+    if (routeDuty?.dutyDate) {
+      return formatISODateOnly(routeDuty.dutyDate);
+    }
+    return formatISODateOnly();
+  });
+  const [selectedCompanyId, setSelectedCompanyId] = useState(() => {
+    return routeDuty?.company?._id || routeDuty?.company || '';
+  });
+  const [selectedClientId, setSelectedClientId] = useState(() => {
+    return routeDuty?.client?._id || routeDuty?.client || '';
+  });
+  const [selectedDutyId, setSelectedDutyId] = useState(() => {
+    return routeDuty?._id || '';
+  });
+  const [relatedDutyId, setRelatedDutyId] = useState(() => {
+    return routeDuty?.dutyId || routeDuty?._id || '';
+  });
   const [generalDescription, setGeneralDescription] = useState('');
 
   // Form Fields - Dynamic Items
@@ -71,6 +124,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [companyPickerVisible, setCompanyPickerVisible] = useState(false);
   const [clientPickerVisible, setClientPickerVisible] = useState(false);
+  const [dutyPickerVisible, setDutyPickerVisible] = useState(false);
   const [activeCategoryPickerIndex, setActiveCategoryPickerIndex] = useState(null);
 
   // Lightbox preview modal state
@@ -78,28 +132,42 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   const [previewImageUri, setPreviewImageUri] = useState('');
   const [previewTitle, setPreviewTitle] = useState('');
 
-  // Load Categories & Companies
+  // 1. Load Categories, Companies & Duties on mount
   useEffect(() => {
     let isMounted = true;
     const fetchInitialData = async () => {
       try {
         setLoadingInitial(true);
         setError('');
-        const [catsRes, compsRes] = await Promise.all([
-          expenseApi.getCategories(),
-          companyApi.getCompanies(),
+        const [catsRes, compsRes, dutiesRes] = await Promise.all([
+          expenseApi.getCategories().catch(() => null),
+          companyApi.getCompanies({ status: 'active', limit: 200 }).catch(() => null),
+          dutyApi.getMyDuties({ limit: 100 }).catch(() => null),
         ]);
 
         if (!isMounted) return;
 
-        const activeCats = (catsRes.data?.categories || []).filter(
+        const activeCats = extractArray(catsRes, 'categories').filter(
           (c) => c.status === 'active'
         );
-        setCategories(activeCats);
-        setCompanies(compsRes.data?.companies || []);
+        const allComps = extractArray(compsRes, 'companies');
+        const allDuties = extractArray(dutiesRes, 'duties');
 
-        // Initialize with one empty item
-        const defaultCat = activeCats.find((c) => c.name === 'Travel – Kilometer') || activeCats[0];
+        setCategories(activeCats);
+        setCompanies(allComps);
+        setDuties(allDuties);
+
+        // Pre-select office company if in office mode and not set
+        if (companyCategory === 'office' && !selectedCompanyId) {
+          const defaultOffice = allComps.find(isOfficeCompany);
+          if (defaultOffice) {
+            setSelectedCompanyId(defaultOffice._id);
+          }
+        }
+
+        // Initialize with default item if empty
+        const defaultCat =
+          activeCats.find((c) => c.name === 'Travel – Kilometer') || activeCats[0];
         setItems([createEmptyItem(defaultCat)]);
       } catch (err) {
         if (isMounted) {
@@ -118,11 +186,13 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     };
   }, []);
 
-  // When selected company changes, fetch filtered clients
+  // 2. When selected company or companyCategory changes, fetch filtered clients
   useEffect(() => {
-    if (!selectedCompanyId) {
+    if (!selectedCompanyId || companyCategory === 'office') {
       setClients([]);
-      setSelectedClientId('');
+      if (companyCategory === 'office') {
+        setSelectedClientId('');
+      }
       return;
     }
 
@@ -131,7 +201,13 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       try {
         const res = await clientApi.getClientsByCompany(selectedCompanyId);
         if (isMounted) {
-          setClients(res.data?.clients || []);
+          const clientList = extractArray(res, 'clients');
+          setClients(clientList);
+
+          // Reset selected client if not belonging to this company
+          if (selectedClientId && !clientList.some((c) => c._id === selectedClientId)) {
+            setSelectedClientId('');
+          }
         }
       } catch (err) {
         if (isMounted) {
@@ -144,7 +220,46 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     return () => {
       isMounted = false;
     };
-  }, [selectedCompanyId]);
+  }, [selectedCompanyId, companyCategory]);
+
+  // Handle duty selection from the dropdown with date like "Oct 3"
+  const handleSelectDuty = (dutyId) => {
+    const duty = duties.find((d) => d._id === dutyId);
+    if (!duty) return;
+
+    setSelectedDutyId(duty._id);
+    setRelatedDutyId(duty.dutyId || duty._id);
+
+    // Sync expense date to duty date if available
+    if (duty.dutyDate) {
+      setExpenseDate(formatISODateOnly(duty.dutyDate));
+    }
+
+    // Determine category based on duty
+    const isOffice =
+      duty.dutyType === 'office' || (duty.company && isOfficeCompany(duty.company));
+    setCompanyCategory(isOffice ? 'office' : 'client');
+
+    // Auto-select company
+    if (duty.company) {
+      const compId = duty.company._id || duty.company;
+      setSelectedCompanyId(compId);
+    }
+
+    // Auto-select client if client duty
+    if (duty.client) {
+      const cliId = duty.client._id || duty.client;
+      setSelectedClientId(cliId);
+    } else {
+      setSelectedClientId('');
+    }
+  };
+
+  // Clear selected duty
+  const handleClearDuty = () => {
+    setSelectedDutyId('');
+    setRelatedDutyId('');
+  };
 
   // Handle Category selection for a specific item
   const handleSelectCategory = (itemIndex, category) => {
@@ -184,8 +299,14 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       const item = { ...updated[itemIndex] };
       item[field] = value;
 
-      const outbound = field === 'outboundDistanceKm' ? parseFloat(value) || 0 : parseFloat(item.outboundDistanceKm) || 0;
-      const ret = field === 'returnDistanceKm' ? parseFloat(value) || 0 : parseFloat(item.returnDistanceKm) || 0;
+      const outbound =
+        field === 'outboundDistanceKm'
+          ? parseFloat(value) || 0
+          : parseFloat(item.outboundDistanceKm) || 0;
+      const ret =
+        field === 'returnDistanceKm'
+          ? parseFloat(value) || 0
+          : parseFloat(item.returnDistanceKm) || 0;
       const total = outbound + ret;
 
       item.totalQuantity = total > 0 ? String(total) : '';
@@ -299,11 +420,44 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     }, 0);
   }, [items]);
 
+  // Filtered companies based on category
+  const filteredCompanies = useMemo(() => {
+    if (companyCategory === 'office') {
+      const offices = companies.filter((c) => isOfficeCompany(c));
+      return offices.length > 0 ? offices : companies;
+    }
+    const clientsList = companies.filter((c) => !isOfficeCompany(c));
+    return clientsList.length > 0 ? clientsList : companies;
+  }, [companies, companyCategory]);
+
+  const selectedCompanyObj = companies.find((c) => c._id === selectedCompanyId);
+  const selectedClientObj = clients.find((c) => c._id === selectedClientId);
+  const selectedDutyObj = duties.find((d) => d._id === selectedDutyId);
+
   // Validation & Submission
   const handleSubmit = async () => {
-    if (submitting) return; // Prevent duplicate submission
+    if (submitting) return;
 
-    // Validate Items
+    // 1. Company & Client category validation rules
+    if (companyCategory === 'office') {
+      if (!selectedCompanyId) {
+        Alert.alert('Office Required', 'Please select the Office location/company.');
+        return;
+      }
+      // Note: In office mode, client is NOT required (no client for internal office)
+    } else {
+      // Client Company mode: Both Company and Client are strictly required!
+      if (!selectedCompanyId) {
+        Alert.alert('Company Required', 'Please select a Client Company.');
+        return;
+      }
+      if (!selectedClientId) {
+        Alert.alert('Client Contact Required', 'Please select a Client Contact Person.');
+        return;
+      }
+    }
+
+    // 2. Validate Items
     if (!items.length) {
       Alert.alert('Validation Error', 'Please add at least one expense item.');
       return;
@@ -319,7 +473,10 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       }
 
       if (item.categoryName === 'Others' && !item.customCategoryName?.trim()) {
-        Alert.alert('Validation Error', `Item #${itemNum}: Please specify the custom expense name for Others.`);
+        Alert.alert(
+          'Validation Error',
+          `Item #${itemNum}: Please specify the custom expense name for Others.`
+        );
         return;
       }
 
@@ -378,11 +535,16 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
           category: item.categoryId,
           categoryName: item.categoryName,
           customCategoryName: item.customCategoryName?.trim() || undefined,
+          customTitle: item.customCategoryName?.trim() || undefined,
           calculationMode: item.calculationMode,
           unit: item.unit || undefined,
           appliedRate: item.ratePerUnit || undefined,
+          ratePerUnit: item.ratePerUnit || undefined,
           outboundDistanceKm: item.calculationMode === 'automatic' ? outbound : undefined,
           returnDistanceKm: item.calculationMode === 'automatic' ? ret : undefined,
+          outboundDistance: item.calculationMode === 'automatic' ? outbound : undefined,
+          returnDistance: item.calculationMode === 'automatic' ? ret : undefined,
+          totalDistance: item.calculationMode === 'automatic' ? totalDist : undefined,
           quantity: item.calculationMode === 'automatic' ? totalDist : undefined,
           amount: Math.round(parseFloat(item.amount)),
           description: item.description?.trim() || undefined,
@@ -393,18 +555,24 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       // Step 2: Submit Expense payload
       const payload = {
         expenseDate,
-        company: selectedCompanyId || undefined,
-        client: selectedClientId || undefined,
-        relatedDuty: relatedDutyId?.trim() || undefined,
+        company: selectedCompanyId,
+        companyId: selectedCompanyId,
+        client: companyCategory === 'client' ? (selectedClientId || undefined) : undefined,
+        clientId: companyCategory === 'client' ? (selectedClientId || undefined) : undefined,
+        relatedDuty: selectedDutyObj?.dutyId || relatedDutyId?.trim() || undefined,
+        duty: selectedDutyObj?._id || undefined,
+        dutyId: selectedDutyObj?._id || undefined,
         generalDescription: generalDescription?.trim() || undefined,
         items: preparedItems,
       };
 
       const res = await expenseApi.createExpense(payload);
+      const expenseObj = res.data?.expense || res.data?.data?.expense || res.expense;
+      const expenseCode = expenseObj?.expenseId || '';
 
       Alert.alert(
         'Expense Submitted',
-        `Your expense submission #${res.data?.expense?.expenseId || ''} for ₹${grandTotal.toLocaleString('en-IN')} has been saved successfully.`,
+        `Your expense claim ${expenseCode ? `#${expenseCode} ` : ''}for ₹${grandTotal.toLocaleString('en-IN')} has been submitted successfully.`,
         [
           {
             text: 'OK',
@@ -412,15 +580,16 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
               if (navigation.canGoBack()) {
                 navigation.goBack();
               } else {
-                navigation.navigate('MyExpenses');
+                navigation.navigate('EmployeeMainTabs', { screen: 'ExpensesTab' });
               }
             },
           },
         ]
       );
     } catch (submitErr) {
-      setError(extractErrorMessage(submitErr, 'Failed to submit expense claim'));
-      Alert.alert('Submission Error', extractErrorMessage(submitErr, 'Failed to submit expense claim'));
+      const msg = extractErrorMessage(submitErr, 'Failed to submit expense claim');
+      setError(msg);
+      Alert.alert('Submission Error', msg);
     } finally {
       setSubmitting(false);
     }
@@ -434,9 +603,6 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       </SafeAreaView>
     );
   }
-
-  const selectedCompanyObj = companies.find((c) => c._id === selectedCompanyId);
-  const selectedClientObj = clients.find((c) => c._id === selectedClientId);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -471,42 +637,187 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
             <Text style={styles.pickerTriggerText}>{formatDate(expenseDate)}</Text>
           </TouchableOpacity>
 
-          {/* Company (Optional) */}
-          <Text style={styles.inputLabel}>Company (Optional)</Text>
+          {/* Related Work / Duty (Dropdown with Dates e.g. "Oct 3") */}
+          <Text style={styles.inputLabel}>Related Work / Duty (Optional)</Text>
+          <TouchableOpacity
+            style={styles.pickerTrigger}
+            onPress={() => setDutyPickerVisible(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="briefcase-outline" size={18} color={COLORS.primary} />
+            <View style={{ flex: 1 }}>
+              {selectedDutyObj ? (
+                <View>
+                  <Text style={styles.pickerTriggerText} numberOfLines={1}>
+                    {formatDutyShortDate(selectedDutyObj.dutyDate)} • {selectedDutyObj.dutyId || 'Work'} -{' '}
+                    {selectedDutyObj.machineName || selectedDutyObj.workType || 'Duty'}
+                  </Text>
+                  <Text style={styles.pickerSubText} numberOfLines={1}>
+                    {selectedDutyObj.company?.companyName ||
+                      (selectedDutyObj.dutyType === 'office' ? 'Office' : 'Company')}{' '}
+                    • {selectedDutyObj.customerName || 'General'}
+                  </Text>
+                </View>
+              ) : relatedDutyId ? (
+                <Text style={styles.pickerTriggerText} numberOfLines={1}>
+                  Duty ID: {relatedDutyId}
+                </Text>
+              ) : (
+                <Text style={[styles.pickerTriggerText, styles.pickerPlaceholder]}>
+                  Select from your duties (e.g. Oct 3) or leave blank
+                </Text>
+              )}
+            </View>
+            {selectedDutyObj || relatedDutyId ? (
+              <TouchableOpacity
+                onPress={handleClearDuty}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            ) : (
+              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+            )}
+          </TouchableOpacity>
+
+          {/* Category Toggle: Office vs Client Company */}
+          <Text style={[styles.inputLabel, { marginTop: SPACING.sm }]}>
+            Company Category *
+          </Text>
+          <View style={styles.typeSelectorRow}>
+            <TouchableOpacity
+              style={[
+                styles.typePill,
+                companyCategory === 'office' && styles.typePillActive,
+              ]}
+              onPress={() => {
+                setCompanyCategory('office');
+                const defaultOffice = companies.find(isOfficeCompany);
+                if (defaultOffice) {
+                  setSelectedCompanyId(defaultOffice._id);
+                }
+                setSelectedClientId('');
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="business"
+                size={16}
+                color={companyCategory === 'office' ? '#FFFFFF' : COLORS.primary}
+              />
+              <Text
+                style={[
+                  styles.typePillText,
+                  companyCategory === 'office' && styles.typePillTextActive,
+                ]}
+              >
+                Internal Office
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.typePill,
+                companyCategory === 'client' && styles.typePillActive,
+              ]}
+              onPress={() => {
+                setCompanyCategory('client');
+                const current = companies.find((c) => c._id === selectedCompanyId);
+                if (!current || isOfficeCompany(current)) {
+                  setSelectedCompanyId('');
+                  setSelectedClientId('');
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="storefront"
+                size={16}
+                color={companyCategory === 'client' ? '#FFFFFF' : COLORS.primary}
+              />
+              <Text
+                style={[
+                  styles.typePillText,
+                  companyCategory === 'client' && styles.typePillTextActive,
+                ]}
+              >
+                Client Company
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Company Picker */}
+          <Text style={styles.inputLabel}>
+            {companyCategory === 'office' ? 'Office Location / Company *' : 'Client Company *'}
+          </Text>
           <TouchableOpacity
             style={styles.pickerTrigger}
             onPress={() => setCompanyPickerVisible(true)}
             activeOpacity={0.8}
           >
-            <Ionicons name="business-outline" size={18} color={COLORS.primary} />
+            <Ionicons
+              name={companyCategory === 'office' ? 'business-outline' : 'storefront-outline'}
+              size={18}
+              color={COLORS.primary}
+            />
             <Text
               style={[
                 styles.pickerTriggerText,
                 !selectedCompanyObj && styles.pickerPlaceholder,
               ]}
             >
-              {selectedCompanyObj ? selectedCompanyObj.companyName : 'Select Company (Optional)'}
+              {selectedCompanyObj
+                ? `${selectedCompanyObj.companyName}${selectedCompanyObj.location ? ` (${selectedCompanyObj.location})` : ''}`
+                : companyCategory === 'office'
+                ? 'Select Office Location *'
+                : 'Select Client Company *'}
             </Text>
             {selectedCompanyObj ? (
               <TouchableOpacity
-                onPress={() => setSelectedCompanyId('')}
+                onPress={() => {
+                  setSelectedCompanyId('');
+                  setSelectedClientId('');
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
               </TouchableOpacity>
-            ) : null}
+            ) : (
+              <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+            )}
           </TouchableOpacity>
 
-          {/* Client (Optional, filtered by company) */}
-          {selectedCompanyId ? (
+          {/* Client Contact Person */}
+          {companyCategory === 'office' ? (
+            <View style={styles.officeClientNotice}>
+              <Ionicons name="information-circle-outline" size={16} color="#0284C7" />
+              <Text style={styles.officeClientNoticeText}>
+                Office expenses do not require an external client contact.
+              </Text>
+            </View>
+          ) : (
             <>
-              <Text style={styles.inputLabel}>Client / Contact (Optional)</Text>
+              <Text style={styles.inputLabel}>Client Contact Person *</Text>
               <TouchableOpacity
-                style={styles.pickerTrigger}
-                onPress={() => setClientPickerVisible(true)}
+                style={[
+                  styles.pickerTrigger,
+                  !selectedCompanyId && styles.pickerTriggerDisabled,
+                ]}
+                onPress={() => {
+                  if (!selectedCompanyId) {
+                    Alert.alert('Company Required', 'Please select a Client Company first.');
+                    return;
+                  }
+                  setClientPickerVisible(true);
+                }}
                 activeOpacity={0.8}
+                disabled={!selectedCompanyId}
               >
-                <Ionicons name="person-outline" size={18} color={COLORS.primary} />
+                <Ionicons
+                  name="person-outline"
+                  size={18}
+                  color={selectedCompanyId ? COLORS.primary : COLORS.textMuted}
+                />
                 <Text
                   style={[
                     styles.pickerTriggerText,
@@ -514,8 +825,10 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
                   ]}
                 >
                   {selectedClientObj
-                    ? `${selectedClientObj.clientName || selectedClientObj.name} (${selectedClientObj.clientPhoneNumber || selectedClientObj.phoneNumber || ''})`
-                    : 'Select Client (Optional)'}
+                    ? `${selectedClientObj.clientName || selectedClientObj.name} (${selectedClientObj.clientPhoneNumber || selectedClientObj.phoneNumber || 'No phone'})`
+                    : selectedCompanyId
+                    ? 'Select Client Contact Person *'
+                    : 'Select Company first to choose client'}
                 </Text>
                 {selectedClientObj ? (
                   <TouchableOpacity
@@ -524,28 +837,22 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
                   >
                     <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
                   </TouchableOpacity>
-                ) : null}
+                ) : (
+                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+                )}
               </TouchableOpacity>
             </>
-          ) : null}
-
-          {/* Related Duty / Work ID */}
-          <TextInputField
-            label="Related Work / Duty (Optional)"
-            placeholder="e.g. WORK-0123 or Service Visit"
-            value={relatedDutyId}
-            onChangeText={setRelatedDutyId}
-            leftIcon="briefcase-outline"
-          />
+          )}
 
           {/* General Description */}
           <TextInputField
             label="General Description (Optional)"
-            placeholder="Brief overview of the visit or travel"
+            placeholder="Brief overview of visit, destination, or purpose"
             value={generalDescription}
             onChangeText={setGeneralDescription}
             multiline
             numberOfLines={2}
+            style={{ marginTop: SPACING.xs }}
           />
         </Card>
 
@@ -568,10 +875,6 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         </View>
 
         {items.map((item, index) => {
-          const isKmAutomatic =
-            item.calculationMode === 'automatic' ||
-            item.categoryName.toLowerCase().includes('kilometer') ||
-            item.categoryName.toLowerCase().includes('km');
           const isOthers = item.categoryName === 'Others';
 
           return (
@@ -780,7 +1083,11 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         {/* Submit Action */}
         <View style={styles.submitContainer}>
           <PrimaryButton
-            title={submitting ? 'Submitting Expense...' : `Submit Expense (₹${grandTotal.toLocaleString('en-IN')})`}
+            title={
+              submitting
+                ? 'Submitting Expense...'
+                : `Submit Expense (₹${grandTotal.toLocaleString('en-IN')})`
+            }
             onPress={handleSubmit}
             loading={submitting}
             disabled={submitting}
@@ -798,12 +1105,39 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         title="Select Expense Date"
       />
 
+      {/* Related Duty Picker Modal with "Oct 3" formatting */}
+      <DropdownPickerModal
+        visible={dutyPickerVisible}
+        onClose={() => setDutyPickerVisible(false)}
+        items={duties.map((d) => {
+          const dateStr = formatDutyShortDate(d.dutyDate);
+          const code = d.dutyId || 'Work';
+          const title = d.machineName || d.workType || d.customerName || 'Service Duty';
+          const comp = d.company?.companyName || (d.dutyType === 'office' ? 'Office' : '');
+          return {
+            label: `${dateStr} • ${code} - ${title}${comp ? ` (${comp})` : ''}`,
+            subtitle: `${comp ? `${comp} • ` : ''}${d.customerName || 'General'}`,
+            value: d._id,
+            raw: d,
+          };
+        })}
+        selectedValue={selectedDutyId}
+        onSelect={(val) => {
+          handleSelectDuty(val);
+          setDutyPickerVisible(false);
+        }}
+        title="Select Related Work / Duty"
+        showAllOption={false}
+        searchPlaceholder="Search work code, machine, date..."
+      />
+
       {/* Company Picker Modal */}
       <DropdownPickerModal
         visible={companyPickerVisible}
         onClose={() => setCompanyPickerVisible(false)}
-        items={companies.map((c) => ({
+        items={filteredCompanies.map((c) => ({
           label: c.companyName + (c.location ? ` (${c.location})` : ''),
+          subtitle: c.companyType === 'office' ? 'Internal Office' : 'Client Site',
           value: c._id,
         }))}
         selectedValue={selectedCompanyId}
@@ -811,8 +1145,9 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
           setSelectedCompanyId(val);
           setCompanyPickerVisible(false);
         }}
-        title="Select Company"
-        searchable
+        title={companyCategory === 'office' ? 'Select Office Location' : 'Select Client Company'}
+        showAllOption={false}
+        searchPlaceholder="Search company name or location..."
       />
 
       {/* Client Picker Modal */}
@@ -820,7 +1155,8 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         visible={clientPickerVisible}
         onClose={() => setClientPickerVisible(false)}
         items={clients.map((c) => ({
-          label: `${c.clientName || c.name} (${c.clientPhoneNumber || c.phoneNumber || ''})`,
+          label: `${c.clientName || c.name}${c.clientPhoneNumber || c.phoneNumber ? ` (${c.clientPhoneNumber || c.phoneNumber})` : ''}`,
+          subtitle: c.designation || 'Client Contact',
           value: c._id,
         }))}
         selectedValue={selectedClientId}
@@ -828,8 +1164,9 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
           setSelectedClientId(val);
           setClientPickerVisible(false);
         }}
-        title="Select Client Contact"
-        searchable
+        title="Select Client Contact Person"
+        showAllOption={false}
+        searchPlaceholder="Search contact name or phone..."
       />
 
       {/* Category Picker Modal */}
@@ -842,9 +1179,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
           raw: c,
         }))}
         selectedValue={
-          activeCategoryPickerIndex !== null
-            ? items[activeCategoryPickerIndex]?.categoryId
-            : ''
+          activeCategoryPickerIndex !== null ? items[activeCategoryPickerIndex]?.categoryId : ''
         }
         onSelect={(val) => {
           const selectedCat = categories.find((c) => c._id === val);
@@ -853,6 +1188,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
           }
         }}
         title="Select Expense Category"
+        showAllOption={false}
       />
 
       {/* Lightbox Preview */}
@@ -896,23 +1232,82 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 8,
   },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  typePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  typePillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    ...SHADOWS.sm,
+  },
+  typePillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  typePillTextActive: {
+    color: '#FFFFFF',
+  },
+  officeClientNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: RADIUS.md,
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  officeClientNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#0369A1',
+    fontWeight: '600',
+  },
   pickerTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    gap: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: RADIUS.md,
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: SPACING.md,
     paddingVertical: 12,
-    gap: 10,
-    marginBottom: 6,
+    marginBottom: SPACING.xs,
+  },
+  pickerTriggerDisabled: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.7,
   },
   pickerTriggerText: {
     flex: 1,
     fontSize: 14,
     color: COLORS.text,
     fontWeight: '600',
+  },
+  pickerSubText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
   pickerPlaceholder: {
     color: COLORS.textMuted,
@@ -922,21 +1317,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#EFF6FF',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderRadius: RADIUS.full,
   },
   modeBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
     color: COLORS.primary,
+    fontWeight: '700',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: SPACING.sm,
+    alignItems: 'center',
     marginBottom: SPACING.sm,
+    marginTop: SPACING.xs,
   },
   sectionTitleWrap: {
     flexDirection: 'row',
@@ -951,21 +1344,19 @@ const styles = StyleSheet.create({
   addItemBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     backgroundColor: COLORS.primary,
+    paddingVertical: 6,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.full,
   },
   addItemBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
+    color: '#FFFFFF',
   },
   itemCard: {
     marginBottom: SPACING.md,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.primary,
   },
   itemCardHeader: {
     flexDirection: 'row',
@@ -974,17 +1365,15 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   itemBadge: {
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
   },
   itemBadgeText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#0369A1',
+    fontWeight: '700',
+    color: COLORS.textSecondary,
   },
   removeItemBtn: {
     padding: 4,
@@ -993,9 +1382,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.md,
     padding: SPACING.sm,
-    marginVertical: 6,
+    marginTop: 6,
+    marginBottom: 6,
   },
   rateRow: {
     flexDirection: 'row',

@@ -2304,21 +2304,53 @@
 - Reason: User requested: "bug there - api working ,client-add; but not selectable and not show; fix ; add client moadal -sumbit db store the data but still modal show ; fix the client modal;;;; work detail sperate with location like checkin location,checout location;;; one bug there - check one location is assign then chechout previous(checkin)location default added so i want freashly add the location in checkin,out;;;;; manpow add- not user friendly and ui not good; i dont want to manpower- add button click scrool to next manpower add ; fix user friendly;;;".
 - Impact: Highly polished client creation flow, independent check-in and departure audit trail, pristine and non-scrolling manpower UX, and comprehensive field reporting.
 
+### 2026-10-27
+#### Auto-Navigate on Check-In, Manpower Description Field, and Expense Form Overhaul
+- What was changed:
+  - **Check-In Auto-Navigation**: In `DutyFormScreen.jsx`, successfully completed check-in now automatically navigates the employee back to the Dashboard (`EmployeeMainTabs` -> `DashboardTab`) upon clicking OK in the confirmation alert or after a 1.2s timeout.
+  - **Manpower Add Member Description Field**: Added dedicated "Work Description / Task Details (Optional)" text input in the Add/Edit Manpower modal, mapped `memberModalDescription` in state and save/edit workflows, and displayed the description in the compact member list card with `memberDescText` styling.
+  - **Expense Form Company Category & Validation Overhaul**:
+    - Introduced "Internal Office" vs "Client Company" toggle in `ExpenseFormScreen.jsx`.
+    - **Office Rule**: Office Location/Company is required; client contact is NOT required and replaced with a clear informational notice.
+    - **Client Company Rule**: Both Client Company AND Client Contact Person are strictly required before submission.
+  - **Related Work / Duty Selector with Short Dates ("Oct 3")**:
+    - Replaced free-text input with an interactive `DropdownPickerModal` listing the employee's duties fetched from `dutyApi.getMyDuties`.
+    - Formats duties with short dates (e.g. `Oct 3 • WORK-1001 - CNC Frame (Acme Corp)`).
+    - Selecting a duty automatically auto-populates Company, Client, Category (office vs client), and matches the Expense Date to the duty date.
+    - Clear `(X)` action allows instant removal of selected duty.
+  - **Expense Form Bug Fixes**:
+    - Fixed missing `createExpense` in `expenseApi.js`.
+    - Fixed missing `getClientsByCompany` in `clientApi.js`.
+    - Added resilient array unwrapping (`extractArray`) supporting multiple backend response shapes (`res.data?.data`, `res.data`, or direct arrays) for companies, categories, clients, and duties.
+- Files changed:
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/ExpenseFormScreen.jsx`
+  - `duty-management-app/src/api/expenseApi.js`
+  - `duty-management-app/src/api/clientApi.js`
+  - `project.md`
+- Logic changed:
+  - Check-in transition now automatically redirects to Dashboard.
+  - Expense validation dynamically adjusts requirements based on selected company category (Office requires company only; Client requires both company and client).
+  - Expense form safely resolves nested API responses and duty associations.
+- Reason: User requested: "i want check in done automattically navigate to dashboad;;; manpower->add member- add description feild;;; bug ->add expense -company required incase office have dont client another- cleent company-cleient,compay required;work listout with date like oct 3and select;;; also not working to expense form fix;;".
+- Impact: Streamlined check-in flow, thorough manpower logging, robust expense submission without errors, strict business rule enforcement for Office vs Client expenses, and seamless one-tap duty linking.
+
 ## Current Progress
 - Completed:
-  - Fixed client modal: parses `res.data?.data?.client`, closes modal immediately upon save, adds to list and auto-selects client.
-  - Decoupled check-in and check-out GPS coordinates: checkout starts fresh with independent capture (no defaulting to check-in).
-  - Revamped manpower addition: replaced multi-field scrolling cards with touch-friendly compact member tiles and a dedicated role-preset modal dialog.
-  - Separated Check-In and Check-Out location reporting with exact reverse-geocoded addresses and Google Maps links in `DutyDetailsScreen` and `AllDutiesScreen`.
-  - Updated PDF and Excel exports with separate Check-In and Check-Out Location columns and maps links.
-  - Backend controller updated to persist `checkOutLocation` and `manpowerMembers`.
-  - 49/49 backend tests passing.
-  - All modified frontend screens AST validated with 0 errors.
+  - Check-in auto-navigation to Dashboard tab upon successful check-in.
+  - Description / task details input field added to Manpower modal and displayed in team cards.
+  - Expense Form completely overhauled with Internal Office vs Client Company toggle.
+  - Strict validation: Office requires company only; Client Company strictly requires both company and client contact person.
+  - Related Duty dropdown with short dates ("Oct 3 • WORK-1001...") and auto-fill of company/client/date.
+  - Fixed `expenseApi.createExpense` and `clientApi.getClientsByCompany`.
+  - Resilient response parsing for categories, companies, clients, and duties.
+  - 49/49 backend unit & integration tests passing.
+  - AST syntax check passing for all modified frontend screens.
 
 ## Known Issues
-- Issue: None. All systems operational and verified.
+- Issue: None. All reported bugs resolved and verified.
 - Status: Clean state.
-- Notes: Mobile frontend connects to live API at `https://vairavan-automation-client-iony.vercel.app/api`.
+- Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
 - Decision: Pre-select Default Office in Add Work and auto-launch Client modal on toggle.

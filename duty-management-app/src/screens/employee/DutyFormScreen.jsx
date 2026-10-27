@@ -206,6 +206,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const [memberModalName, setMemberModalName] = useState('');
   const [memberModalPhone, setMemberModalPhone] = useState('');
   const [memberModalRole, setMemberModalRole] = useState('');
+  const [memberModalDescription, setMemberModalDescription] = useState('');
   const [memberModalError, setMemberModalError] = useState('');
 
   // Submission / Loading state
@@ -636,7 +637,15 @@ export const DutyFormScreen = ({ navigation, route }) => {
         setCheckOutLocationCoords(null);
         Alert.alert(
           'Check-In Successful',
-          `Checked in at ${companyCategory === 'office' ? 'Office' : customerName || 'Client Site'}!\nYou can now log work details and checkout.`
+          `Checked in at ${companyCategory === 'office' ? 'Office' : customerName || 'Client Site'}!`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigation.navigate('EmployeeMainTabs', { screen: 'DashboardTab' });
+              },
+            },
+          ]
         );
       }
     } catch (err) {
@@ -676,6 +685,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setMemberModalName('');
     setMemberModalPhone('');
     setMemberModalRole('');
+    setMemberModalDescription('');
     setMemberModalError('');
     setManpowerModalVisible(true);
   };
@@ -686,7 +696,8 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setEditingManpowerIndex(index);
     setMemberModalName(member.name || '');
     setMemberModalPhone(member.phoneNumber || member.phone || '');
-    setMemberModalRole(member.description || '');
+    setMemberModalRole(member.role || member.description || '');
+    setMemberModalDescription(member.description || '');
     setMemberModalError('');
     setManpowerModalVisible(true);
   };
@@ -700,7 +711,8 @@ export const DutyFormScreen = ({ navigation, route }) => {
     const memberData = {
       name: memberModalName.trim(),
       phoneNumber: memberModalPhone.trim(),
-      description: memberModalRole.trim(),
+      role: memberModalRole.trim(),
+      description: memberModalDescription.trim() || memberModalRole.trim(),
     };
 
     if (editingManpowerIndex !== null) {
@@ -1506,10 +1518,10 @@ export const DutyFormScreen = ({ navigation, route }) => {
                               {member.name}
                             </Text>
                             <View style={styles.memberMetaRow}>
-                              {member.description ? (
+                              {(member.role || member.description) ? (
                                 <View style={styles.memberRoleBadge}>
                                   <Text style={styles.memberRoleBadgeText} numberOfLines={1}>
-                                    {member.description}
+                                    {member.role || member.description}
                                   </Text>
                                 </View>
                               ) : null}
@@ -1520,6 +1532,11 @@ export const DutyFormScreen = ({ navigation, route }) => {
                                 </View>
                               ) : null}
                             </View>
+                            {member.description && member.role && member.description !== member.role ? (
+                              <Text style={styles.memberDescText} numberOfLines={2}>
+                                {member.description}
+                              </Text>
+                            ) : null}
                           </View>
 
                           <View style={styles.memberActionsRow}>
@@ -2047,11 +2064,20 @@ export const DutyFormScreen = ({ navigation, route }) => {
             </View>
 
             <TextInputField
-              label="Custom Role / Note"
+              label="Custom Role / Title"
               placeholder="Or type custom role (e.g. Wiring Specialist)"
               value={memberModalRole}
               onChangeText={setMemberModalRole}
               style={{ marginTop: SPACING.xs }}
+            />
+
+            <TextInputField
+              label="Work Description / Task Details (Optional)"
+              placeholder="e.g. Panel wiring, sensor calibration, CNC loading"
+              value={memberModalDescription}
+              onChangeText={setMemberModalDescription}
+              multiline
+              numberOfLines={2}
             />
 
             <TextInputField
@@ -2610,6 +2636,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSecondary,
     fontWeight: '500',
+  },
+  memberDescText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 3,
+    fontStyle: 'italic',
   },
   memberActionsRow: {
     flexDirection: 'row',

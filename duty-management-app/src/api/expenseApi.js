@@ -31,6 +31,11 @@ export const expenseApi = {
     return res.data;
   },
 
+  createExpense: async (expenseData) => {
+    const res = await apiClient.post('/expenses', expenseData);
+    return res.data;
+  },
+
   getMyExpenses: async (params = {}) => {
     const res = await apiClient.get('/expenses/my', { params });
     return res.data;

@@ -10,6 +10,11 @@ export const clientApi = {
   getClients: (params = {}) => apiClient.get('/clients', { params }),
 
   /**
+   * Get active clients for a specific company
+   */
+  getClientsByCompany: (companyId) => apiClient.get('/clients', { params: { companyId, status: 'active' } }),
+
+  /**
    * Add a new client linked to a company
    */
   createClient: (data) => apiClient.post('/clients', data),
