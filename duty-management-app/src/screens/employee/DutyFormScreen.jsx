@@ -65,7 +65,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const [companyCategory, setCompanyCategory] = useState(() => {
     if (dutyToEdit?.dutyType) return dutyToEdit.dutyType;
     if (dutyToEdit?.company?.companyType) return dutyToEdit.company.companyType;
-    return 'office'; // default Office
+    return ''; // No default entity: user chooses Office or Client
   });
   const [selectedCompanyId, setSelectedCompanyId] = useState(() => {
     return dutyToEdit?.company?._id || dutyToEdit?.company || '';
@@ -77,7 +77,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const [customerName, setCustomerName] = useState(() => dutyToEdit?.customerName || '');
   const [customerPhone, setCustomerPhone] = useState(() => dutyToEdit?.customerPhoneNumber || '');
   const [machineName, setMachineName] = useState(() => dutyToEdit?.machineName || '');
-  const [workType, setWorkType] = useState(() => dutyToEdit?.workType || 'Maintenance');
+  const [workType, setWorkType] = useState(() => dutyToEdit?.workType || '');
   const [customWorkDetails, setCustomWorkDetails] = useState(() => {
     if (dutyToEdit?.customWorkType) return dutyToEdit.customWorkType;
     const match = dutyToEdit?.workDescription?.match(/^\[Work:\s*([^\]]+)\]/);
@@ -242,12 +242,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
       try {
         const draft = await getWorkDraft();
         if (draft && isMounted) {
-          if (draft.dutyDate) setDutyDate(draft.dutyDate);
-          if (draft.companyCategory) setCompanyCategory(draft.companyCategory);
-          if (draft.selectedCompanyId) setSelectedCompanyId(draft.selectedCompanyId);
-          if (draft.selectedClientId) setSelectedClientId(draft.selectedClientId);
-          if (draft.customerName) setCustomerName(draft.customerName);
-          if (draft.customerPhone) setCustomerPhone(draft.customerPhone);
+          // Restore work details only (do not prefill check-in entity or company)
           if (draft.machineName) setMachineName(draft.machineName);
           if (draft.workType) setWorkType(draft.workType);
           if (draft.customWorkDetails) setCustomWorkDetails(draft.customWorkDetails);
@@ -352,6 +347,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
   // Required Fields Completion Verification
   const isCheckInComplete = Boolean(
     dutyDate &&
+    companyCategory &&
     selectedCompanyId &&
     (companyCategory === 'office'
       ? true
@@ -458,14 +454,6 @@ export const DutyFormScreen = ({ navigation, route }) => {
           const companyList = compRes.data?.data?.companies || compRes.data?.companies || [];
           if (companyList.length > 0) {
             setCompanies(companyList);
-
-            // If no company selected and in office mode, pre-select default office
-            if (!selectedCompanyId && !dutyToEdit && companyCategory === 'office') {
-              const defaultOffice = companyList.find((c) => isOfficeCompany(c));
-              if (defaultOffice) {
-                setSelectedCompanyId(defaultOffice._id);
-              }
-            }
           }
         } catch (err) {
           console.warn('Failed to load companies in duty form:', err);
@@ -704,6 +692,10 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setError('');
     const errors = {};
 
+    if (!companyCategory) {
+      errors.companyCategory = 'Please select Duty Type (Office Duty or Client Company)';
+    }
+
     if (!selectedCompanyId) {
       errors.company =
         companyCategory === 'office' ? 'Please select an office' : 'Please select a client company';
@@ -720,7 +712,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      Alert.alert('Incomplete Check-In', 'Please select both company and client contact to proceed.');
+      Alert.alert('Incomplete Check-In', errors.companyCategory || errors.company || errors.client || 'Please complete all required fields.');
       return;
     }
 
@@ -779,8 +771,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
         address: currentCoords?.address,
       };
 
-      const res = await dutyApi.checkIn(checkInPayload);
-      const createdDuty = res.data?.data?.duty || res.data?.duty;
+      const createdDuty = res.data?.data?.duty || res.data?.duty || res.duty;
       if (createdDuty) {
         setIsCheckedIn(true);
         setActiveDutyId(createdDuty._id);
@@ -789,15 +780,8 @@ export const DutyFormScreen = ({ navigation, route }) => {
         setCheckOutLocationCoords(null);
         Alert.alert(
           'Check-In Successful',
-          `Checked in at ${companyCategory === 'office' ? 'Office' : customerName || 'Client Site'}!`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                navigation.navigate('EmployeeMainTabs', { screen: 'DashboardTab' });
-              },
-            },
-          ]
+          `Checked in at ${companyCategory === 'office' ? 'Office' : customerName || 'Client Site'}! You can now log your work details and check out when finished.`,
+          [{ text: 'Continue' }]
         );
       }
     } catch (err) {
@@ -1210,10 +1194,14 @@ export const DutyFormScreen = ({ navigation, route }) => {
                   ]}
                   onPress={() => {
                     setCompanyCategory('office');
-                    const officeComp = companies.find((c) => isOfficeCompany(c));
-                    if (officeComp) {
-                      setSelectedCompanyId(officeComp._id);
+                    const currentComp = companies.find((c) => c._id === selectedCompanyId);
+                    if (!currentComp || !isOfficeCompany(currentComp)) {
+                      setSelectedCompanyId('');
+                      setSelectedClientId('');
                     }
+                    setCustomerName('Office');
+                    setCustomerPhone('');
+                    setCompanyDropdownVisible(true);
                   }}
                   activeOpacity={0.8}
                 >

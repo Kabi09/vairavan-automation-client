@@ -319,186 +319,207 @@ export const MonthlyCalendarView = ({
                 <Text style={styles.summaryTapHint}>Tap any card to view dates</Text>
               </View>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.summaryScroll}
-              >
-                {/* 1. Scheduled Working Days */}
-                <TouchableOpacity
-                  style={[styles.kpiCard, { borderColor: '#CBD5E1', backgroundColor: '#F8FAFC' }]}
-                  onPress={() =>
-                    handleOpenSummaryCategory(
-                      'workingDays',
-                      'Scheduled Working Days',
-                      'calendar-outline',
-                      '#475569',
-                      summary.totalScheduledWorkingDays
-                    )
-                  }
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.kpiTopRow}>
-                    <Ionicons name="calendar-outline" size={18} color="#475569" />
-                    <View style={styles.tapPill}>
-                      <Ionicons name="list" size={10} color="#475569" />
+              <View style={styles.summaryGrid}>
+                {/* Row 1: Core Attendance (3 items: Working Days, Days Worked, Holidays) */}
+                <View style={styles.summaryRow}>
+                  {/* 1. Scheduled Working Days */}
+                  <TouchableOpacity
+                    style={[styles.kpiCardThird, { borderColor: '#CBD5E1', backgroundColor: '#F8FAFC' }]}
+                    onPress={() =>
+                      handleOpenSummaryCategory(
+                        'workingDays',
+                        'Scheduled Working Days',
+                        'calendar-outline',
+                        '#475569',
+                        summary.totalScheduledWorkingDays
+                      )
+                    }
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.kpiTopRow}>
+                      <Ionicons name="calendar-outline" size={16} color="#475569" />
+                      <View style={styles.tapPill}>
+                        <Ionicons name="list" size={9} color="#475569" />
+                      </View>
                     </View>
-                  </View>
-                  <Text style={styles.kpiNumber}>{summary.totalScheduledWorkingDays}</Text>
-                  <Text style={styles.kpiLabel}>Working Days</Text>
-                  <Text style={styles.kpiViewText}>View dates ›</Text>
-                </TouchableOpacity>
+                    <Text style={styles.kpiNumberThird}>{summary.totalScheduledWorkingDays}</Text>
+                    <Text style={styles.kpiLabelThird} numberOfLines={1}>Working Days</Text>
+                    <Text style={styles.kpiViewTextThird}>Tap dates ›</Text>
+                  </TouchableOpacity>
 
-                {/* 2. Days Worked */}
-                <TouchableOpacity
-                  style={[styles.kpiCard, { borderColor: '#86EFAC', backgroundColor: '#F0FDF4' }]}
-                  onPress={() =>
-                    handleOpenSummaryCategory(
-                      'daysWorked',
-                      'Days Worked / Present',
-                      'checkmark-circle',
-                      '#059669',
-                      summary.daysWorked
-                    )
-                  }
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.kpiTopRow}>
-                    <Ionicons name="checkmark-circle" size={18} color="#059669" />
-                    <View style={[styles.tapPill, { backgroundColor: '#DCFCE7' }]}>
-                      <Ionicons name="list" size={10} color="#059669" />
+                  {/* 2. Days Worked */}
+                  <TouchableOpacity
+                    style={[styles.kpiCardThird, { borderColor: '#86EFAC', backgroundColor: '#F0FDF4' }]}
+                    onPress={() =>
+                      handleOpenSummaryCategory(
+                        'daysWorked',
+                        'Days Worked / Present',
+                        'checkmark-circle',
+                        '#059669',
+                        summary.daysWorked
+                      )
+                    }
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.kpiTopRow}>
+                      <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                      <View style={[styles.tapPill, { backgroundColor: '#DCFCE7' }]}>
+                        <Ionicons name="list" size={9} color="#059669" />
+                      </View>
                     </View>
-                  </View>
-                  <Text style={[styles.kpiNumber, { color: '#059669' }]}>{summary.daysWorked}</Text>
-                  <Text style={styles.kpiLabel}>Days Worked</Text>
-                  <Text style={[styles.kpiViewText, { color: '#059669' }]}>View dates ›</Text>
-                </TouchableOpacity>
+                    <Text style={[styles.kpiNumberThird, { color: '#059669' }]}>{summary.daysWorked}</Text>
+                    <Text style={styles.kpiLabelThird} numberOfLines={1}>Days Worked</Text>
+                    <Text style={[styles.kpiViewTextThird, { color: '#059669' }]}>Tap dates ›</Text>
+                  </TouchableOpacity>
 
-                {/* 3. Total Holidays */}
-                <TouchableOpacity
-                  style={[styles.kpiCard, { borderColor: '#FDE047', backgroundColor: '#FEFCE8' }]}
-                  onPress={() =>
-                    handleOpenSummaryCategory(
-                      'holidays',
-                      'Holidays (Sundays & Public)',
-                      'sunny',
-                      '#CA8A04',
-                      summary.totalHolidays
-                    )
-                  }
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.kpiTopRow}>
-                    <Ionicons name="sunny" size={18} color="#CA8A04" />
-                    <View style={[styles.tapPill, { backgroundColor: '#FEF9C3' }]}>
-                      <Ionicons name="list" size={10} color="#CA8A04" />
+                  {/* 3. Total Holidays */}
+                  <TouchableOpacity
+                    style={[styles.kpiCardThird, { borderColor: '#FDE047', backgroundColor: '#FEFCE8' }]}
+                    onPress={() =>
+                      handleOpenSummaryCategory(
+                        'holidays',
+                        'Holidays (Sundays & Public)',
+                        'sunny',
+                        '#CA8A04',
+                        summary.totalHolidays
+                      )
+                    }
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.kpiTopRow}>
+                      <Ionicons name="sunny" size={16} color="#CA8A04" />
+                      <View style={[styles.tapPill, { backgroundColor: '#FEF9C3' }]}>
+                        <Ionicons name="list" size={9} color="#CA8A04" />
+                      </View>
                     </View>
-                  </View>
-                  <Text style={[styles.kpiNumber, { color: '#CA8A04' }]}>{summary.totalHolidays}</Text>
-                  <Text style={styles.kpiLabel}>Holidays</Text>
-                  <Text style={[styles.kpiViewText, { color: '#CA8A04' }]}>View dates ›</Text>
-                </TouchableOpacity>
+                    <Text style={[styles.kpiNumberThird, { color: '#CA8A04' }]}>{summary.totalHolidays}</Text>
+                    <Text style={styles.kpiLabelThird} numberOfLines={1}>Holidays</Text>
+                    <Text style={[styles.kpiViewTextThird, { color: '#CA8A04' }]}>Tap dates ›</Text>
+                  </TouchableOpacity>
+                </View>
 
-                {/* 4. Casual Leave Taken */}
-                <TouchableOpacity
-                  style={[styles.kpiCard, { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]}
-                  onPress={() =>
-                    handleOpenSummaryCategory(
-                      'casualLeave',
-                      'Casual Leave Taken',
-                      'time',
-                      '#DC2626',
-                      summary.casualLeaveTaken
-                    )
-                  }
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.kpiTopRow}>
-                    <Ionicons name="time" size={18} color="#DC2626" />
-                    <View style={[styles.tapPill, { backgroundColor: '#FEE2E2' }]}>
-                      <Ionicons name="list" size={10} color="#DC2626" />
+                {/* Row 2: Leaves (2 items: Casual Leave Taken, Comp-Off Used) */}
+                <View style={styles.summaryRow}>
+                  {/* 4. Casual Leave Taken */}
+                  <TouchableOpacity
+                    style={[styles.kpiCardHalf, { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]}
+                    onPress={() =>
+                      handleOpenSummaryCategory(
+                        'casualLeave',
+                        'Casual Leave Taken',
+                        'time',
+                        '#DC2626',
+                        summary.casualLeaveTaken
+                      )
+                    }
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.kpiTopRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Ionicons name="time" size={15} color="#DC2626" />
+                        <Text style={[styles.kpiLabelHalf, { color: '#991B1B' }]} numberOfLines={1}>Casual Leave</Text>
+                      </View>
+                      <View style={[styles.tapPill, { backgroundColor: '#FEE2E2' }]}>
+                        <Ionicons name="list" size={9} color="#DC2626" />
+                      </View>
                     </View>
-                  </View>
-                  <Text style={[styles.kpiNumber, { color: '#DC2626' }]}>{summary.casualLeaveTaken}</Text>
-                  <Text style={styles.kpiLabel}>Casual Leave</Text>
-                  <Text style={[styles.kpiViewText, { color: '#DC2626' }]}>View dates ›</Text>
-                </TouchableOpacity>
+                    <View style={styles.kpiHalfBottomRow}>
+                      <Text style={[styles.kpiNumberHalf, { color: '#DC2626' }]}>{summary.casualLeaveTaken}</Text>
+                      <Text style={[styles.kpiViewTextHalf, { color: '#DC2626' }]}>Tap dates ›</Text>
+                    </View>
+                  </TouchableOpacity>
 
-                {/* 5. Comp-Off Leave Taken */}
-                <TouchableOpacity
-                  style={[styles.kpiCard, { borderColor: '#93C5FD', backgroundColor: '#EFF6FF' }]}
-                  onPress={() =>
-                    handleOpenSummaryCategory(
-                      'compOffUsed',
-                      'Comp-Off Leave Taken',
-                      'gift',
-                      '#2563EB',
-                      summary.compOffLeaveTaken
-                    )
-                  }
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.kpiTopRow}>
-                    <Ionicons name="gift" size={18} color="#2563EB" />
-                    <View style={[styles.tapPill, { backgroundColor: '#DBEAFE' }]}>
-                      <Ionicons name="list" size={10} color="#2563EB" />
+                  {/* 5. Comp-Off Leave Taken */}
+                  <TouchableOpacity
+                    style={[styles.kpiCardHalf, { borderColor: '#93C5FD', backgroundColor: '#EFF6FF' }]}
+                    onPress={() =>
+                      handleOpenSummaryCategory(
+                        'compOffUsed',
+                        'Comp-Off Leave Taken',
+                        'gift',
+                        '#2563EB',
+                        summary.compOffLeaveTaken
+                      )
+                    }
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.kpiTopRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Ionicons name="gift" size={15} color="#2563EB" />
+                        <Text style={[styles.kpiLabelHalf, { color: '#1E40AF' }]} numberOfLines={1}>Comp-Off Used</Text>
+                      </View>
+                      <View style={[styles.tapPill, { backgroundColor: '#DBEAFE' }]}>
+                        <Ionicons name="list" size={9} color="#2563EB" />
+                      </View>
                     </View>
-                  </View>
-                  <Text style={[styles.kpiNumber, { color: '#2563EB' }]}>{summary.compOffLeaveTaken}</Text>
-                  <Text style={styles.kpiLabel}>Comp-Off Used</Text>
-                  <Text style={[styles.kpiViewText, { color: '#2563EB' }]}>View dates ›</Text>
-                </TouchableOpacity>
+                    <View style={styles.kpiHalfBottomRow}>
+                      <Text style={[styles.kpiNumberHalf, { color: '#2563EB' }]}>{summary.compOffLeaveTaken}</Text>
+                      <Text style={[styles.kpiViewTextHalf, { color: '#2563EB' }]}>Tap dates ›</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
 
-                {/* 6. Sunday Work Days */}
-                <TouchableOpacity
-                  style={[styles.kpiCard, { borderColor: '#FDBA74', backgroundColor: '#FFF7ED' }]}
-                  onPress={() =>
-                    handleOpenSummaryCategory(
-                      'sundayWorks',
-                      'Sunday Work Days',
-                      'briefcase',
-                      '#EA580C',
-                      summary.sundayWorkDays
-                    )
-                  }
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.kpiTopRow}>
-                    <Ionicons name="briefcase" size={18} color="#EA580C" />
-                    <View style={[styles.tapPill, { backgroundColor: '#FFEDD5' }]}>
-                      <Ionicons name="list" size={10} color="#EA580C" />
+                {/* Row 3: Sunday Work & Credits (2 items: Sunday Works, Comp-Off Earned) */}
+                <View style={styles.summaryRow}>
+                  {/* 6. Sunday Work Days */}
+                  <TouchableOpacity
+                    style={[styles.kpiCardHalf, { borderColor: '#FDBA74', backgroundColor: '#FFF7ED' }]}
+                    onPress={() =>
+                      handleOpenSummaryCategory(
+                        'sundayWorks',
+                        'Sunday Work Days',
+                        'briefcase',
+                        '#EA580C',
+                        summary.sundayWorkDays
+                      )
+                    }
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.kpiTopRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Ionicons name="briefcase" size={15} color="#EA580C" />
+                        <Text style={[styles.kpiLabelHalf, { color: '#9A3412' }]} numberOfLines={1}>Sunday Works</Text>
+                      </View>
+                      <View style={[styles.tapPill, { backgroundColor: '#FFEDD5' }]}>
+                        <Ionicons name="list" size={9} color="#EA580C" />
+                      </View>
                     </View>
-                  </View>
-                  <Text style={[styles.kpiNumber, { color: '#EA580C' }]}>{summary.sundayWorkDays}</Text>
-                  <Text style={styles.kpiLabel}>Sunday Works</Text>
-                  <Text style={[styles.kpiViewText, { color: '#EA580C' }]}>View dates ›</Text>
-                </TouchableOpacity>
+                    <View style={styles.kpiHalfBottomRow}>
+                      <Text style={[styles.kpiNumberHalf, { color: '#EA580C' }]}>{summary.sundayWorkDays}</Text>
+                      <Text style={[styles.kpiViewTextHalf, { color: '#EA580C' }]}>Tap dates ›</Text>
+                    </View>
+                  </TouchableOpacity>
 
-                {/* 7. Comp-Off Credits Earned */}
-                <TouchableOpacity
-                  style={[styles.kpiCard, { borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }]}
-                  onPress={() =>
-                    handleOpenSummaryCategory(
-                      'compOffEarned',
-                      'Comp-Off Credits Earned',
-                      'star',
-                      '#7C3AED',
-                      summary.compOffCreditsEarned
-                    )
-                  }
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.kpiTopRow}>
-                    <Ionicons name="star" size={18} color="#7C3AED" />
-                    <View style={[styles.tapPill, { backgroundColor: '#EDE9FE' }]}>
-                      <Ionicons name="list" size={10} color="#7C3AED" />
+                  {/* 7. Comp-Off Credits Earned */}
+                  <TouchableOpacity
+                    style={[styles.kpiCardHalf, { borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }]}
+                    onPress={() =>
+                      handleOpenSummaryCategory(
+                        'compOffEarned',
+                        'Comp-Off Credits Earned',
+                        'star',
+                        '#7C3AED',
+                        summary.compOffCreditsEarned
+                      )
+                    }
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.kpiTopRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Ionicons name="star" size={15} color="#7C3AED" />
+                        <Text style={[styles.kpiLabelHalf, { color: '#5B21B6' }]} numberOfLines={1}>Credits Earned</Text>
+                      </View>
+                      <View style={[styles.tapPill, { backgroundColor: '#EDE9FE' }]}>
+                        <Ionicons name="list" size={9} color="#7C3AED" />
+                      </View>
                     </View>
-                  </View>
-                  <Text style={[styles.kpiNumber, { color: '#7C3AED' }]}>{summary.compOffCreditsEarned}</Text>
-                  <Text style={styles.kpiLabel}>Comp-Off Earned</Text>
-                  <Text style={[styles.kpiViewText, { color: '#7C3AED' }]}>View dates ›</Text>
-                </TouchableOpacity>
-              </ScrollView>
+                    <View style={styles.kpiHalfBottomRow}>
+                      <Text style={[styles.kpiNumberHalf, { color: '#7C3AED' }]}>{summary.compOffCreditsEarned}</Text>
+                      <Text style={[styles.kpiViewTextHalf, { color: '#7C3AED' }]}>Tap dates ›</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           ) : null}
 
@@ -1100,9 +1121,65 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.primary,
   },
-  summaryScroll: {
-    gap: SPACING.sm,
-    paddingVertical: 4,
+  summaryGrid: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  kpiCardThird: {
+    flex: 1,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    ...SHADOWS.sm,
+  },
+  kpiNumberThird: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginTop: 4,
+  },
+  kpiLabelThird: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  kpiViewTextThird: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginTop: 3,
+  },
+  kpiCardHalf: {
+    flex: 1,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    ...SHADOWS.sm,
+  },
+  kpiLabelHalf: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  kpiHalfBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  kpiNumberHalf: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  kpiViewTextHalf: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   kpiCard: {
     borderRadius: RADIUS.md,

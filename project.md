@@ -161,6 +161,79 @@
 ## Change History
 
 ### 2026-10-27
+#### Admin Calendar Staff Selection Fix, Employee Duty Edit Removal, Clean Check-In Form & Real-Time Dashboard Timer
+- What was changed:
+  - **Admin Calendar Staff Selector Fix (`LeaveRequestsScreen.jsx`)**:
+    - Identified root-cause bug where selecting a staff member in the Calendar tab (`adminMode === 'calendar'`) failed to switch employees because `DropdownPickerModal.handleSelect(val, itemObj)` passed `val` (the string ID) as argument 1, but the callback was written as `onSelect={(item) => setCalendarEmployeeId(item.value)}`, causing `(string).value` to evaluate to `undefined`.
+    - Updated `onSelect` handlers in `LeaveRequestsScreen.jsx` for both `calendarEmployeePickerVisible` and `employeeDropdownVisible` to safely accept `val`:
+      `onSelect={(val, item) => setCalendarEmployeeId(typeof val === 'string' ? val : (item?.value ?? ''))}`
+      `onSelect={(val, item) => setSelectedEmployeeId(typeof val === 'string' ? val : (item?.value ?? ''))}`
+    - Choosing any staff member now immediately updates `calendarEmployeeId` and instantly renders their monthly attendance & leave calendar.
+  - **Removed Edit Button for Employees on Work Cards (`MyDutiesScreen.jsx`)**:
+    - Removed the explicit `editBtn` `<TouchableOpacity>` from `cardActionsRow` in `MyDutiesScreen.jsx`.
+    - Employees can no longer edit submitted duty/work visit records from their duty lists.
+    - Preserved `+ Expense` quick-action and full tap-to-inspect duty details modal. In `DutyDetailsScreen.jsx`, `canEdit` remains strictly restricted to Administrators (`Boolean(isAdmin)`).
+  - **Clean Check-In Without Unwanted Default Values (`DutyFormScreen.jsx`)**:
+    - Removed default pre-selection of `'office'` in `companyCategory` state; starts clean as empty string (`''`) prompting user to explicitly pick Office Duty or Client Company.
+    - Removed automatic pre-selection of default office company in `loadCompanies` and `onPress` of Office Duty button; employees now explicitly select their office/branch from the dropdown.
+    - Removed `'Maintenance'` default in `workType` state; starts clean (`''`) so user explicitly selects their work category chip.
+    - Prevented draft restoration from pre-filling check-in entity, company, or customer inputs when creating a fresh check-in.
+    - Updated `isCheckInComplete` to enforce explicit `companyCategory` selection before allowing check-in.
+  - **Smooth Check-In Workflow & Real-Time Dashboard Timer Fix (`DutyFormScreen.jsx`, `EmployeeDashboardScreen.jsx`)**:
+    - Removed unwanted navigation away to the dashboard (`navigation.navigate('EmployeeMainTabs', { screen: 'DashboardTab' })`) upon successful check-in in `DutyFormScreen.jsx`. The screen stays in `DutyFormScreen` and seamlessly transitions to Step 2 ("Work Details & Check-Out") so employees can immediately log machines, features, photos, and check out when finished.
+    - In `EmployeeDashboardScreen.jsx`:
+      - Fixed `lastCompletedDuty` to strictly exclude duties with `status === 'checked_in'`, preventing active in-progress duties from ever being mistakenly treated as completed records with 0 duration.
+      - Enhanced `fetchDashboard` with active duty fallback from `dashRes?.data?.todayDuties?.reports` so `activeDuty` is immediately detected and set without relying on manual refresh.
+      - Re-engineered the running timer `useEffect` with helper `getActiveDutyStartTime(activeDuty)`: supports `activeDuty.checkInTime`, `activeDuty.createdAt`, and parsed `activeDuty.inTime`. The timer immediately increments every second and the action button displays "Check-out" (red) in real-time.
+- Files changed:
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Admin Calendar employee selector properly handles string ID argument from `DropdownPickerModal`.
+  - Employees cannot edit submitted work reports.
+  - Duty check-in has zero pre-filled default values.
+  - Check-in does not navigate away from DutyForm; dashboard reflects active session and runs timer in real-time without requiring pull-to-refresh.
+- Reason: User requested: "admin - leave & calender section calenter tab -> i choose th eemployee but not seleted; fix the issue;;; employee- word details edit button show remove the button; check in default vaule have so idont want default value ; fixx checkin dont dashboard navigate at the time time not run/still checkin button show then refresh the page timer show; fixxx;".
+- Impact: Flawless staff switching in Admin Calendar; enforced data integrity with no employee work editing; pristine check-in form with no unwanted defaults; uninterrupted duty logging workflow and immediate live timer display on dashboard.
+
+### 2026-10-27
+#### UI Fix: Staff Picker in Assign Leave Modal & Responsive Multi-Row Calendar Summary Grid
+- What was changed:
+  - **Inline Staff Selector in Assign Leave Modal (`LeaveRequestsScreen.jsx`)**:
+    - Identified and fixed root-cause bug where selecting staff inside `AdminGrantLeaveModal` failed to register clicks because `DropdownPickerModal` launched a second `<Modal>` on top of the parent native `<Modal>`, which swallows / freezes touch dispatch in React Native.
+    - Replaced the nested modal picker with an **inline expandable staff selector**:
+      - Tapping the selected employee card or "Change" pill smoothly expands the selection panel directly inside the modal body without creating any child modal.
+      - Integrated instant search input filtering staff by name, employee ID, or designation.
+      - Rendered a scrollable list of employee cards with avatar initials, employee ID, designation, and active checkmarks.
+      - Tapping any employee immediately selects them, collapses the selector, triggers live balance retrieval (`casualLeave.available` & `compOff.available`), and refreshes the preview card.
+    - Integrated dedicated Start Date and End Date pickers powered by the reusable `DatePickerModal` calendar component:
+      - Removed the "Leave Period" presets and stepper controls per user requirement.
+      - Rendered distinct "Start Date *" and "End Date *" triggers with calendar icons, selected date display, and chevron indicators.
+      - Tapping either date trigger embeds the full calendar component (`DatePickerModal inline={true}`) with month navigation, year selection, weekday headers, today indicator, and tap-to-select day interaction.
+      - Automatically ensures `endDate >= startDate` and recalculates working days (excluding Sundays) on selection.
+    - Removed redundant child modals (`grantStartDatePickerVisible`, `grantEndDatePickerVisible`, `grantEmployeePickerVisible`) from the root hierarchy.
+  - **All-Visible 3-Row Calendar Summary Grid (`MonthlyCalendarView.jsx`)**:
+    - Fixed UI issue where only "Working Days" was visible on screen while the other 6 metrics (Days Worked, Holidays, Casual Leave, Comp-Off Used, Sunday Works, Comp-Off Earned) were hidden off-screen or trapped behind unscrollable horizontal gestures inside the parent vertical scroll view.
+    - Replaced `<ScrollView horizontal ...>` with a structured, responsive multi-row dashboard grid (`summaryGrid`):
+      - **Row 1 (Attendance Core - 3 columns, equal flex)**: Working Days (Slate), Days Worked (Emerald), Total Holidays (Amber).
+      - **Row 2 (Leaves - 2 columns, equal flex)**: Casual Leave Taken (Rose), Comp-Off Used (Sky Blue).
+      - **Row 3 (Sunday Work & Credits - 2 columns, equal flex)**: Sunday Works (Orange), Comp-Off Credits Earned (Purple).
+    - All 7 summary square boxes are now 100% visible on screen at the same time without needing any horizontal scrolling.
+    - Maintained full touch interactivity: tapping any of the 7 cards opens `SummaryDateListModal` to inspect the exact dates for that metric, with 1-tap drilling into day inspection details.
+- Files changed:
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `duty-management-app/src/components/MonthlyCalendarView.jsx`
+  - `project.md`
+- Logic changed:
+  - Eliminated nested modal touch blockage by switching to inline expandable staff selection.
+  - Replaced horizontal scroll layout with a 3-row responsive grid ensuring all 7 KPI summary cards are immediately visible simultaneously.
+- Reason: User requested: "ui bug there-> assign leave to staff select employee not selectable fix;; also summary previously have holiday,work,etc have but now only show on working days fix;; ui;".
+- Impact: Flawless staff selection in Assign Leave modal across iOS, Android, and Web; immediate visibility of all 7 attendance and leave metrics in the monthly calendar without frustrating horizontal scroll clipping.
+
+### 2026-10-27
 #### Admin Direct Leave Assignment, Interactive Summary Date Lists & Modern Calendar Redesign
 - What was changed:
   - **Admin Direct Leave Grant Without Employee Request (`leaveController.js`, `leaveValidator.js`, `leaveRoutes.js`, `leaveApi.js`, `LeaveRequestsScreen.jsx`)**:

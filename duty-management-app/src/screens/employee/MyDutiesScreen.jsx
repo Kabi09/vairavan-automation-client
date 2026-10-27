@@ -276,15 +276,6 @@ export const MyDutiesScreen = ({ navigation }) => {
               <Ionicons name="receipt-outline" size={13} color="#0284C7" />
               <Text style={styles.expenseQuickBtnText}>+ Expense</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() => navigation.navigate('DutyForm', { dutyToEdit: item })}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="create-outline" size={14} color={COLORS.primary} />
-              <Text style={styles.editBtnText}>Edit</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Card>

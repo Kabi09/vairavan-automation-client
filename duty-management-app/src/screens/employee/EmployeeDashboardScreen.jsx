@@ -50,13 +50,43 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const [timerDigits, setTimerDigits] = useState({ hours: '00', minutes: '00', seconds: '00' });
 
   const todayDuties = data?.todayDuties?.reports || [];
-  const lastCompletedDuty = todayDuties.length > 0 ? todayDuties[todayDuties.length - 1] : null;
+  const lastCompletedDuty = useMemo(() => {
+    if (!todayDuties || todayDuties.length === 0) return null;
+    const completed = todayDuties.filter(
+      (d) =>
+        d.status !== 'checked_in' &&
+        (Boolean(d.checkOutTime) || Boolean(d.outTime) || d.status === 'submitted' || d.status === 'approved')
+    );
+    return completed.length > 0 ? completed[completed.length - 1] : null;
+  }, [todayDuties]);
+
+  // Helper to extract a valid start Date for active duty
+  const getActiveDutyStartTime = (duty) => {
+    if (!duty) return new Date();
+    if (duty.checkInTime) {
+      const d = new Date(duty.checkInTime);
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (duty.createdAt) {
+      const d = new Date(duty.createdAt);
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (duty.inTime && typeof duty.inTime === 'string') {
+      const parts = duty.inTime.split(':').map(Number);
+      if (!isNaN(parts[0]) && !isNaN(parts[1])) {
+        const d = new Date();
+        d.setHours(parts[0], parts[1], 0, 0);
+        return d;
+      }
+    }
+    return new Date();
+  };
 
   // Running timer when checked in, stopped total duration when checked out, or 00:00:00 when not checked in
   useEffect(() => {
-    if (activeDuty?.checkInTime) {
+    if (activeDuty) {
       const updateRunningTimer = () => {
-        const checkInDate = new Date(activeDuty.checkInTime);
+        const checkInDate = getActiveDutyStartTime(activeDuty);
         const diffMs = Math.max(0, Date.now() - checkInDate.getTime());
         const totalSecs = Math.floor(diffMs / 1000);
         const hours = String(Math.floor(totalSecs / 3600)).padStart(2, '0');
@@ -104,10 +134,15 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
       if (dashRes?.data) {
         setData(dashRes.data);
       }
-      if (activeRes?.data?.activeDuty) {
-        setActiveDuty(activeRes.data.activeDuty);
+      const activeObj = activeRes?.data?.activeDuty || activeRes?.activeDuty;
+      if (activeObj) {
+        setActiveDuty(activeObj);
       } else {
-        setActiveDuty(null);
+        // Fallback: check if dashRes.data.todayDuties reports contain an active checked_in duty
+        const activeFromDash = dashRes?.data?.todayDuties?.reports?.find(
+          (d) => d.status === 'checked_in' && !d.checkOutTime && !d.outTime
+        );
+        setActiveDuty(activeFromDash || null);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load dashboard'));

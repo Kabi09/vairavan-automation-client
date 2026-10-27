@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -97,17 +97,30 @@ export const LeaveRequestsScreen = () => {
   // Admin direct grant leave state (Assign leave without employee request)
   const [grantModalVisible, setGrantModalVisible] = useState(false);
   const [grantEmployeeId, setGrantEmployeeId] = useState('');
-  const [grantEmployeePickerVisible, setGrantEmployeePickerVisible] = useState(false);
+  const [showGrantEmployeeSelector, setShowGrantEmployeeSelector] = useState(false);
+  const [grantEmployeeSearch, setGrantEmployeeSearch] = useState('');
   const [grantLeaveType, setGrantLeaveType] = useState('casual_leave'); // 'casual_leave' | 'comp_off'
   const [grantStartDate, setGrantStartDate] = useState(today);
   const [grantEndDate, setGrantEndDate] = useState(today);
-  const [grantStartDatePickerVisible, setGrantStartDatePickerVisible] = useState(false);
-  const [grantEndDatePickerVisible, setGrantEndDatePickerVisible] = useState(false);
+  const [grantDatePickerActive, setGrantDatePickerActive] = useState(null); // 'start' | 'end' | null
   const [grantReason, setGrantReason] = useState('Management Assigned Leave');
   const [grantAdminRemarks, setGrantAdminRemarks] = useState('Sanctioned directly by Admin');
   const [grantSubmitting, setGrantSubmitting] = useState(false);
   const [grantEmployeeBalances, setGrantEmployeeBalances] = useState(null);
   const [loadingGrantBalances, setLoadingGrantBalances] = useState(false);
+
+  // Filtered employees for inline staff selector inside grant modal
+  const filteredGrantEmployees = useMemo(() => {
+    if (!employees || employees.length === 0) return [];
+    if (!grantEmployeeSearch.trim()) return employees;
+    const q = grantEmployeeSearch.toLowerCase().trim();
+    return employees.filter(
+      (e) =>
+        (e.employeeName && e.employeeName.toLowerCase().includes(q)) ||
+        (e.employeeId && e.employeeId.toLowerCase().includes(q)) ||
+        (e.designation && e.designation.toLowerCase().includes(q))
+    );
+  }, [employees, grantEmployeeSearch]);
 
 
   // Load employee list for dropdown filter
@@ -297,6 +310,9 @@ export const LeaveRequestsScreen = () => {
     setGrantEndDate(today);
     setGrantReason('Management Assigned Leave');
     setGrantAdminRemarks('Sanctioned directly by Admin');
+    setShowGrantEmployeeSelector(false);
+    setGrantEmployeeSearch('');
+    setGrantDatePickerActive(null);
     setGrantModalVisible(true);
     if (targetId) {
       fetchGrantEmployeeBalances(targetId);
@@ -1112,7 +1128,7 @@ export const LeaveRequestsScreen = () => {
           })),
         ]}
         selectedValue={selectedEmployeeId}
-        onSelect={(item) => setSelectedEmployeeId(item.value)}
+        onSelect={(val, item) => setSelectedEmployeeId(typeof val === 'string' ? val : (item?.value ?? ''))}
       />
 
       <DropdownPickerModal
@@ -1125,7 +1141,7 @@ export const LeaveRequestsScreen = () => {
           value: e._id,
         }))}
         selectedValue={calendarEmployeeId}
-        onSelect={(item) => setCalendarEmployeeId(item.value)}
+        onSelect={(val, item) => setCalendarEmployeeId(typeof val === 'string' ? val : (item?.value ?? ''))}
       />
 
       {/* Admin Direct Grant Leave Modal */}
@@ -1159,15 +1175,40 @@ export const LeaveRequestsScreen = () => {
             </View>
 
             <ScrollView style={styles.grantModalBody} showsVerticalScrollIndicator={false}>
-              {/* Employee Selection */}
+              {/* Employee Selection (Inline Searchable Selector - No Nested Modal) */}
               <View style={{ marginBottom: SPACING.md }}>
-                <Text style={styles.inputFieldLabel}>Select Employee</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={styles.inputFieldLabel}>Select Staff Member</Text>
+                  {showGrantEmployeeSelector ? (
+                    <TouchableOpacity
+                      onPress={() => setShowGrantEmployeeSelector(false)}
+                      style={styles.collapseSelectorBtn}
+                    >
+                      <Ionicons name="checkmark-done" size={14} color={COLORS.primary} />
+                      <Text style={styles.collapseSelectorBtnText}>Done</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                {/* Selected Employee Card / Expand Trigger */}
                 <TouchableOpacity
-                  style={styles.grantEmpPickerTrigger}
-                  onPress={() => setGrantEmployeePickerVisible(true)}
+                  style={[
+                    styles.grantEmpPickerTrigger,
+                    showGrantEmployeeSelector && styles.grantEmpPickerTriggerActive,
+                  ]}
+                  onPress={() => setShowGrantEmployeeSelector(!showGrantEmployeeSelector)}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="person" size={18} color={COLORS.primary} />
+                  <View style={styles.empAvatarCircle}>
+                    <Text style={styles.empAvatarText}>
+                      {(employees.find((e) => e._id === grantEmployeeId)?.employeeName || 'EM')
+                        .split(' ')
+                        .map((n) => n[0])
+                        .slice(0, 2)
+                        .join('')
+                        .toUpperCase()}
+                    </Text>
+                  </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.grantEmpPickerName}>
                       {employees.find((e) => e._id === grantEmployeeId)?.employeeName || 'Tap to choose staff member'}
@@ -1176,10 +1217,101 @@ export const LeaveRequestsScreen = () => {
                       <Text style={styles.grantEmpPickerSub}>
                         ID: {employees.find((e) => e._id === grantEmployeeId)?.employeeId} • {employees.find((e) => e._id === grantEmployeeId)?.designation || 'Staff'}
                       </Text>
-                    ) : null}
+                    ) : (
+                      <Text style={styles.grantEmpPickerSub}>Select an employee to assign leave</Text>
+                    )}
                   </View>
-                  <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+                  <View style={styles.changeEmpPill}>
+                    <Text style={styles.changeEmpPillText}>
+                      {showGrantEmployeeSelector ? 'Close' : 'Change'}
+                    </Text>
+                    <Ionicons
+                      name={showGrantEmployeeSelector ? 'chevron-up' : 'chevron-down'}
+                      size={14}
+                      color={COLORS.primary}
+                    />
+                  </View>
                 </TouchableOpacity>
+
+                {/* Expandable Staff Member List with Instant Search */}
+                {showGrantEmployeeSelector && (
+                  <View style={styles.inlineEmpListContainer}>
+                    <View style={styles.inlineEmpSearchBar}>
+                      <Ionicons name="search" size={16} color={COLORS.textSecondary} />
+                      <TextInput
+                        style={styles.inlineEmpSearchInput}
+                        placeholder="Search staff by name, ID, or designation..."
+                        value={grantEmployeeSearch}
+                        onChangeText={setGrantEmployeeSearch}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                      {grantEmployeeSearch.length > 0 && (
+                        <TouchableOpacity onPress={() => setGrantEmployeeSearch('')}>
+                          <Ionicons name="close-circle" size={16} color={COLORS.textSecondary} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    <ScrollView
+                      style={styles.inlineEmpScroll}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator={true}
+                    >
+                      {filteredGrantEmployees.length === 0 ? (
+                        <View style={styles.inlineEmpEmpty}>
+                          <Text style={styles.inlineEmpEmptyText}>
+                            No staff found matching "{grantEmployeeSearch}"
+                          </Text>
+                        </View>
+                      ) : (
+                        filteredGrantEmployees.map((emp) => {
+                          const isSelected = emp._id === grantEmployeeId;
+                          return (
+                            <TouchableOpacity
+                              key={emp._id}
+                              style={[
+                                styles.inlineEmpItem,
+                                isSelected && styles.inlineEmpItemSelected,
+                              ]}
+                              onPress={() => {
+                                setGrantEmployeeId(emp._id);
+                                fetchGrantEmployeeBalances(emp._id);
+                                setShowGrantEmployeeSelector(false);
+                                setGrantEmployeeSearch('');
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <View style={[styles.inlineEmpItemAvatar, isSelected && { backgroundColor: COLORS.primary }]}>
+                                <Text style={[styles.inlineEmpItemAvatarText, isSelected && { color: '#FFFFFF' }]}>
+                                  {(emp.employeeName || 'EM')
+                                    .split(' ')
+                                    .map((n) => n[0])
+                                    .slice(0, 2)
+                                    .join('')
+                                    .toUpperCase()}
+                                </Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.inlineEmpItemName, isSelected && { color: COLORS.primary, fontWeight: '800' }]}>
+                                  {emp.employeeName}
+                                </Text>
+                                <Text style={styles.inlineEmpItemSub}>
+                                  ID: {emp.employeeId} • {emp.designation || 'Staff'}
+                                </Text>
+                              </View>
+                              {isSelected ? (
+                                <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                              ) : (
+                                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
               {/* Real-time Balances Preview for Selected Employee */}
@@ -1260,34 +1392,93 @@ export const LeaveRequestsScreen = () => {
                 </View>
               </View>
 
-              {/* Date Selection */}
+              {/* Start Date & End Date Selection with Calendar Component */}
               <View style={{ marginBottom: SPACING.md }}>
-                <Text style={styles.inputFieldLabel}>Leave Period</Text>
                 <View style={styles.grantDateRow}>
+                  {/* Start Date Trigger */}
                   <View style={{ flex: 1, marginRight: SPACING.xs }}>
-                    <Text style={styles.grantDateSubLabel}>Start Date</Text>
+                    <Text style={styles.inputFieldLabel}>Start Date *</Text>
                     <TouchableOpacity
-                      style={styles.grantDateTrigger}
-                      onPress={() => setGrantStartDatePickerVisible(true)}
+                      style={[
+                        styles.grantDateTrigger,
+                        grantDatePickerActive === 'start' && styles.grantDateTriggerActive,
+                      ]}
+                      onPress={() =>
+                        setGrantDatePickerActive((prev) => (prev === 'start' ? null : 'start'))
+                      }
                       activeOpacity={0.8}
                     >
                       <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
                       <Text style={styles.grantDateTriggerText}>{grantStartDate || 'Select'}</Text>
+                      <Ionicons
+                        name={grantDatePickerActive === 'start' ? 'chevron-up' : 'chevron-down'}
+                        size={14}
+                        color={COLORS.textSecondary}
+                        style={{ marginLeft: 'auto' }}
+                      />
                     </TouchableOpacity>
                   </View>
 
+                  {/* End Date Trigger */}
                   <View style={{ flex: 1, marginLeft: SPACING.xs }}>
-                    <Text style={styles.grantDateSubLabel}>End Date</Text>
+                    <Text style={styles.inputFieldLabel}>End Date *</Text>
                     <TouchableOpacity
-                      style={styles.grantDateTrigger}
-                      onPress={() => setGrantEndDatePickerVisible(true)}
+                      style={[
+                        styles.grantDateTrigger,
+                        grantDatePickerActive === 'end' && styles.grantDateTriggerActive,
+                      ]}
+                      onPress={() =>
+                        setGrantDatePickerActive((prev) => (prev === 'end' ? null : 'end'))
+                      }
                       activeOpacity={0.8}
                     >
                       <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
                       <Text style={styles.grantDateTriggerText}>{grantEndDate || 'Select'}</Text>
+                      <Ionicons
+                        name={grantDatePickerActive === 'end' ? 'chevron-up' : 'chevron-down'}
+                        size={14}
+                        color={COLORS.textSecondary}
+                        style={{ marginLeft: 'auto' }}
+                      />
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                {/* Inline Calendar Component for Start Date */}
+                {grantDatePickerActive === 'start' && (
+                  <View style={styles.calendarInlineWrapper}>
+                    <DatePickerModal
+                      inline={true}
+                      title="Select Start Date"
+                      selectedDate={grantStartDate}
+                      onSelectDate={(date) => {
+                        setGrantStartDate(date);
+                        if (grantEndDate < date) {
+                          setGrantEndDate(date);
+                        }
+                        setGrantDatePickerActive(null);
+                      }}
+                      onClose={() => setGrantDatePickerActive(null)}
+                    />
+                  </View>
+                )}
+
+                {/* Inline Calendar Component for End Date */}
+                {grantDatePickerActive === 'end' && (
+                  <View style={styles.calendarInlineWrapper}>
+                    <DatePickerModal
+                      inline={true}
+                      title="Select End Date"
+                      selectedDate={grantEndDate}
+                      minDate={grantStartDate}
+                      onSelectDate={(date) => {
+                        setGrantEndDate(date);
+                        setGrantDatePickerActive(null);
+                      }}
+                      onClose={() => setGrantDatePickerActive(null)}
+                    />
+                  </View>
+                )}
 
                 {/* Duration Hint */}
                 <View style={styles.durationNoticeBox}>
@@ -1368,40 +1559,6 @@ export const LeaveRequestsScreen = () => {
         </View>
       </Modal>
 
-      {/* Grant Start Date Picker */}
-      <DatePickerModal
-        visible={grantStartDatePickerVisible}
-        onClose={() => setGrantStartDatePickerVisible(false)}
-        selectedDate={grantStartDate}
-        onSelectDate={setGrantStartDate}
-        title="Assign Leave: Start Date"
-      />
-
-      {/* Grant End Date Picker */}
-      <DatePickerModal
-        visible={grantEndDatePickerVisible}
-        onClose={() => setGrantEndDatePickerVisible(false)}
-        selectedDate={grantEndDate}
-        onSelectDate={setGrantEndDate}
-        title="Assign Leave: End Date"
-      />
-
-      {/* Grant Employee Dropdown */}
-      <DropdownPickerModal
-        visible={grantEmployeePickerVisible}
-        onClose={() => setGrantEmployeePickerVisible(false)}
-        title="Assign Leave: Select Staff Member"
-        searchPlaceholder="Search staff by name or ID..."
-        items={employees.map((e) => ({
-          label: `${e.employeeName} (${e.employeeId}) - ${e.designation || 'Staff'}`,
-          value: e._id,
-        }))}
-        selectedValue={grantEmployeeId}
-        onSelect={(item) => {
-          setGrantEmployeeId(item.value);
-          fetchGrantEmployeeBalances(item.value);
-        }}
-      />
     </SafeAreaView>
   );
 };
@@ -2051,10 +2208,29 @@ const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: 10,
+  },
+  grantEmpPickerTriggerActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: '#EFF6FF',
+  },
+  empAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  empAvatarText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.primary,
   },
   grantEmpPickerName: {
     fontSize: 13,
@@ -2066,6 +2242,109 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  changeEmpPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  changeEmpPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  collapseSelectorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  collapseSelectorBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  inlineEmpListContainer: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    marginTop: 6,
+    overflow: 'hidden',
+    ...SHADOWS.sm,
+  },
+  inlineEmpSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  inlineEmpSearchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.text,
+    paddingVertical: 4,
+  },
+  inlineEmpScroll: {
+    maxHeight: 180,
+  },
+  inlineEmpItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  inlineEmpItemSelected: {
+    backgroundColor: '#EFF6FF',
+  },
+  inlineEmpItemAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inlineEmpItemAvatarText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  inlineEmpItemName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  inlineEmpItemSub: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  inlineEmpEmpty: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  inlineEmpEmptyText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
   grantBalanceCard: {
     backgroundColor: '#F8FAFC',
@@ -2135,27 +2414,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 6,
   },
-  grantDateSubLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginBottom: 3,
-  },
   grantDateTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     backgroundColor: '#F8FAFC',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#CBD5E1',
     borderRadius: RADIUS.md,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  grantDateTriggerActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: '#EFF6FF',
   },
   grantDateTriggerText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: COLORS.text,
+  },
+  calendarInlineWrapper: {
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
   },
   durationNoticeBox: {
     flexDirection: 'row',
