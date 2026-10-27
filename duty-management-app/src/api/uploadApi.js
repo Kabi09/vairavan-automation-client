@@ -1,6 +1,7 @@
 import apiClient from './apiClient';
 
 export const uploadApi = {
+
   
   /**
    * Upload customer signature image
