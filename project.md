@@ -2269,16 +2269,49 @@
 - Reason: User requested: "ui fix-form- check- company - not selectable also client not selectable; add comapny sautomattically assign then agein to slect the another not selectable; fix;;; check in,checkout current time is show fix i want to - not checkin - 0000 have then checkin done timer to start checkout timer is stop that time total show;; not want cuurent time;;; compersolry location mattry to checkin ; chechout not defauly ;;;in,out- compersory checkin must; fix;".
 - Impact: Flawless company and client selection, strict GPS audit trail for field duty attendance, and accurate duty-based digital timers.
 
+### 2026-10-27
+#### Client Add Response Handling, Fresh Independent Check-Out GPS, Separated Locations in Work Details & Exports, and User-Friendly Manpower Modal
+- What was changed:
+  - **Client Add & Selection Fix (`DutyFormScreen.jsx`)**:
+    - Fixed response payload parsing in `clientApi.createClient` and `clientApi.getClients`. Backend `ApiResponse.created` and `ApiResponse.success` encapsulate data in `{ success: true, message, data: { client } }`, wrapped by Axios in `res.data`. The frontend code was checking `res.data?.client` which returned `undefined`. Updated to read `res.data?.data?.client || res.data?.client` and `res.data?.data?.clients || res.data?.clients || []`.
+    - Modal now immediately closes upon successful DB insertion (`setAddClientModalVisible(false)`), adds the created client to the dropdown, auto-selects the client, pre-fills `customerName` and `customerPhone`, and displays a confirmation alert.
+  - **Fresh Independent Check-Out Location (`DutyFormScreen.jsx`, `dutyController.js`, `Duty.js`)**:
+    - Decoupled `locationCoords` into two distinct states: `checkInLocationCoords` and `checkOutLocationCoords`.
+    - On active session resume, check-in coordinates are loaded into `checkInLocationCoords`, and `checkOutLocationCoords` is explicitly reset to `null` so checkout begins completely fresh.
+    - Added dedicated `handleCaptureCheckOutLocation` to tag departure GPS freshly.
+    - Updated `handleCheckoutOrSubmit` to auto-capture departure GPS if not manually refreshed, and send `checkoutPayload.checkOutLocation`.
+    - Updated backend `dutyController.js` to accept `checkOutLocation` in `checkOut` and `updateDuty`.
+  - **Separated Check-In and Check-Out Locations across Work Details & Exports (`DutyDetailsScreen.jsx`, `AllDutiesScreen.jsx`, `exportUtils.js`)**:
+    - In `DutyDetailsScreen.jsx`: Resolved reverse-geocoded addresses for both `duty.checkInLocation` and `duty.checkOutLocation`, and rendered two distinct, color-coded location blocks with coordinates, address, accuracy, and "Open in Google Maps" buttons (with legacy fallback).
+    - In `AllDutiesScreen.jsx`: Updated admin inspection modal to resolve and display separate Check-In Location and Check-Out Location blocks with Google Maps links.
+    - In `exportUtils.js`: Updated PDF exports to include distinct Check-In Location and Check-Out Location lines with Google Maps links; updated Excel/CSV exports with 4 dedicated columns (`Check-In Location Address`, `Check-In GPS Coordinates`, `Check-Out Location Address`, `Check-Out GPS Coordinates`).
+  - **User-Friendly Manpower Add Revamp (`DutyFormScreen.jsx`)**:
+    - Eliminated clunky inline card appending that inserted multi-field forms and pushed down the screen causing unwanted scrolling.
+    - Replaced with clean, touch-friendly compact member tiles featuring avatar initial circle, member name, role badge, phone number, and edit/delete action buttons.
+    - Added dedicated `ManpowerModal` with Member Name, quick role preset chips (`Assistant`, `Technician`, `Electrician`, `Mechanic`, `Helper`, `Programmer`), custom role input, and phone number.
+- Files changed:
+  - `backend/src/controllers/dutyController.js`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `project.md`
+- Logic changed:
+  - Client modal closes and auto-selects newly created client by extracting data from `res.data?.data?.client`.
+  - Check-in and check-out GPS coordinates are completely decoupled; checkout never inherits check-in coordinates by default.
+  - Manpower additions are handled in a focused modal without scrolling or expanding the main work form.
+  - Work details and exports report both check-in and check-out locations independently.
+- Reason: User requested: "bug there - api working ,client-add; but not selectable and not show; fix ; add client moadal -sumbit db store the data but still modal show ; fix the client modal;;;; work detail sperate with location like checkin location,checout location;;; one bug there - check one location is assign then chechout previous(checkin)location default added so i want freashly add the location in checkin,out;;;;; manpow add- not user friendly and ui not good; i dont want to manpower- add button click scrool to next manpower add ; fix user friendly;;;".
+- Impact: Highly polished client creation flow, independent check-in and departure audit trail, pristine and non-scrolling manpower UX, and comprehensive field reporting.
+
 ## Current Progress
 - Completed:
-  - Fixed company and client selection in `DutyFormScreen`: supports selecting any company, adding new company, and switching between companies.
-  - Auto-reset client contacts on company switch and fetch fresh company-specific clients.
-  - Compulsory GPS location enforcement for duty check-in with auto-capture and visual mandatory indicators.
-  - Enforced compulsory check-in before work checkout: employees cannot checkout by default without checking in first.
-  - Updated Zoho People style timer widget:
-    - When not checked in: `00 : 00 : 00` (no wall clock time).
-    - When checked in: live running elapsed shift duration.
-    - When checked out: timer stops and displays that duty's total completed duration.
+  - Fixed client modal: parses `res.data?.data?.client`, closes modal immediately upon save, adds to list and auto-selects client.
+  - Decoupled check-in and check-out GPS coordinates: checkout starts fresh with independent capture (no defaulting to check-in).
+  - Revamped manpower addition: replaced multi-field scrolling cards with touch-friendly compact member tiles and a dedicated role-preset modal dialog.
+  - Separated Check-In and Check-Out location reporting with exact reverse-geocoded addresses and Google Maps links in `DutyDetailsScreen` and `AllDutiesScreen`.
+  - Updated PDF and Excel exports with separate Check-In and Check-Out Location columns and maps links.
+  - Backend controller updated to persist `checkOutLocation` and `manpowerMembers`.
   - 49/49 backend tests passing.
   - All modified frontend screens AST validated with 0 errors.
 

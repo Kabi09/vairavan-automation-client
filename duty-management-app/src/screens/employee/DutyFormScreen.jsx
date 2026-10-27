@@ -164,9 +164,17 @@ export const DutyFormScreen = ({ navigation, route }) => {
     return [];
   });
 
-  // GPS Location state
-  const [locationCoords, setLocationCoords] = useState(() => {
-    if (dutyToEdit?.location?.latitude) {
+  // GPS Location states - Separated for Check-In and Check-Out!
+  const [checkInLocationCoords, setCheckInLocationCoords] = useState(() => {
+    if (dutyToEdit?.checkInLocation?.latitude) {
+      return {
+        latitude: dutyToEdit.checkInLocation.latitude,
+        longitude: dutyToEdit.checkInLocation.longitude,
+        accuracy: dutyToEdit.checkInLocation.accuracy || 0,
+        address: dutyToEdit.checkInLocation.address || '',
+      };
+    }
+    if (dutyToEdit?.location?.latitude && !dutyToEdit?.checkOutLocation?.latitude) {
       return {
         latitude: dutyToEdit.location.latitude,
         longitude: dutyToEdit.location.longitude,
@@ -176,7 +184,29 @@ export const DutyFormScreen = ({ navigation, route }) => {
     }
     return null;
   });
-  const [locating, setLocating] = useState(false);
+
+  const [checkOutLocationCoords, setCheckOutLocationCoords] = useState(() => {
+    if (dutyToEdit?.checkOutLocation?.latitude) {
+      return {
+        latitude: dutyToEdit.checkOutLocation.latitude,
+        longitude: dutyToEdit.checkOutLocation.longitude,
+        accuracy: dutyToEdit.checkOutLocation.accuracy || 0,
+        address: dutyToEdit.checkOutLocation.address || '',
+      };
+    }
+    return null; // Fresh for checkout!
+  });
+
+  const [locatingCheckIn, setLocatingCheckIn] = useState(false);
+  const [locatingCheckOut, setLocatingCheckOut] = useState(false);
+
+  // Dedicated Add / Edit Manpower Member Modal State
+  const [manpowerModalVisible, setManpowerModalVisible] = useState(false);
+  const [editingManpowerIndex, setEditingManpowerIndex] = useState(null);
+  const [memberModalName, setMemberModalName] = useState('');
+  const [memberModalPhone, setMemberModalPhone] = useState('');
+  const [memberModalRole, setMemberModalRole] = useState('');
+  const [memberModalError, setMemberModalError] = useState('');
 
   // Submission / Loading state
   const [loading, setLoading] = useState(false);
@@ -226,24 +256,37 @@ export const DutyFormScreen = ({ navigation, route }) => {
             if (Array.isArray(active.manpowerMembers) && active.manpowerMembers.length > 0) {
               setManpowerMembers(active.manpowerMembers);
             }
-            if (active.location?.latitude) {
-              setLocationCoords({
+            if (active.checkInLocation?.latitude) {
+              setCheckInLocationCoords({
+                latitude: active.checkInLocation.latitude,
+                longitude: active.checkInLocation.longitude,
+                accuracy: active.checkInLocation.accuracy || 0,
+                address: active.checkInLocation.address || '',
+              });
+            } else if (active.location?.latitude) {
+              setCheckInLocationCoords({
                 latitude: active.location.latitude,
                 longitude: active.location.longitude,
                 accuracy: active.location.accuracy || 0,
                 address: active.location.address || '',
               });
             }
+            // Fresh checkout location: do not copy check-in location!
+            setCheckOutLocationCoords(null);
           } else {
             setIsCheckedIn(false);
             setActiveDutyId(null);
             setActiveCheckInTime('');
+            setCheckInLocationCoords(null);
+            setCheckOutLocationCoords(null);
           }
         } catch (err) {
           console.warn('Error checking active duty check-in:', err);
           setIsCheckedIn(false);
           setActiveDutyId(null);
           setActiveCheckInTime('');
+          setCheckInLocationCoords(null);
+          setCheckOutLocationCoords(null);
         } finally {
           setCheckingSession(false);
         }
@@ -259,13 +302,13 @@ export const DutyFormScreen = ({ navigation, route }) => {
       const loadCompanies = async () => {
         try {
           const compRes = await companyApi.getCompanies({ status: 'active', limit: 200 }).catch(() => ({ data: { companies: [] } }));
-          if (compRes.data?.companies) {
-            const activeComps = compRes.data.companies;
-            setCompanies(activeComps);
+          const companyList = compRes.data?.data?.companies || compRes.data?.companies || [];
+          if (companyList.length > 0) {
+            setCompanies(companyList);
 
             // If no company selected and in office mode, pre-select default office
-            if (!selectedCompanyId && !dutyToEdit && companyCategory === 'office' && activeComps.length > 0) {
-              const defaultOffice = activeComps.find((c) => isOfficeCompany(c));
+            if (!selectedCompanyId && !dutyToEdit && companyCategory === 'office') {
+              const defaultOffice = companyList.find((c) => isOfficeCompany(c));
               if (defaultOffice) {
                 setSelectedCompanyId(defaultOffice._id);
               }
@@ -289,11 +332,9 @@ export const DutyFormScreen = ({ navigation, route }) => {
 
     const loadClients = async () => {
       try {
-        const res = await clientApi.getClients({ companyId: selectedCompanyId, status: 'active' }).catch(() => ({ data: { clients: [] } }));
-        if (res.data?.clients) {
-          setClients(res.data.clients);
-          // If a client was previously selected and is in the list, keep it; otherwise leave unselected
-        }
+        const res = await clientApi.getClients({ companyId: selectedCompanyId, status: 'active' }).catch(() => ({ data: { data: { clients: [] } } }));
+        const clientList = res.data?.data?.clients || res.data?.clients || [];
+        setClients(clientList);
       } catch (err) {
         console.warn('Failed to load clients for company:', err);
       }
@@ -304,7 +345,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
 
   // Auto-request location permissions and capture on focus if not yet set in check-in mode
   useEffect(() => {
-    if (!isCheckedIn && !locationCoords && !locating) {
+    if (!isCheckedIn && !checkInLocationCoords && !locatingCheckIn) {
       (async () => {
         try {
           const { status } = await Location.getForegroundPermissionsAsync();
@@ -316,7 +357,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
             const lng = loc.coords.longitude;
             const accuracy = Math.round(loc.coords.accuracy || 0);
             const address = await reverseGeocodeCoords(lat, lng);
-            setLocationCoords({
+            setCheckInLocationCoords({
               latitude: lat,
               longitude: lng,
               accuracy,
@@ -330,9 +371,9 @@ export const DutyFormScreen = ({ navigation, route }) => {
     }
   }, [isCheckedIn]);
 
-  // GPS Location capture
-  const handleCaptureLocation = async () => {
-    setLocating(true);
+  // Check-In GPS Location capture
+  const handleCaptureCheckInLocation = async () => {
+    setLocatingCheckIn(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
@@ -354,19 +395,19 @@ export const DutyFormScreen = ({ navigation, route }) => {
       // Reverse geocode to exact address name
       const address = await reverseGeocodeCoords(lat, lng);
 
-      setLocationCoords({
+      setCheckInLocationCoords({
         latitude: lat,
         longitude: lng,
         accuracy,
         address: address || '',
       });
 
-      if (fieldErrors.location) {
-        setFieldErrors((prev) => ({ ...prev, location: null }));
+      if (fieldErrors.checkInLocation || fieldErrors.location) {
+        setFieldErrors((prev) => ({ ...prev, checkInLocation: null, location: null }));
       }
 
       Alert.alert(
-        'Location Captured',
+        'Check-In Location Captured',
         address
           ? `${address}\n\nCoordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`
           : `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`
@@ -374,7 +415,51 @@ export const DutyFormScreen = ({ navigation, route }) => {
     } catch (locErr) {
       Alert.alert('GPS Error', 'Unable to retrieve GPS coordinates. Ensure device location is turned on.');
     } finally {
-      setLocating(false);
+      setLocatingCheckIn(false);
+    }
+  };
+
+  // Check-Out GPS Location capture (Freshly captured at checkout time!)
+  const handleCaptureCheckOutLocation = async () => {
+    setLocatingCheckOut(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Denied',
+          'Location permission is required to tag check-out coordinates.'
+        );
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const lat = location.coords.latitude;
+      const lng = location.coords.longitude;
+      const accuracy = Math.round(location.coords.accuracy || 0);
+
+      const address = await reverseGeocodeCoords(lat, lng);
+
+      const freshCheckoutLoc = {
+        latitude: lat,
+        longitude: lng,
+        accuracy,
+        address: address || '',
+      };
+      setCheckOutLocationCoords(freshCheckoutLoc);
+
+      Alert.alert(
+        'Checkout Location Captured',
+        address
+          ? `${address}\n\nCoordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+          : `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      );
+    } catch (locErr) {
+      Alert.alert('GPS Error', 'Unable to retrieve checkout GPS coordinates. Ensure device location is turned on.');
+    } finally {
+      setLocatingCheckOut(false);
     }
   };
 
@@ -397,7 +482,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
         companyPhoneNumber: newCompanyPhone.trim(),
         companyType: 'client',
       });
-      const createdComp = res.data?.company;
+      const createdComp = res.data?.data?.company || res.data?.company;
       if (createdComp) {
         setCompanies((prev) => [createdComp, ...prev]);
         setSelectedCompanyId(createdComp._id);
@@ -438,7 +523,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
         clientName: newClientName.trim(),
         clientPhoneNumber: newClientPhone.trim(),
       });
-      const createdClient = res.data?.client;
+      const createdClient = res.data?.data?.client || res.data?.client;
       if (createdClient) {
         setClients((prev) => [createdClient, ...prev]);
         setSelectedClientId(createdClient._id);
@@ -449,6 +534,9 @@ export const DutyFormScreen = ({ navigation, route }) => {
         setNewClientName('');
         setNewClientPhone('');
         setAddClientModalVisible(false);
+        if (fieldErrors.client) {
+          setFieldErrors((prev) => ({ ...prev, client: null }));
+        }
         Alert.alert('Client Added', `${createdClient.clientName} linked to company!`);
       }
     } catch (err) {
@@ -486,7 +574,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setLoading(true);
     try {
       // Auto-capture GPS coordinates if missing
-      let currentCoords = locationCoords;
+      let currentCoords = checkInLocationCoords;
       if (!currentCoords?.latitude) {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
@@ -504,7 +592,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
               accuracy,
               address: address || '',
             };
-            setLocationCoords(currentCoords);
+            setCheckInLocationCoords(currentCoords);
           }
         } catch (gpsErr) {
           console.warn('GPS auto-fetch on checkin error:', gpsErr);
@@ -516,11 +604,11 @@ export const DutyFormScreen = ({ navigation, route }) => {
         setLoading(false);
         setFieldErrors((prev) => ({
           ...prev,
-          location: 'GPS location is compulsory to check in. Please capture your location.',
+          checkInLocation: 'GPS location is compulsory to check in. Please capture your location.',
         }));
         Alert.alert(
           'GPS Location Required *',
-          'GPS location is strictly compulsory for Duty Check-In. Please turn on device GPS / Location and tap "Capture Current Location" to proceed.'
+          'GPS location is strictly compulsory for Duty Check-In. Please turn on device GPS / Location and tap "Capture Check-In Location" to proceed.'
         );
         return;
       }
@@ -539,11 +627,13 @@ export const DutyFormScreen = ({ navigation, route }) => {
       };
 
       const res = await dutyApi.checkIn(checkInPayload);
-      const createdDuty = res.data?.duty;
+      const createdDuty = res.data?.data?.duty || res.data?.duty;
       if (createdDuty) {
         setIsCheckedIn(true);
         setActiveDutyId(createdDuty._id);
         setActiveCheckInTime(createdDuty.checkInTime || createdDuty.inTime || '');
+        // Explicitly start checkout location as fresh/empty
+        setCheckOutLocationCoords(null);
         Alert.alert(
           'Check-In Successful',
           `Checked in at ${companyCategory === 'office' ? 'Office' : customerName || 'Client Site'}!\nYou can now log work details and checkout.`
@@ -580,20 +670,50 @@ export const DutyFormScreen = ({ navigation, route }) => {
     setFeatures((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Manpower Members helpers
-  const handleAddManpower = () => {
-    setManpowerMembers((prev) => [
-      ...prev,
-      { name: '', phoneNumber: '', description: '' },
-    ]);
+  // Manpower Members helpers - Dedicated Modal flow
+  const handleOpenAddManpower = () => {
+    setEditingManpowerIndex(null);
+    setMemberModalName('');
+    setMemberModalPhone('');
+    setMemberModalRole('');
+    setMemberModalError('');
+    setManpowerModalVisible(true);
   };
 
-  const handleUpdateManpower = (field, value, index) => {
-    setManpowerMembers((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      return updated;
-    });
+  const handleOpenEditManpower = (index) => {
+    const member = manpowerMembers[index];
+    if (!member) return;
+    setEditingManpowerIndex(index);
+    setMemberModalName(member.name || '');
+    setMemberModalPhone(member.phoneNumber || member.phone || '');
+    setMemberModalRole(member.description || '');
+    setMemberModalError('');
+    setManpowerModalVisible(true);
+  };
+
+  const handleSaveManpowerModal = () => {
+    if (!memberModalName.trim()) {
+      setMemberModalError('Please enter member name');
+      return;
+    }
+
+    const memberData = {
+      name: memberModalName.trim(),
+      phoneNumber: memberModalPhone.trim(),
+      description: memberModalRole.trim(),
+    };
+
+    if (editingManpowerIndex !== null) {
+      setManpowerMembers((prev) => {
+        const updated = [...prev];
+        updated[editingManpowerIndex] = memberData;
+        return updated;
+      });
+    } else {
+      setManpowerMembers((prev) => [...prev, memberData]);
+    }
+
+    setManpowerModalVisible(false);
   };
 
   const handleRemoveManpower = (index) => {
@@ -768,11 +888,37 @@ export const DutyFormScreen = ({ navigation, route }) => {
         customerProofPhotos: uploadedPhotos,
       };
 
-      if (locationCoords) {
-        checkoutPayload.latitude = locationCoords.latitude;
-        checkoutPayload.longitude = locationCoords.longitude;
-        checkoutPayload.accuracy = locationCoords.accuracy;
-        checkoutPayload.address = locationCoords.address;
+      let finalCheckOutLoc = checkOutLocationCoords;
+      if (!finalCheckOutLoc?.latitude) {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            const lat = loc.coords.latitude;
+            const lng = loc.coords.longitude;
+            const accuracy = Math.round(loc.coords.accuracy || 0);
+            const address = await reverseGeocodeCoords(lat, lng);
+            finalCheckOutLoc = {
+              latitude: lat,
+              longitude: lng,
+              accuracy,
+              address: address || '',
+            };
+            setCheckOutLocationCoords(finalCheckOutLoc);
+          }
+        } catch (checkoutGpsErr) {
+          console.warn('GPS auto-fetch on checkout error:', checkoutGpsErr);
+        }
+      }
+
+      if (finalCheckOutLoc?.latitude) {
+        checkoutPayload.checkOutLocation = finalCheckOutLoc;
+        checkoutPayload.latitude = finalCheckOutLoc.latitude;
+        checkoutPayload.longitude = finalCheckOutLoc.longitude;
+        checkoutPayload.accuracy = finalCheckOutLoc.accuracy;
+        checkoutPayload.address = finalCheckOutLoc.address;
       }
 
       if (isEditing) {
@@ -793,7 +939,8 @@ export const DutyFormScreen = ({ navigation, route }) => {
         setManpowerMembers([]);
         setSignatureData(null);
         setPhotos([]);
-        setLocationCoords(null);
+        setCheckInLocationCoords(null);
+        setCheckOutLocationCoords(null);
         setSelectedCompanyId('');
         setSelectedClientId('');
         setCustomerName('');
@@ -1061,15 +1208,15 @@ export const DutyFormScreen = ({ navigation, route }) => {
               ) : null}
 
               {/* GPS Coordinates Capture for Check-In (Compulsory) */}
-              <View style={[styles.gpsContainer, fieldErrors.location && styles.gpsContainerError]}>
+              <View style={[styles.gpsContainer, fieldErrors.checkInLocation && styles.gpsContainerError]}>
                 <View style={styles.gpsHeaderRow}>
                   <Ionicons
                     name="navigate-circle"
                     size={20}
-                    color={fieldErrors.location ? '#DC2626' : COLORS.primary}
+                    color={fieldErrors.checkInLocation ? '#DC2626' : COLORS.primary}
                   />
                   <Text style={styles.gpsTitle}>Check-In GPS Location *</Text>
-                  {locationCoords ? (
+                  {checkInLocationCoords ? (
                     <View style={styles.gpsVerifiedBadge}>
                       <Ionicons name="checkmark-circle" size={13} color="#059669" />
                       <Text style={styles.gpsVerifiedText}>Ready</Text>
@@ -1081,30 +1228,30 @@ export const DutyFormScreen = ({ navigation, route }) => {
                   )}
                 </View>
 
-                {locationCoords?.address ? (
+                {checkInLocationCoords?.address ? (
                   <View style={styles.resolvedAddressBox}>
                     <Text style={styles.resolvedAddressLabel}>Address:</Text>
-                    <Text style={styles.resolvedAddressText}>{locationCoords.address}</Text>
+                    <Text style={styles.resolvedAddressText}>{checkInLocationCoords.address}</Text>
                   </View>
                 ) : null}
 
-                {fieldErrors.location ? (
+                {fieldErrors.checkInLocation ? (
                   <Text style={[styles.errorText, { marginTop: 4, marginBottom: 2 }]}>
-                    {fieldErrors.location}
+                    {fieldErrors.checkInLocation}
                   </Text>
                 ) : null}
 
                 <SecondaryButton
                   title={
-                    locating
+                    locatingCheckIn
                       ? 'Fetching GPS...'
-                      : locationCoords
-                      ? 'Update Location'
-                      : 'Capture Current Location *'
+                      : checkInLocationCoords
+                      ? 'Update Check-In Location'
+                      : 'Capture Check-In Location *'
                   }
-                  onPress={handleCaptureLocation}
-                  loading={locating}
-                  icon={locating ? undefined : 'location-outline'}
+                  onPress={handleCaptureCheckInLocation}
+                  loading={locatingCheckIn}
+                  icon={locatingCheckIn ? undefined : 'location-outline'}
                   style={{ marginTop: SPACING.sm }}
                 />
               </View>
@@ -1308,12 +1455,17 @@ export const DutyFormScreen = ({ navigation, route }) => {
                 {/* Manpower Members Section */}
                 <View style={styles.dynamicSectionWrap}>
                   <View style={styles.dynamicSectionHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Ionicons name="people" size={18} color={COLORS.primary} />
-                      <Text style={styles.dynamicSectionTitle}>Manpower Members (Optional)</Text>
+                      <Text style={styles.dynamicSectionTitle}>Manpower Members</Text>
+                      {manpowerMembers.length > 0 && (
+                        <View style={styles.countBadge}>
+                          <Text style={styles.countBadgeText}>{manpowerMembers.length}</Text>
+                        </View>
+                      )}
                     </View>
                     <TouchableOpacity
-                      onPress={handleAddManpower}
+                      onPress={handleOpenAddManpower}
                       style={styles.addMemberBtn}
                       activeOpacity={0.8}
                     >
@@ -1322,67 +1474,75 @@ export const DutyFormScreen = ({ navigation, route }) => {
                     </TouchableOpacity>
                   </View>
                   <Text style={styles.dynamicSectionSubtitle}>
-                    Add team technicians or assistants working on this duty visit.
+                    Add colleagues or technicians assisting on this duty visit.
                   </Text>
 
                   {manpowerMembers.length === 0 ? (
-                    <View style={styles.emptyManpowerBox}>
+                    <TouchableOpacity
+                      style={styles.emptyManpowerBox}
+                      onPress={handleOpenAddManpower}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="person-add-outline" size={24} color={COLORS.textMuted} />
                       <Text style={styles.emptyManpowerText}>
-                        No manpower members added yet. Tap "+ Add Member" above if working with colleagues.
+                        No team members added yet.
                       </Text>
-                    </View>
+                      <Text style={styles.emptyManpowerSub}>
+                        Tap here or "+ Add Member" to add assistants without screen clutter.
+                      </Text>
+                    </TouchableOpacity>
                   ) : (
-                    manpowerMembers.map((member, idx) => (
-                      <Card key={`member-${idx}`} style={styles.manpowerCard}>
-                        <View style={styles.manpowerCardHeader}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name="person-circle" size={18} color={COLORS.primary} />
-                            <Text style={styles.manpowerCardNum}>Team Member #{idx + 1}</Text>
+                    <View style={styles.compactMemberList}>
+                      {manpowerMembers.map((member, idx) => (
+                        <View key={`member-${idx}`} style={styles.compactMemberCard}>
+                          <View style={styles.memberAvatarCircle}>
+                            <Text style={styles.memberAvatarInitial}>
+                              {member.name ? member.name.charAt(0).toUpperCase() : '#'}
+                            </Text>
                           </View>
-                          <TouchableOpacity
-                            onPress={() => handleRemoveManpower(idx)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          >
-                            <Ionicons name="trash-outline" size={18} color="#DC2626" />
-                          </TouchableOpacity>
-                        </View>
 
-                        <TextInputField
-                          label="Member Name *"
-                          placeholder="e.g. Kabilan M"
-                          value={member.name}
-                          onChangeText={(t) => handleUpdateManpower('name', t, idx)}
-                        />
-
-                        <View style={styles.manpowerRowCols}>
-                          <View style={{ flex: 1, marginRight: SPACING.xs }}>
-                            <TextInputField
-                              label="Phone Number"
-                              placeholder="10-digit mobile"
-                              value={member.phoneNumber}
-                              onChangeText={(t) =>
-                                handleUpdateManpower(
-                                  'phoneNumber',
-                                  t.replace(/\D/g, '').slice(0, 10),
-                                  idx
-                                )
-                              }
-                              keyboardType="number-pad"
-                              maxLength={10}
-                            />
+                          <View style={styles.memberInfoCol}>
+                            <Text style={styles.memberNameText} numberOfLines={1}>
+                              {member.name}
+                            </Text>
+                            <View style={styles.memberMetaRow}>
+                              {member.description ? (
+                                <View style={styles.memberRoleBadge}>
+                                  <Text style={styles.memberRoleBadgeText} numberOfLines={1}>
+                                    {member.description}
+                                  </Text>
+                                </View>
+                              ) : null}
+                              {member.phoneNumber ? (
+                                <View style={styles.memberPhoneRow}>
+                                  <Ionicons name="call-outline" size={12} color={COLORS.textSecondary} />
+                                  <Text style={styles.memberPhoneText}>{member.phoneNumber}</Text>
+                                </View>
+                              ) : null}
+                            </View>
                           </View>
-                          <View style={{ flex: 1 }}>
-                            <TextInputField
-                              label="Role / Task"
-                              placeholder="e.g. Assistant"
-                              value={member.description}
-                              onChangeText={(t) => handleUpdateManpower('description', t, idx)}
-                            />
+
+                          <View style={styles.memberActionsRow}>
+                            <TouchableOpacity
+                              onPress={() => handleOpenEditManpower(idx)}
+                              style={styles.memberActionBtn}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              activeOpacity={0.7}
+                            >
+                              <Ionicons name="create-outline" size={18} color={COLORS.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => handleRemoveManpower(idx)}
+                              style={styles.memberActionBtn}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              activeOpacity={0.7}
+                            >
+                              <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                            </TouchableOpacity>
                           </View>
                         </View>
-                      </Card>
-                    ))
+                      ))}
+                    </View>
                   )}
                 </View>
 
@@ -1470,22 +1630,121 @@ export const DutyFormScreen = ({ navigation, route }) => {
                   )}
                 </View>
 
-                {/* Current Location Checkout Tagging */}
-                <View style={styles.gpsContainer}>
-                  <View style={styles.gpsHeaderRow}>
-                    <Ionicons name="navigate-circle" size={20} color={COLORS.primary} />
-                    <Text style={styles.gpsTitle}>Current Location</Text>
+                {/* Separate Locations: Check-In Location (Recorded) & Check-Out Location (Fresh) */}
+                <View style={styles.locationsSectionWrap}>
+                  {/* 1. Check-In Location Summary Card (Recorded) */}
+                  <View style={styles.locationBlockCard}>
+                    <View style={styles.locationBlockHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="log-in" size={18} color="#059669" />
+                        <Text style={styles.locationBlockTitle}>Check-In Location</Text>
+                      </View>
+                      <View style={styles.locationBlockTagSuccess}>
+                        <Ionicons name="checkmark-circle" size={12} color="#059669" />
+                        <Text style={styles.locationBlockTagSuccessText}>Recorded</Text>
+                      </View>
+                    </View>
+
+                    {checkInLocationCoords ? (
+                      <View style={styles.locationBlockBody}>
+                        {checkInLocationCoords.address ? (
+                          <Text style={styles.locationAddressText}>
+                            {checkInLocationCoords.address}
+                          </Text>
+                        ) : null}
+                        <Text style={styles.locationCoordsText}>
+                          GPS: {Number(checkInLocationCoords.latitude).toFixed(5)},{' '}
+                          {Number(checkInLocationCoords.longitude).toFixed(5)}
+                          {checkInLocationCoords.accuracy ? ` (±${checkInLocationCoords.accuracy}m)` : ''}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.openMapLink}
+                          onPress={() =>
+                            openMapLocation(
+                              checkInLocationCoords.latitude,
+                              checkInLocationCoords.longitude,
+                              'Check-In Location'
+                            )
+                          }
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="map-outline" size={14} color={COLORS.primary} />
+                          <Text style={styles.openMapLinkText}>View on Google Maps</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Text style={styles.locationFallbackText}>
+                        No check-in GPS recorded.
+                      </Text>
+                    )}
                   </View>
-                  {locationCoords?.address ? (
-                    <Text style={styles.resolvedAddressText}>{locationCoords.address}</Text>
-                  ) : null}
-                  <SecondaryButton
-                    title={locating ? 'Fetching...' : 'Refresh Location'}
-                    onPress={handleCaptureLocation}
-                    loading={locating}
-                    icon="location-outline"
-                    style={{ marginTop: SPACING.xs }}
-                  />
+
+                  {/* 2. Check-Out Location Card (Freshly Tagged at Departure) */}
+                  <View style={[styles.locationBlockCard, styles.locationBlockCardCheckout]}>
+                    <View style={styles.locationBlockHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="log-out" size={18} color={COLORS.primary} />
+                        <Text style={styles.locationBlockTitle}>Check-Out Location</Text>
+                      </View>
+                      {checkOutLocationCoords ? (
+                        <View style={styles.locationBlockTagSuccess}>
+                          <Ionicons name="checkmark-circle" size={12} color="#059669" />
+                          <Text style={styles.locationBlockTagSuccessText}>Ready</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.locationBlockTagPending}>
+                          <Text style={styles.locationBlockTagPendingText}>Fresh Capture</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {checkOutLocationCoords ? (
+                      <View style={styles.locationBlockBody}>
+                        {checkOutLocationCoords.address ? (
+                          <Text style={styles.locationAddressText}>
+                            {checkOutLocationCoords.address}
+                          </Text>
+                        ) : null}
+                        <Text style={styles.locationCoordsText}>
+                          GPS: {Number(checkOutLocationCoords.latitude).toFixed(5)},{' '}
+                          {Number(checkOutLocationCoords.longitude).toFixed(5)}
+                          {checkOutLocationCoords.accuracy ? ` (±${checkOutLocationCoords.accuracy}m)` : ''}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.openMapLink}
+                          onPress={() =>
+                            openMapLocation(
+                              checkOutLocationCoords.latitude,
+                              checkOutLocationCoords.longitude,
+                              'Check-Out Location'
+                            )
+                          }
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="map-outline" size={14} color={COLORS.primary} />
+                          <Text style={styles.openMapLinkText}>View on Google Maps</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Text style={styles.locationHelperText}>
+                        Checkout location is freshly captured and independent from check-in. Tap below or it will auto-tag upon submitting.
+                      </Text>
+                    )}
+
+                    <SecondaryButton
+                      title={
+                        locatingCheckOut
+                          ? 'Fetching Checkout GPS...'
+                          : checkOutLocationCoords
+                          ? 'Re-Capture Checkout Location'
+                          : 'Capture Checkout Location (Fresh)'
+                      }
+                      onPress={handleCaptureCheckOutLocation}
+                      loading={locatingCheckOut}
+                      icon={locatingCheckOut ? undefined : 'locate-outline'}
+                      style={{ marginTop: SPACING.xs }}
+                    />
+                  </View>
                 </View>
 
                 {/* Single Checkout Action Button */}
@@ -1715,6 +1974,111 @@ export const DutyFormScreen = ({ navigation, route }) => {
         isSignature={previewIsSignature}
         onClose={() => setPreviewModalVisible(false)}
       />
+
+      {/* Manpower Add / Edit Modal */}
+      <Modal
+        visible={manpowerModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setManpowerModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <Card style={styles.dialogCard}>
+            <View style={styles.dialogHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="people" size={20} color={COLORS.primary} />
+                <Text style={styles.dialogTitle}>
+                  {editingManpowerIndex !== null ? 'Edit Team Member' : 'Add Team Member'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setManpowerModalVisible(false)}>
+                <Ionicons name="close" size={22} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {memberModalError ? (
+              <Text style={[styles.errorText, { marginBottom: SPACING.xs }]}>
+                {memberModalError}
+              </Text>
+            ) : null}
+
+            <TextInputField
+              label="Member Name *"
+              placeholder="e.g. Senthil Kumar"
+              value={memberModalName}
+              onChangeText={(t) => {
+                setMemberModalName(t);
+                if (memberModalError) setMemberModalError('');
+              }}
+              required
+            />
+
+            {/* Quick Role Selection Presets */}
+            <Text style={[styles.fieldLabel, { marginTop: 4 }]}>Role / Designation</Text>
+            <View style={styles.rolePresetChipsWrap}>
+              {['Assistant', 'Technician', 'Electrician', 'Mechanic', 'Helper', 'Programmer'].map(
+                (role) => {
+                  const isSelected = memberModalRole === role;
+                  return (
+                    <TouchableOpacity
+                      key={role}
+                      style={[
+                        styles.rolePresetChip,
+                        isSelected && styles.rolePresetChipSelected,
+                      ]}
+                      onPress={() => setMemberModalRole(isSelected ? '' : role)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.rolePresetChipText,
+                          isSelected && styles.rolePresetChipTextSelected,
+                        ]}
+                      >
+                        {role}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                }
+              )}
+            </View>
+
+            <TextInputField
+              label="Custom Role / Note"
+              placeholder="Or type custom role (e.g. Wiring Specialist)"
+              value={memberModalRole}
+              onChangeText={setMemberModalRole}
+              style={{ marginTop: SPACING.xs }}
+            />
+
+            <TextInputField
+              label="Phone Number (Optional)"
+              placeholder="10-digit mobile number"
+              value={memberModalPhone}
+              onChangeText={(t) => setMemberModalPhone(t.replace(/\D/g, '').slice(0, 10))}
+              keyboardType="number-pad"
+              maxLength={10}
+            />
+
+            <View style={styles.dialogButtonsRow}>
+              <SecondaryButton
+                title="Cancel"
+                onPress={() => setManpowerModalVisible(false)}
+                style={{ flex: 1, marginRight: SPACING.sm }}
+              />
+              <PrimaryButton
+                title={editingManpowerIndex !== null ? 'Update Member' : 'Add Member'}
+                onPress={handleSaveManpowerModal}
+                icon="checkmark"
+                style={{ flex: 1.3 }}
+              />
+            </View>
+          </Card>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -2158,41 +2522,109 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   emptyManpowerBox: {
-    padding: SPACING.sm,
+    padding: SPACING.md,
     backgroundColor: '#F8FAFC',
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: SPACING.xs,
   },
   emptyManpowerText: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    fontStyle: 'italic',
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginTop: 6,
     textAlign: 'center',
   },
-  manpowerCard: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
-    borderWidth: 1,
-    padding: SPACING.sm + 2,
-    marginBottom: SPACING.sm,
+  emptyManpowerSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+    textAlign: 'center',
   },
-  manpowerCardHeader: {
+  compactMemberList: {
+    gap: SPACING.xs,
+    marginTop: 2,
+  },
+  compactMemberCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.xs,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: RADIUS.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
   },
-  manpowerCardNum: {
-    fontSize: 12,
+  memberAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberAvatarInitial: {
+    fontSize: 14,
     fontWeight: '700',
     color: COLORS.primary,
   },
-  manpowerRowCols: {
+  memberInfoCol: {
+    flex: 1,
+  },
+  memberNameText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  memberMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    marginTop: 3,
+    flexWrap: 'wrap',
+  },
+  memberRoleBadge: {
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: RADIUS.xs,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  memberRoleBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0284C7',
+  },
+  memberPhoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  memberPhoneText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  memberActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  memberActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   photosSection: {
     marginBottom: SPACING.md,
@@ -2328,6 +2760,129 @@ const styles = StyleSheet.create({
   dialogButtonsRow: {
     flexDirection: 'row',
     marginTop: SPACING.md,
+  },
+  rolePresetChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginVertical: SPACING.xs,
+  },
+  rolePresetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  rolePresetChipSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  rolePresetChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  rolePresetChipTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  locationsSectionWrap: {
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  locationBlockCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+  },
+  locationBlockCardCheckout: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+  },
+  locationBlockHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  locationBlockTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  locationBlockTagSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  locationBlockTagSuccessText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  locationBlockTagPending: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  locationBlockTagPendingText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  locationBlockBody: {
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  locationAddressText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+    lineHeight: 16,
+    marginBottom: 3,
+  },
+  locationCoordsText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 4,
+  },
+  openMapLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  openMapLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  locationFallbackText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  locationHelperText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    lineHeight: 15,
+    marginTop: 2,
+    marginBottom: 6,
   },
 });
 

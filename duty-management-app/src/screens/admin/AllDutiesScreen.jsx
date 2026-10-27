@@ -81,7 +81,8 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
   // Read-only Duty Detail Modal (No approval workflow)
   const [selectedDuty, setSelectedDuty] = useState(null);
-  const [selectedDutyAddress, setSelectedDutyAddress] = useState('');
+  const [selectedDutyCheckInAddress, setSelectedDutyCheckInAddress] = useState('');
+  const [selectedDutyCheckOutAddress, setSelectedDutyCheckOutAddress] = useState('');
 
   // Lightbox preview modal state
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
@@ -93,17 +94,40 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
   // Automatically resolve reverse-geocoded location for selected duty
   useEffect(() => {
-    if (selectedDuty?.location?.address) {
-      setSelectedDutyAddress(selectedDuty.location.address);
-    } else if (selectedDuty?.location?.latitude && selectedDuty?.location?.longitude) {
-      setSelectedDutyAddress('');
-      reverseGeocodeCoords(selectedDuty.location.latitude, selectedDuty.location.longitude)
+    if (!selectedDuty) {
+      setSelectedDutyCheckInAddress('');
+      setSelectedDutyCheckOutAddress('');
+      return;
+    }
+
+    const checkInLoc = selectedDuty.checkInLocation?.latitude
+      ? selectedDuty.checkInLocation
+      : selectedDuty.location;
+    if (checkInLoc?.address) {
+      setSelectedDutyCheckInAddress(checkInLoc.address);
+    } else if (checkInLoc?.latitude && checkInLoc?.longitude) {
+      setSelectedDutyCheckInAddress('');
+      reverseGeocodeCoords(checkInLoc.latitude, checkInLoc.longitude)
         .then((addr) => {
-          if (addr) setSelectedDutyAddress(addr);
+          if (addr) setSelectedDutyCheckInAddress(addr);
         })
         .catch(() => {});
     } else {
-      setSelectedDutyAddress('');
+      setSelectedDutyCheckInAddress('');
+    }
+
+    const checkOutLoc = selectedDuty.checkOutLocation;
+    if (checkOutLoc?.address) {
+      setSelectedDutyCheckOutAddress(checkOutLoc.address);
+    } else if (checkOutLoc?.latitude && checkOutLoc?.longitude) {
+      setSelectedDutyCheckOutAddress('');
+      reverseGeocodeCoords(checkOutLoc.latitude, checkOutLoc.longitude)
+        .then((addr) => {
+          if (addr) setSelectedDutyCheckOutAddress(addr);
+        })
+        .catch(() => {});
+    } else {
+      setSelectedDutyCheckOutAddress('');
     }
   }, [selectedDuty]);
 
@@ -720,32 +744,82 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                 </View>
               ) : null}
 
-              {/* GPS Coordinates with Interactive Map Button */}
-              {selectedDuty?.location?.latitude ? (
+              {/* Check-In GPS Location */}
+              {(selectedDuty?.checkInLocation?.latitude || selectedDuty?.location?.latitude) ? (
                 <View style={styles.detailBlock}>
-                  <Text style={styles.blockLabel}>GPS Location Tag & Interactive Map</Text>
+                  <Text style={styles.blockLabel}>Check-In Location (GPS)</Text>
 
-                  {selectedDutyAddress ? (
+                  {(selectedDutyCheckInAddress || selectedDuty.checkInLocation?.address || selectedDuty.location?.address) ? (
                     <View style={styles.exactAddressCard}>
-                      <Ionicons name="location" size={20} color={COLORS.primary} style={{ marginTop: 2 }} />
+                      <Ionicons name="location" size={20} color="#059669" style={{ marginTop: 2 }} />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.exactAddressTitle}>Exact Location Name</Text>
-                        <Text style={styles.exactAddressText}>{selectedDutyAddress}</Text>
+                        <Text style={[styles.exactAddressTitle, { color: '#059669' }]}>Check-In Address</Text>
+                        <Text style={styles.exactAddressText}>
+                          {selectedDutyCheckInAddress || selectedDuty.checkInLocation?.address || selectedDuty.location?.address}
+                        </Text>
                       </View>
                     </View>
                   ) : null}
 
-                  <View style={styles.mapCard}>
+                  <View style={[styles.mapCard, { borderColor: '#BBF7D0', backgroundColor: '#F0FDF4' }]}>
                     <View style={styles.mapInfo}>
-                      <Ionicons name="navigate-circle" size={24} color={COLORS.primary} />
+                      <Ionicons name="log-in" size={24} color="#059669" />
                       <View>
                         <Text style={styles.blockValue}>
-                          {selectedDuty.location.latitude.toFixed(5)},{' '}
-                          {selectedDuty.location.longitude.toFixed(5)}
+                          {(selectedDuty.checkInLocation?.latitude || selectedDuty.location?.latitude).toFixed(5)},{' '}
+                          {(selectedDuty.checkInLocation?.longitude || selectedDuty.location?.longitude).toFixed(5)}
                         </Text>
-                        {selectedDuty.location.accuracy ? (
+                        {(selectedDuty.checkInLocation?.accuracy || selectedDuty.location?.accuracy) ? (
                           <Text style={styles.blockSub}>
-                            Accuracy: ~{selectedDuty.location.accuracy} meters
+                            Accuracy: ~{selectedDuty.checkInLocation?.accuracy || selectedDuty.location?.accuracy} meters
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.openMapBtn, { backgroundColor: '#059669' }]}
+                      onPress={() => {
+                        const lat = selectedDuty.checkInLocation?.latitude || selectedDuty.location?.latitude;
+                        const lng = selectedDuty.checkInLocation?.longitude || selectedDuty.location?.longitude;
+                        openMapLocation(lat, lng, `${selectedDuty.customerName || 'Service'} Check-In`);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.openMapBtnText}>Open Check-In on Google Maps</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Check-Out GPS Location */}
+              {selectedDuty?.checkOutLocation?.latitude ? (
+                <View style={styles.detailBlock}>
+                  <Text style={styles.blockLabel}>Check-Out Location (GPS)</Text>
+
+                  {(selectedDutyCheckOutAddress || selectedDuty.checkOutLocation?.address) ? (
+                    <View style={styles.exactAddressCard}>
+                      <Ionicons name="location" size={20} color={COLORS.primary} style={{ marginTop: 2 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.exactAddressTitle}>Check-Out Address</Text>
+                        <Text style={styles.exactAddressText}>
+                          {selectedDutyCheckOutAddress || selectedDuty.checkOutLocation?.address}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  <View style={[styles.mapCard, { borderColor: '#BAE6FD', backgroundColor: '#F0F9FF' }]}>
+                    <View style={styles.mapInfo}>
+                      <Ionicons name="log-out" size={24} color={COLORS.primary} />
+                      <View>
+                        <Text style={styles.blockValue}>
+                          {selectedDuty.checkOutLocation.latitude.toFixed(5)},{' '}
+                          {selectedDuty.checkOutLocation.longitude.toFixed(5)}
+                        </Text>
+                        {selectedDuty.checkOutLocation.accuracy ? (
+                          <Text style={styles.blockSub}>
+                            Accuracy: ~{selectedDuty.checkOutLocation.accuracy} meters
                           </Text>
                         ) : null}
                       </View>
@@ -754,15 +828,15 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                       style={styles.openMapBtn}
                       onPress={() => {
                         openMapLocation(
-                          selectedDuty.location.latitude,
-                          selectedDuty.location.longitude,
-                          selectedDuty.customerName || 'Service Location'
+                          selectedDuty.checkOutLocation.latitude,
+                          selectedDuty.checkOutLocation.longitude,
+                          `${selectedDuty.customerName || 'Service'} Check-Out`
                         );
                       }}
                       activeOpacity={0.8}
                     >
                       <Ionicons name="map-outline" size={16} color="#FFFFFF" />
-                      <Text style={styles.openMapBtnText}>Open in Google Maps</Text>
+                      <Text style={styles.openMapBtnText}>Open Check-Out on Google Maps</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

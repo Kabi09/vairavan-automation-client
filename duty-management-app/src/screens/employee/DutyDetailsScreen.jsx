@@ -32,7 +32,8 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   const [duty, setDuty] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [resolvedAddress, setResolvedAddress] = useState('');
+  const [resolvedCheckInAddress, setResolvedCheckInAddress] = useState('');
+  const [resolvedCheckOutAddress, setResolvedCheckOutAddress] = useState('');
 
   // Lightbox preview modal state
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
@@ -52,12 +53,28 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
             const dutyRecord = res.data.duty;
             setDuty(dutyRecord);
 
-            if (dutyRecord.location?.address) {
-              setResolvedAddress(dutyRecord.location.address);
-            } else if (dutyRecord.location?.latitude && dutyRecord.location?.longitude) {
-              reverseGeocodeCoords(dutyRecord.location.latitude, dutyRecord.location.longitude)
+            // Resolve Check-In address (or legacy location)
+            const checkInLoc = dutyRecord.checkInLocation?.latitude
+              ? dutyRecord.checkInLocation
+              : dutyRecord.location;
+            if (checkInLoc?.address) {
+              setResolvedCheckInAddress(checkInLoc.address);
+            } else if (checkInLoc?.latitude && checkInLoc?.longitude) {
+              reverseGeocodeCoords(checkInLoc.latitude, checkInLoc.longitude)
                 .then((addr) => {
-                  if (addr) setResolvedAddress(addr);
+                  if (addr) setResolvedCheckInAddress(addr);
+                })
+                .catch(() => {});
+            }
+
+            // Resolve Check-Out address
+            const checkOutLoc = dutyRecord.checkOutLocation;
+            if (checkOutLoc?.address) {
+              setResolvedCheckOutAddress(checkOutLoc.address);
+            } else if (checkOutLoc?.latitude && checkOutLoc?.longitude) {
+              reverseGeocodeCoords(checkOutLoc.latitude, checkOutLoc.longitude)
+                .then((addr) => {
+                  if (addr) setResolvedCheckOutAddress(addr);
                 })
                 .catch(() => {});
             }
@@ -305,51 +322,126 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
           <Text style={styles.descriptionText}>{duty.workDescription}</Text>
         </Card>
 
-        {/* GPS Location & Interactive Map */}
-        {duty.location?.latitude ? (
+        {/* GPS Locations: Check-In Location & Check-Out Location */}
+        {Boolean(
+          (duty.checkInLocation?.latitude || duty.location?.latitude) ||
+          duty.checkOutLocation?.latitude
+        ) && (
           <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Service Location GPS</Text>
+            <Text style={styles.sectionTitle}>Visit GPS Locations</Text>
 
-            {resolvedAddress ? (
-              <View style={styles.exactAddressCard}>
-                <Ionicons name="location" size={20} color={COLORS.primary} style={{ marginTop: 2 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.exactAddressTitle}>Exact Location Name</Text>
-                  <Text style={styles.exactAddressText}>{resolvedAddress}</Text>
+            {/* 1. Check-In Location */}
+            {(duty.checkInLocation?.latitude || duty.location?.latitude) ? (
+              <View style={styles.detailLocationBlock}>
+                <View style={styles.detailLocationHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="log-in" size={18} color="#059669" />
+                    <Text style={styles.detailLocationTitle}>Check-In Location</Text>
+                  </View>
+                  <View style={styles.detailLocationTagCheckIn}>
+                    <Text style={styles.detailLocationTagTextCheckIn}>Check-In</Text>
+                  </View>
                 </View>
+
+                {(resolvedCheckInAddress || duty.checkInLocation?.address || duty.location?.address) ? (
+                  <View style={styles.exactAddressCard}>
+                    <Ionicons name="location" size={18} color="#059669" style={{ marginTop: 2 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.exactAddressTitle}>Recorded Address</Text>
+                      <Text style={styles.exactAddressText}>
+                        {resolvedCheckInAddress || duty.checkInLocation?.address || duty.location?.address}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                <View style={styles.locationRow}>
+                  <Ionicons name="navigate-circle" size={22} color="#059669" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.coordText}>
+                      {(duty.checkInLocation?.latitude || duty.location?.latitude).toFixed(5)},{' '}
+                      {(duty.checkInLocation?.longitude || duty.location?.longitude).toFixed(5)}
+                    </Text>
+                    {(duty.checkInLocation?.accuracy || duty.location?.accuracy) ? (
+                      <Text style={styles.accuracyText}>
+                        Accuracy: ~{duty.checkInLocation?.accuracy || duty.location?.accuracy} meters
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.mapOpenBtn, styles.mapOpenBtnCheckIn]}
+                  onPress={() => {
+                    const lat = duty.checkInLocation?.latitude || duty.location?.latitude;
+                    const lng = duty.checkInLocation?.longitude || duty.location?.longitude;
+                    openMapLocation(lat, lng, `${duty.customerName || 'Service'} Check-In`);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="map-outline" size={15} color="#FFFFFF" />
+                  <Text style={styles.mapOpenBtnText}>Open Check-In on Google Maps</Text>
+                </TouchableOpacity>
               </View>
             ) : null}
 
-            <View style={styles.locationRow}>
-              <Ionicons name="navigate-circle" size={26} color={COLORS.success} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.coordText}>
-                  {duty.location.latitude.toFixed(5)}, {duty.location.longitude.toFixed(5)}
-                </Text>
-                {duty.location.accuracy ? (
-                  <Text style={styles.accuracyText}>
-                    Accuracy: ~{duty.location.accuracy} meters
-                  </Text>
-                ) : null}
-              </View>
-            </View>
+            {/* 2. Check-Out Location */}
+            {duty.checkOutLocation?.latitude ? (
+              <View style={[styles.detailLocationBlock, styles.detailLocationBlockCheckOut]}>
+                <View style={styles.detailLocationHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="log-out" size={18} color={COLORS.primary} />
+                    <Text style={styles.detailLocationTitle}>Check-Out Location</Text>
+                  </View>
+                  <View style={styles.detailLocationTagCheckOut}>
+                    <Text style={styles.detailLocationTagTextCheckOut}>Check-Out</Text>
+                  </View>
+                </View>
 
-            <TouchableOpacity
-              style={styles.mapOpenBtn}
-              onPress={() => {
-                openMapLocation(
-                  duty.location.latitude,
-                  duty.location.longitude,
-                  duty.customerName || 'Service Location'
-                );
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="map-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.mapOpenBtnText}>Open in Google Maps</Text>
-            </TouchableOpacity>
+                {(resolvedCheckOutAddress || duty.checkOutLocation?.address) ? (
+                  <View style={[styles.exactAddressCard, styles.exactAddressCardCheckout]}>
+                    <Ionicons name="location" size={18} color={COLORS.primary} style={{ marginTop: 2 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.exactAddressTitle}>Departure Address</Text>
+                      <Text style={styles.exactAddressText}>
+                        {resolvedCheckOutAddress || duty.checkOutLocation?.address}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                <View style={styles.locationRow}>
+                  <Ionicons name="navigate-circle" size={22} color={COLORS.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.coordText}>
+                      {duty.checkOutLocation.latitude.toFixed(5)}, {duty.checkOutLocation.longitude.toFixed(5)}
+                    </Text>
+                    {duty.checkOutLocation.accuracy ? (
+                      <Text style={styles.accuracyText}>
+                        Accuracy: ~{duty.checkOutLocation.accuracy} meters
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.mapOpenBtn}
+                  onPress={() => {
+                    openMapLocation(
+                      duty.checkOutLocation.latitude,
+                      duty.checkOutLocation.longitude,
+                      `${duty.customerName || 'Service'} Check-Out`
+                    );
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="map-outline" size={15} color="#FFFFFF" />
+                  <Text style={styles.mapOpenBtnText}>Open Check-Out on Google Maps</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </Card>
-        ) : null}
+        )}
 
         {/* Proof Photos */}
         {duty.customerProofPhotos?.length > 0 && (
@@ -675,6 +767,62 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  mapOpenBtnCheckIn: {
+    backgroundColor: '#059669',
+  },
+  detailLocationBlock: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+  },
+  detailLocationBlockCheckOut: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+    marginTop: SPACING.sm,
+  },
+  detailLocationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  detailLocationTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  detailLocationTagCheckIn: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  detailLocationTagTextCheckIn: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  detailLocationTagCheckOut: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+  },
+  detailLocationTagTextCheckOut: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  exactAddressCardCheckout: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
   },
   actionRow: {
     flexDirection: 'row',

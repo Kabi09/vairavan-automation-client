@@ -360,12 +360,17 @@ export const checkOut = asyncHandler(async (req, res) => {
     duty.totalDurationMinutes = Math.max(0, Math.round(durationMs / (1000 * 60)));
   }
 
-  if (latitude !== undefined && longitude !== undefined && latitude !== null && longitude !== null) {
+  const checkOutLat = req.body.checkOutLocation?.latitude ?? latitude;
+  const checkOutLng = req.body.checkOutLocation?.longitude ?? longitude;
+  const checkOutAcc = req.body.checkOutLocation?.accuracy ?? accuracy;
+  const checkOutAddr = req.body.checkOutLocation?.address ?? address;
+
+  if (checkOutLat !== undefined && checkOutLng !== undefined && checkOutLat !== null && checkOutLng !== null) {
     duty.checkOutLocation = {
-      latitude: Number(latitude),
-      longitude: Number(longitude),
-      accuracy: accuracy !== undefined && accuracy !== null ? Number(accuracy) : null,
-      address: address ? String(address).trim() : '',
+      latitude: Number(checkOutLat),
+      longitude: Number(checkOutLng),
+      accuracy: checkOutAcc !== undefined && checkOutAcc !== null ? Number(checkOutAcc) : null,
+      address: checkOutAddr ? String(checkOutAddr).trim() : '',
       capturedAt: now,
     };
     duty.location = duty.checkOutLocation;
@@ -638,14 +643,31 @@ export const updateDuty = asyncHandler(async (req, res) => {
   }
   if (customerProofPhotos) duty.customerProofPhotos = customerProofPhotos;
 
-  if (latitude !== undefined && longitude !== undefined && latitude !== null && longitude !== null) {
-    duty.location = {
-      latitude: Number(latitude),
-      longitude: Number(longitude),
-      accuracy: accuracy !== undefined && accuracy !== null ? Number(accuracy) : null,
-      address: address !== undefined ? String(address).trim() : (duty.location?.address || ''),
+  if (Array.isArray(req.body.manpowerMembers)) {
+    duty.manpowerMembers = req.body.manpowerMembers
+      .filter((m) => m && m.name && String(m.name).trim())
+      .map((m) => ({
+        name: String(m.name).trim(),
+        phoneNumber: m.phoneNumber ? String(m.phoneNumber).trim() : (m.phone ? String(m.phone).trim() : ''),
+        description: m.description ? String(m.description).trim() : '',
+      }));
+  }
+
+  const updateOutLat = req.body.checkOutLocation?.latitude ?? latitude;
+  const updateOutLng = req.body.checkOutLocation?.longitude ?? longitude;
+  const updateOutAcc = req.body.checkOutLocation?.accuracy ?? accuracy;
+  const updateOutAddr = req.body.checkOutLocation?.address ?? address;
+
+  if (updateOutLat !== undefined && updateOutLng !== undefined && updateOutLat !== null && updateOutLng !== null) {
+    const locObj = {
+      latitude: Number(updateOutLat),
+      longitude: Number(updateOutLng),
+      accuracy: updateOutAcc !== undefined && updateOutAcc !== null ? Number(updateOutAcc) : null,
+      address: updateOutAddr !== undefined ? String(updateOutAddr).trim() : (duty.checkOutLocation?.address || duty.location?.address || ''),
       capturedAt: new Date(),
     };
+    duty.checkOutLocation = locObj;
+    duty.location = locObj;
   } else if (address !== undefined && duty.location) {
     duty.location.address = String(address).trim();
   }

@@ -361,19 +361,37 @@ export const exportDutiesToPDF = async ({
         const customerPhone = escapeHtml(d.customerPhoneNumber || 'N/A');
         const workDesc = escapeHtml(d.workDescription || 'N/A');
 
-        const lat = d.location?.latitude;
-        const lng = d.location?.longitude;
-        const locAddress = d.location?.address ? escapeHtml(d.location.address) : '';
-        const coordsText = lat && lng ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : '';
-        let locationText = 'Not Recorded';
-        if (locAddress && coordsText) {
-          locationText = `${locAddress}<br/><span style="color: #64748b; font-size: 10px;">Coordinates: ${coordsText}</span>`;
-        } else if (locAddress) {
-          locationText = locAddress;
-        } else if (coordsText) {
-          locationText = coordsText;
+        // Check-In Location
+        const checkInLat = d.checkInLocation?.latitude || d.location?.latitude;
+        const checkInLng = d.checkInLocation?.longitude || d.location?.longitude;
+        const checkInAddr = (d.checkInLocation?.address || d.location?.address)
+          ? escapeHtml(d.checkInLocation?.address || d.location?.address)
+          : '';
+        const checkInCoords = checkInLat && checkInLng ? `${checkInLat.toFixed(5)}, ${checkInLng.toFixed(5)}` : '';
+        let checkInLocText = 'Not Recorded';
+        if (checkInAddr && checkInCoords) {
+          checkInLocText = `${checkInAddr} (${checkInCoords})`;
+        } else if (checkInAddr) {
+          checkInLocText = checkInAddr;
+        } else if (checkInCoords) {
+          checkInLocText = checkInCoords;
         }
-        const mapsUrl = lat && lng ? `https://maps.google.com/?q=${lat},${lng}` : null;
+        const checkInMapsUrl = checkInLat && checkInLng ? `https://maps.google.com/?q=${checkInLat},${checkInLng}` : null;
+
+        // Check-Out Location
+        const checkOutLat = d.checkOutLocation?.latitude;
+        const checkOutLng = d.checkOutLocation?.longitude;
+        const checkOutAddr = d.checkOutLocation?.address ? escapeHtml(d.checkOutLocation.address) : '';
+        const checkOutCoords = checkOutLat && checkOutLng ? `${checkOutLat.toFixed(5)}, ${checkOutLng.toFixed(5)}` : '';
+        let checkOutLocText = 'Not Recorded';
+        if (checkOutAddr && checkOutCoords) {
+          checkOutLocText = `${checkOutAddr} (${checkOutCoords})`;
+        } else if (checkOutAddr) {
+          checkOutLocText = checkOutAddr;
+        } else if (checkOutCoords) {
+          checkOutLocText = checkOutCoords;
+        }
+        const checkOutMapsUrl = checkOutLat && checkOutLng ? `https://maps.google.com/?q=${checkOutLat},${checkOutLng}` : null;
 
         const signatureUrl =
           d.customerSignature?.url ||
@@ -498,8 +516,10 @@ export const exportDutiesToPDF = async ({
                   <strong>Check-In Time (IST):</strong> ${checkInIST}<br/>
                   <strong>Check-Out Time (IST):</strong> ${checkOutIST}<br/>
                   <strong>Total Working Duration:</strong> ${durationText}<br/>
-                  <strong>GPS Location:</strong> ${locationText}
-                  ${mapsUrl ? `<br/><a href="${mapsUrl}" target="_blank" style="color: #1e40af; font-size: 11px;">[View on Google Maps]</a>` : ''}
+                  <strong>Check-In Location:</strong> ${checkInLocText}
+                  ${checkInMapsUrl ? `<a href="${checkInMapsUrl}" target="_blank" style="color: #059669; font-size: 10px; margin-left: 4px;">[Maps ↗]</a>` : ''}<br/>
+                  <strong>Check-Out Location:</strong> ${checkOutLocText}
+                  ${checkOutMapsUrl ? `<a href="${checkOutMapsUrl}" target="_blank" style="color: #1e40af; font-size: 10px; margin-left: 4px;">[Maps ↗]</a>` : ''}
                 </td>
               </tr>
             </table>
@@ -750,8 +770,10 @@ export const exportDutiesToExcel = async ({
       'Features',
       'Manpower Team',
       'Work Description',
-      'Location Address',
-      'GPS Coordinates',
+      'Check-In Location Address',
+      'Check-In GPS Coordinates',
+      'Check-Out Location Address',
+      'Check-Out GPS Coordinates',
       'Signature Timestamp',
       'Customer Signature URL',
       'Proof Photos URLs',
@@ -780,10 +802,15 @@ export const exportDutiesToExcel = async ({
       const outTime = d.outTime || '';
       const workDesc = d.workDescription || '';
 
-      const lat = d.location?.latitude;
-      const lng = d.location?.longitude;
-      const coords = lat && lng ? `${lat}, ${lng}` : '';
-      const address = d.location?.address || '';
+      const checkInLat = d.checkInLocation?.latitude || d.location?.latitude;
+      const checkInLng = d.checkInLocation?.longitude || d.location?.longitude;
+      const checkInCoords = checkInLat && checkInLng ? `${checkInLat}, ${checkInLng}` : '';
+      const checkInAddress = d.checkInLocation?.address || d.location?.address || '';
+
+      const checkOutLat = d.checkOutLocation?.latitude;
+      const checkOutLng = d.checkOutLocation?.longitude;
+      const checkOutCoords = checkOutLat && checkOutLng ? `${checkOutLat}, ${checkOutLng}` : '';
+      const checkOutAddress = d.checkOutLocation?.address || '';
 
       const signatureUrl = d.customerSignature?.url || '';
       const sigTime = d.customerSignature?.signedAt
@@ -880,8 +907,10 @@ export const exportDutiesToExcel = async ({
         escapeCsv(featuresStr),
         escapeCsv(manpowerStr),
         escapeCsv(workDesc),
-        escapeCsv(address),
-        escapeCsv(coords),
+        escapeCsv(checkInAddress),
+        escapeCsv(checkInCoords),
+        escapeCsv(checkOutAddress),
+        escapeCsv(checkOutCoords),
         escapeCsv(sigTime),
         escapeCsv(signatureUrl),
         escapeCsv(photos),
