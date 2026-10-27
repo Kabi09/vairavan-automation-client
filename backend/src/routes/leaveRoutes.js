@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createLeave,
+  adminGrantLeave,
   getMyLeaves,
   getLeaveBalances,
   getLeaveById,
@@ -16,6 +17,7 @@ import { authorize } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import {
   validateCreateLeave,
+  validateAdminGrantLeave,
   validateReviewLeave,
   validateLeaveIdParam,
 } from '../validators/leaveValidator.js';
@@ -34,8 +36,12 @@ router.patch('/config', authorize('admin'), updateLeaveConfig);
 // Specific employee CL allowance configuration (Admin only)
 router.patch('/employee-allowance/:id', authorize('admin'), updateEmployeeAllowance);
 
+// Admin directly grants leave to an employee without prior employee request
+router.post('/admin-grant', authorize('admin'), validateAdminGrantLeave, validate, adminGrantLeave);
+
 // Submit leave request (Employee, Staff, Admin)
 router.post('/', authorize('employee', 'staff', 'admin'), validateCreateLeave, validate, createLeave);
+
 
 // View own leaves (Employee, Staff, Admin)
 router.get('/my', authorize('employee', 'staff', 'admin'), getMyLeaves);

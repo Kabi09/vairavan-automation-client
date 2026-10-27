@@ -6,6 +6,12 @@ export const leaveApi = {
     return res.data;
   },
 
+  adminGrantLeave: async (grantData) => {
+    const res = await apiClient.post('/leaves/admin-grant', grantData);
+    return res.data;
+  },
+
+
   getMyLeaves: async (params = {}) => {
     const res = await apiClient.get('/leaves/my', { params });
     return res.data;

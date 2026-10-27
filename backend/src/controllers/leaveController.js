@@ -491,8 +491,151 @@ export const updateEmployeeAllowance = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Admin directly grants/assigns leave to an employee without prior request
+ * @route   POST /api/leaves/admin-grant
+ * @access  Private/Admin
+ */
+export const adminGrantLeave = asyncHandler(async (req, res) => {
+  const {
+    employeeId,
+    startDate,
+    endDate,
+    leaveType = 'casual_leave',
+    reason = 'Directly granted by Administrator',
+    adminRemarks,
+  } = req.body;
+
+  const targetEmployee = await User.findById(employeeId);
+  if (!targetEmployee) {
+    throw ApiError.notFound('Employee not found');
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  if (end < start) {
+    throw ApiError.badRequest('End date cannot be earlier than start date');
+  }
+
+  // Prevent overlapping approved or pending leave requests
+  const overlappingLeave = await Leave.findOne({
+    employee: targetEmployee._id,
+    status: { $in: ['pending', 'approved'] },
+    startDate: { $lte: end },
+    endDate: { $gte: start },
+  });
+
+  if (overlappingLeave) {
+    const sStr = overlappingLeave.startDate.toISOString().split('T')[0];
+    const eStr = overlappingLeave.endDate.toISOString().split('T')[0];
+    throw ApiError.conflict(
+      `Employee already has a ${overlappingLeave.status} leave record from ${sStr} to ${eStr}`
+    );
+  }
+
+  // Calculate eligible working days (Mon-Sat, excluding Sundays and company holidays)
+  const { totalWorkingDays } = await calculateLeaveWorkingDays(start, end);
+  if (totalWorkingDays <= 0) {
+    throw ApiError.badRequest(
+      'Selected date range contains no scheduled working days. Sundays and company holidays are not counted as leave days.'
+    );
+  }
+
+  const reqYear = start.getFullYear();
+  const balances = await getEmployeeLeaveBalances(targetEmployee._id, reqYear);
+  const selectedType = leaveType === 'comp_off' ? 'comp_off' : 'casual_leave';
+
+  if (selectedType === 'casual_leave') {
+    if (totalWorkingDays > balances.casualLeave.available) {
+      throw ApiError.badRequest(
+        `Insufficient Casual Leave balance. Employee has only ${balances.casualLeave.available} available day(s), but this grant requires ${totalWorkingDays} working day(s).`
+      );
+    }
+  } else if (selectedType === 'comp_off') {
+    if (totalWorkingDays > balances.compOff.available) {
+      throw ApiError.badRequest(
+        `Insufficient Comp-Off credits. Employee has only ${balances.compOff.available} available credit(s), but this grant requires ${totalWorkingDays} working day(s).`
+      );
+    }
+  }
+
+  const finalReason = (reason && reason.trim()) ? reason.trim() : 'Assigned by Administrator';
+  const finalRemarks = (adminRemarks && adminRemarks.trim()) ? adminRemarks.trim() : 'Granted directly by Admin';
+
+  const leave = await Leave.create({
+    employee: targetEmployee._id,
+    leaveType: selectedType,
+    reason: finalReason,
+    startDate: start,
+    endDate: end,
+    daysCount: totalWorkingDays,
+    leaveYear: reqYear,
+    status: 'approved',
+    adminReviewer: req.user._id,
+    adminRemarks: finalRemarks,
+    reviewedAt: new Date(),
+  });
+
+  const populatedLeave = await Leave.findById(leave._id)
+    .populate('employee', 'employeeName employeeId email designation casualLeaveAllowance')
+    .populate('adminReviewer', 'employeeName employeeId');
+
+  const typeLabel = selectedType === 'comp_off' ? 'Comp-Off Leave' : 'Casual Leave';
+  const startStr = start.toISOString().split('T')[0];
+  const endStr = end.toISOString().split('T')[0];
+
+  // Notify the employee in-app
+  try {
+    await Notification.create({
+      recipient: targetEmployee._id,
+      sender: req.user._id,
+      type: 'leave_reviewed',
+      title: `${typeLabel} Granted by Management`,
+      message: `Management has assigned you ${totalWorkingDays} day(s) of ${typeLabel} from ${startStr} to ${endStr}. Remarks: ${finalRemarks}`,
+      data: {
+        leaveId: leave._id,
+        leaveType: selectedType,
+        daysCount: totalWorkingDays,
+        employeeId: targetEmployee.employeeId,
+        employeeName: targetEmployee.employeeName,
+        reason: finalReason,
+        startDate: start,
+        endDate: end,
+        status: 'approved',
+        adminRemarks: finalRemarks,
+      },
+    });
+  } catch (notifErr) {
+    console.error('[Notification] Error creating in-app notification for admin grant:', notifErr.message);
+  }
+
+  // Push notification via FCM
+  try {
+    await notificationService.sendNotificationToUser(
+      targetEmployee._id,
+      {
+        title: `${typeLabel} Granted by Management`,
+        body: `You have been granted ${totalWorkingDays} day(s) of ${typeLabel} from ${startStr} to ${endStr}`,
+      },
+      {
+        leaveId: leave._id.toString(),
+        type: 'leave_reviewed',
+        status: 'approved',
+      }
+    );
+  } catch (pushErr) {
+    console.error('[FCM] Error dispatching push notification for admin grant:', pushErr.message);
+  }
+
+  return ApiResponse.created(res, `${typeLabel} granted successfully to ${targetEmployee.employeeName}`, {
+    leave: populatedLeave,
+  });
+});
+
 export default {
   createLeave,
+  adminGrantLeave,
   getMyLeaves,
   getLeaveBalances,
   getLeaveById,
@@ -503,3 +646,4 @@ export default {
   updateLeaveConfig,
   updateEmployeeAllowance,
 };
+

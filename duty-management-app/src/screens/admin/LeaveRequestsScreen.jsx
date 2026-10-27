@@ -10,7 +10,9 @@ import {
   Alert,
   ScrollView,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -91,6 +93,22 @@ export const LeaveRequestsScreen = () => {
   const [allowanceEditTarget, setAllowanceEditTarget] = useState(null);
   const [individualAllowanceInput, setIndividualAllowanceInput] = useState('12');
   const [savingIndividualAllowance, setSavingIndividualAllowance] = useState(false);
+
+  // Admin direct grant leave state (Assign leave without employee request)
+  const [grantModalVisible, setGrantModalVisible] = useState(false);
+  const [grantEmployeeId, setGrantEmployeeId] = useState('');
+  const [grantEmployeePickerVisible, setGrantEmployeePickerVisible] = useState(false);
+  const [grantLeaveType, setGrantLeaveType] = useState('casual_leave'); // 'casual_leave' | 'comp_off'
+  const [grantStartDate, setGrantStartDate] = useState(today);
+  const [grantEndDate, setGrantEndDate] = useState(today);
+  const [grantStartDatePickerVisible, setGrantStartDatePickerVisible] = useState(false);
+  const [grantEndDatePickerVisible, setGrantEndDatePickerVisible] = useState(false);
+  const [grantReason, setGrantReason] = useState('Management Assigned Leave');
+  const [grantAdminRemarks, setGrantAdminRemarks] = useState('Sanctioned directly by Admin');
+  const [grantSubmitting, setGrantSubmitting] = useState(false);
+  const [grantEmployeeBalances, setGrantEmployeeBalances] = useState(null);
+  const [loadingGrantBalances, setLoadingGrantBalances] = useState(false);
+
 
   // Load employee list for dropdown filter
   const loadEmployees = useCallback(async () => {
@@ -271,6 +289,117 @@ export const LeaveRequestsScreen = () => {
     }
   };
 
+  const handleOpenGrantModal = (preselectedEmpId = null) => {
+    const targetId = preselectedEmpId || selectedEmployeeId || (employees[0]?._id ?? '');
+    setGrantEmployeeId(targetId);
+    setGrantLeaveType('casual_leave');
+    setGrantStartDate(today);
+    setGrantEndDate(today);
+    setGrantReason('Management Assigned Leave');
+    setGrantAdminRemarks('Sanctioned directly by Admin');
+    setGrantModalVisible(true);
+    if (targetId) {
+      fetchGrantEmployeeBalances(targetId);
+    }
+  };
+
+  const fetchGrantEmployeeBalances = async (empId) => {
+    if (!empId) return;
+    try {
+      setLoadingGrantBalances(true);
+      const res = await leaveApi.getLeaveBalances({ employeeId: empId });
+      if (res.data) {
+        setGrantEmployeeBalances(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch grant employee balances:', err);
+    } finally {
+      setLoadingGrantBalances(false);
+    }
+  };
+
+  const calculateWorkingDaysCount = (sStr, eStr) => {
+    if (!sStr || !eStr) return 0;
+    const s = new Date(sStr);
+    const e = new Date(eStr);
+    if (e < s) return 0;
+    let count = 0;
+    let curr = new Date(s);
+    while (curr <= e) {
+      if (curr.getDay() !== 0) count++;
+      curr.setDate(curr.getDate() + 1);
+    }
+    return count;
+  };
+
+  const handleConfirmGrantLeave = async () => {
+    if (!grantEmployeeId) {
+      Alert.alert('Required', 'Please select an employee.');
+      return;
+    }
+    if (!grantStartDate || !grantEndDate) {
+      Alert.alert('Required', 'Please select start and end dates.');
+      return;
+    }
+
+    const workingDays = calculateWorkingDaysCount(grantStartDate, grantEndDate);
+    if (workingDays <= 0) {
+      Alert.alert(
+        'Invalid Date Range',
+        'Selected date range contains no scheduled working days. Sundays are weekly holidays and excluded.'
+      );
+      return;
+    }
+
+    if (grantEmployeeBalances) {
+      if (grantLeaveType === 'casual_leave') {
+        const avail = grantEmployeeBalances.casualLeave?.available ?? 0;
+        if (workingDays > avail) {
+          Alert.alert(
+            'Insufficient Balance',
+            `Selected employee has only ${avail} available Casual Leave day(s), but this grant requires ${workingDays} working day(s).`
+          );
+          return;
+        }
+      } else if (grantLeaveType === 'comp_off') {
+        const avail = grantEmployeeBalances.compOff?.available ?? 0;
+        if (workingDays > avail) {
+          Alert.alert(
+            'Insufficient Comp-Off',
+            `Selected employee has only ${avail} available Comp-Off credit(s), but this grant requires ${workingDays} working day(s).`
+          );
+          return;
+        }
+      }
+    }
+
+    setGrantSubmitting(true);
+    try {
+      await leaveApi.adminGrantLeave({
+        employeeId: grantEmployeeId,
+        leaveType: grantLeaveType,
+        startDate: grantStartDate,
+        endDate: grantEndDate,
+        reason: grantReason.trim() || 'Assigned by Administrator',
+        adminRemarks: grantAdminRemarks.trim() || 'Granted directly by Admin',
+      });
+
+      const selectedEmp = employees.find((e) => e._id === grantEmployeeId);
+      Alert.alert(
+        'Leave Granted & Approved',
+        `${grantLeaveType === 'comp_off' ? 'Comp-Off' : 'Casual Leave'} of ${workingDays} working day(s) has been successfully granted and approved for ${selectedEmp?.employeeName || 'employee'}.`
+      );
+      setGrantModalVisible(false);
+      fetchLeaves();
+      fetchBalancesAndConfig();
+    } catch (err) {
+      Alert.alert('Grant Failed', extractErrorMessage(err, 'Failed to grant employee leave'));
+    } finally {
+      setGrantSubmitting(false);
+    }
+  };
+
+
   const renderLeaveItem = ({ item }) => {
     const isCompOff = item.leaveType === 'comp_off';
     const days = item.daysCount || 1;
@@ -389,6 +518,25 @@ export const LeaveRequestsScreen = () => {
       />
 
       <View style={styles.container}>
+        {/* Quick Admin Grant Leave Action Banner */}
+        <TouchableOpacity
+          style={styles.grantLeaveBanner}
+          onPress={() => handleOpenGrantModal()}
+          activeOpacity={0.85}
+        >
+          <View style={styles.grantLeaveIconWrap}>
+            <Ionicons name="person-add" size={17} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.grantLeaveBannerTitle}>Assign Leave to Staff</Text>
+            <Text style={styles.grantLeaveBannerSub}>Directly sanction CL or Comp-Off without request</Text>
+          </View>
+          <View style={styles.grantLeaveAddChip}>
+            <Ionicons name="add" size={14} color={COLORS.primary} />
+            <Text style={styles.grantLeaveAddChipText}>Add Leave</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Top 3-Section Navigation Bar */}
         <View style={styles.topSegmentBar}>
           <TouchableOpacity
@@ -712,11 +860,22 @@ export const LeaveRequestsScreen = () => {
                       <Text style={styles.staffNameText}>{item.employee?.name}</Text>
                       <Text style={styles.staffIdText}>ID: {item.employee?.employeeId}</Text>
                     </View>
-                    <View style={styles.editAllowanceBadge}>
-                      <Ionicons name="pencil" size={12} color={COLORS.primary} />
-                      <Text style={styles.editAllowanceBadgeText}>Edit CL</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <TouchableOpacity
+                        style={styles.empCardAssignBtn}
+                        onPress={() => handleOpenGrantModal(item.employee?._id)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="add-circle" size={13} color="#059669" />
+                        <Text style={styles.empCardAssignBtnText}>Assign Leave</Text>
+                      </TouchableOpacity>
+                      <View style={styles.editAllowanceBadge}>
+                        <Ionicons name="pencil" size={12} color={COLORS.primary} />
+                        <Text style={styles.editAllowanceBadgeText}>Edit CL</Text>
+                      </View>
                     </View>
                   </View>
+
 
                   <View style={styles.balanceColsRow}>
                     {/* Casual Leave summary */}
@@ -968,9 +1127,285 @@ export const LeaveRequestsScreen = () => {
         selectedValue={calendarEmployeeId}
         onSelect={(item) => setCalendarEmployeeId(item.value)}
       />
+
+      {/* Admin Direct Grant Leave Modal */}
+      <Modal
+        visible={grantModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setGrantModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.grantModalContainer}>
+            {/* Header */}
+            <View style={styles.grantModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <View style={styles.grantModalIconWrap}>
+                  <Ionicons name="person-add" size={20} color={COLORS.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.grantModalTitle}>Assign Leave to Staff</Text>
+                  <Text style={styles.grantModalSubtitle}>
+                    Sanction approved leave directly without employee request
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setGrantModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close-circle" size={26} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.grantModalBody} showsVerticalScrollIndicator={false}>
+              {/* Employee Selection */}
+              <View style={{ marginBottom: SPACING.md }}>
+                <Text style={styles.inputFieldLabel}>Select Employee</Text>
+                <TouchableOpacity
+                  style={styles.grantEmpPickerTrigger}
+                  onPress={() => setGrantEmployeePickerVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="person" size={18} color={COLORS.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.grantEmpPickerName}>
+                      {employees.find((e) => e._id === grantEmployeeId)?.employeeName || 'Tap to choose staff member'}
+                    </Text>
+                    {grantEmployeeId ? (
+                      <Text style={styles.grantEmpPickerSub}>
+                        ID: {employees.find((e) => e._id === grantEmployeeId)?.employeeId} • {employees.find((e) => e._id === grantEmployeeId)?.designation || 'Staff'}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Real-time Balances Preview for Selected Employee */}
+              {grantEmployeeId ? (
+                <View style={styles.grantBalanceCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={styles.grantBalanceTitle}>Available Staff Balance</Text>
+                    {loadingGrantBalances ? (
+                      <ActivityIndicator size="small" color={COLORS.primary} />
+                    ) : null}
+                  </View>
+                  <View style={styles.grantBalanceRow}>
+                    <View style={[styles.grantBalancePill, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                      <Text style={[styles.grantBalancePillLabel, { color: '#DC2626' }]}>Casual Leave (CL)</Text>
+                      <Text style={[styles.grantBalancePillVal, { color: '#DC2626' }]}>
+                        {grantEmployeeBalances?.casualLeave?.available ?? '--'} days left
+                      </Text>
+                    </View>
+                    <View style={[styles.grantBalancePill, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                      <Text style={[styles.grantBalancePillLabel, { color: '#2563EB' }]}>Comp-Off</Text>
+                      <Text style={[styles.grantBalancePillVal, { color: '#2563EB' }]}>
+                        {grantEmployeeBalances?.compOff?.available ?? '--'} credits
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Leave Type Switcher */}
+              <View style={{ marginBottom: SPACING.md }}>
+                <Text style={styles.inputFieldLabel}>Leave Type</Text>
+                <View style={styles.grantTypeRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.grantTypeBtn,
+                      grantLeaveType === 'casual_leave' && styles.grantTypeBtnCLActive,
+                    ]}
+                    onPress={() => setGrantLeaveType('casual_leave')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name="time"
+                      size={18}
+                      color={grantLeaveType === 'casual_leave' ? '#DC2626' : COLORS.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.grantTypeBtnText,
+                        grantLeaveType === 'casual_leave' && { color: '#DC2626', fontWeight: '800' },
+                      ]}
+                    >
+                      Casual Leave (CL)
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.grantTypeBtn,
+                      grantLeaveType === 'comp_off' && styles.grantTypeBtnCompOffActive,
+                    ]}
+                    onPress={() => setGrantLeaveType('comp_off')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name="gift"
+                      size={18}
+                      color={grantLeaveType === 'comp_off' ? '#2563EB' : COLORS.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.grantTypeBtnText,
+                        grantLeaveType === 'comp_off' && { color: '#2563EB', fontWeight: '800' },
+                      ]}
+                    >
+                      Comp-Off
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Date Selection */}
+              <View style={{ marginBottom: SPACING.md }}>
+                <Text style={styles.inputFieldLabel}>Leave Period</Text>
+                <View style={styles.grantDateRow}>
+                  <View style={{ flex: 1, marginRight: SPACING.xs }}>
+                    <Text style={styles.grantDateSubLabel}>Start Date</Text>
+                    <TouchableOpacity
+                      style={styles.grantDateTrigger}
+                      onPress={() => setGrantStartDatePickerVisible(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+                      <Text style={styles.grantDateTriggerText}>{grantStartDate || 'Select'}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={{ flex: 1, marginLeft: SPACING.xs }}>
+                    <Text style={styles.grantDateSubLabel}>End Date</Text>
+                    <TouchableOpacity
+                      style={styles.grantDateTrigger}
+                      onPress={() => setGrantEndDatePickerVisible(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+                      <Text style={styles.grantDateTriggerText}>{grantEndDate || 'Select'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Duration Hint */}
+                <View style={styles.durationNoticeBox}>
+                  <Ionicons name="information-circle" size={16} color={COLORS.primary} />
+                  <Text style={styles.durationNoticeText}>
+                    Duration: {calculateWorkingDaysCount(grantStartDate, grantEndDate)} working day(s) • Sundays excluded
+                  </Text>
+                </View>
+              </View>
+
+              {/* Reason & Quick Presets */}
+              <View style={{ marginBottom: SPACING.md }}>
+                <Text style={styles.inputFieldLabel}>Reason / Purpose</Text>
+                <View style={styles.presetChipsWrap}>
+                  {['Management Granted', 'Medical Emergency', 'Official Permission', 'Compensatory Off', 'Personal Leave'].map(
+                    (preset) => (
+                      <TouchableOpacity
+                        key={preset}
+                        style={[
+                          styles.presetChip,
+                          grantReason === preset && styles.presetChipActive,
+                        ]}
+                        onPress={() => setGrantReason(preset)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.presetChipText,
+                            grantReason === preset && styles.presetChipTextActive,
+                          ]}
+                        >
+                          {preset}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  )}
+                </View>
+
+                <TextInput
+                  style={[styles.modalInput, { minHeight: 60 }]}
+                  placeholder="Enter reason for assigning leave..."
+                  value={grantReason}
+                  onChangeText={setGrantReason}
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+
+              {/* Admin Remarks / Notes */}
+              <View style={{ marginBottom: SPACING.lg }}>
+                <Text style={styles.inputFieldLabel}>Admin Remarks (Optional)</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g. Sanctioned by Management..."
+                  value={grantAdminRemarks}
+                  onChangeText={setGrantAdminRemarks}
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions */}
+            <View style={styles.modalActions}>
+              <SecondaryButton
+                title="Cancel"
+                onPress={() => setGrantModalVisible(false)}
+                style={styles.modalBtn}
+              />
+              <PrimaryButton
+                title="Grant & Approve Leave"
+                onPress={handleConfirmGrantLeave}
+                loading={grantSubmitting}
+                style={styles.modalBtn}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Grant Start Date Picker */}
+      <DatePickerModal
+        visible={grantStartDatePickerVisible}
+        onClose={() => setGrantStartDatePickerVisible(false)}
+        selectedDate={grantStartDate}
+        onSelectDate={setGrantStartDate}
+        title="Assign Leave: Start Date"
+      />
+
+      {/* Grant End Date Picker */}
+      <DatePickerModal
+        visible={grantEndDatePickerVisible}
+        onClose={() => setGrantEndDatePickerVisible(false)}
+        selectedDate={grantEndDate}
+        onSelectDate={setGrantEndDate}
+        title="Assign Leave: End Date"
+      />
+
+      {/* Grant Employee Dropdown */}
+      <DropdownPickerModal
+        visible={grantEmployeePickerVisible}
+        onClose={() => setGrantEmployeePickerVisible(false)}
+        title="Assign Leave: Select Staff Member"
+        searchPlaceholder="Search staff by name or ID..."
+        items={employees.map((e) => ({
+          label: `${e.employeeName} (${e.employeeId}) - ${e.designation || 'Staff'}`,
+          value: e._id,
+        }))}
+        selectedValue={grantEmployeeId}
+        onSelect={(item) => {
+          setGrantEmployeeId(item.value);
+          fetchGrantEmployeeBalances(item.value);
+        }}
+      />
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -1509,6 +1944,261 @@ const styles = StyleSheet.create({
   modalBtn: {
     flex: 1,
   },
+  // Grant Leave Banner
+  grantLeaveBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E40AF',
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: SPACING.sm,
+    ...SHADOWS.sm,
+  },
+  grantLeaveIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grantLeaveBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  grantLeaveBannerSub: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#E0E7FF',
+    marginTop: 1,
+  },
+  grantLeaveAddChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+  },
+  grantLeaveAddChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  empCardAssignBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  empCardAssignBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  // Grant Modal Container & Elements
+  grantModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.xl,
+    maxHeight: '88%',
+    overflow: 'hidden',
+    ...SHADOWS.lg,
+  },
+  grantModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  grantModalIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grantModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  grantModalSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  grantModalBody: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  grantEmpPickerTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+  },
+  grantEmpPickerName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  grantEmpPickerSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  grantBalanceCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  grantBalanceTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  grantBalanceRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  grantBalancePill: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: RADIUS.sm,
+    padding: 8,
+    alignItems: 'center',
+  },
+  grantBalancePillLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  grantBalancePillVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  grantTypeRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  grantTypeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  grantTypeBtnCLActive: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#DC2626',
+  },
+  grantTypeBtnCompOffActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#2563EB',
+  },
+  grantTypeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  grantDateRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  grantDateSubLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 3,
+  },
+  grantDateTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  grantDateTriggerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  durationNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    padding: 8,
+    borderRadius: RADIUS.sm,
+    marginTop: 4,
+  },
+  durationNoticeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primary,
+    flex: 1,
+  },
+  presetChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  presetChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  presetChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: COLORS.primary,
+  },
+  presetChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  presetChipTextActive: {
+    color: COLORS.primary,
+  },
+
 });
 
 export default LeaveRequestsScreen;

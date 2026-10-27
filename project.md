@@ -120,13 +120,17 @@
 - `MessageDetailsModal`: Full message view modal displaying sender, timestamp, broadcast/direct tag, and complete notice content.
 - `BrandingFooter`: Reusable minimal branding attribution footer ("Developed by Ameyy Digital Services") with a clickable link to `https://www.ameyy.in/` supporting web and mobile opening in a new tab/browser.
 - `ExpenseClaimDetailModal`: Dedicated full-details modal for expense claims linked to work visits and duties. Displays claim KPI summary, approval status badge, work metadata, itemized calculations (km distances, units, rates), notes, and responsive proof photo thumbnails with tap-to-zoom in `ImageViewerModal`.
-- `MonthlyCalendarView`: Reusable monthly calendar view component used across both Employee and Admin panels (`duty-management-app/src/components/MonthlyCalendarView.jsx`). Features month and year navigation with previous/next buttons and "Current Month" quick reset, 7 monthly KPI summary cards (Total Scheduled Working Days, Days Worked, Holidays, Casual Leave Taken, Comp-Off Taken, Sunday Work Days, Comp-Off Credits Earned), an interactive calendar grid with 7 distinct status colors, a visible color legend, and an interactive tap-to-inspect date modal displaying full attendance, duty, check-in/out times, duration, and leave details.
+- `MonthlyCalendarView`: Reusable monthly calendar view component used across both Employee and Admin panels (`duty-management-app/src/components/MonthlyCalendarView.jsx`). Features month and year navigation with previous/next buttons and "Current Month" quick reset, 7 monthly KPI summary cards (Total Scheduled Working Days, Days Worked, Holidays, Casual Leave Taken, Comp-Off Taken, Sunday Work Days, Comp-Off Credits Earned) which are interactive and tap-to-open a modal listing all matching dates, an interactive calendar grid with modern pastel cards, highlighted "Today" circular ring, a visible color legend, and an interactive tap-to-inspect date modal displaying full attendance, duty, check-in/out times, duration, and leave details.
 - `EmployeeCalendarScreen`: Dedicated monthly calendar screen for employees (`duty-management-app/src/screens/employee/EmployeeCalendarScreen.jsx`) accessible from the dashboard and bottom tab navigation.
 - `LeaveRequestScreen`: Dual-type leave application screen (`duty-management-app/src/screens/employee/LeaveRequestScreen.jsx`) supporting Casual Leave (`casual_leave`) and Comp-Off (`comp_off`). Displays real-time balance cards, start/end date pickers, calculated working days count (excluding Sundays and company holidays), reason input, and client-side balance validation.
 - `MyLeavesScreen`: Employee leave overview screen (`duty-management-app/src/screens/employee/MyLeavesScreen.jsx`) with live balance summary cards (Annual CL Allowance, Used, Available; Comp-Off Earned, Used, Available), dual-mode toggle ("My Leaves" request list vs "Monthly Calendar"), and tap-to-inspect request details.
-- `LeaveRequestsScreen`: Admin leave management console (`duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`) with a 3-tab segment ("Applications", "Calendar", "Balances & Rules"). Allows admins to review pending leaves with approve and reject actions (optional rejection reason modal), view individual employee monthly calendars with staff picker, configure global annual CL allowance and leave year, and edit individual employee CL allowances.
+- `LeaveRequestsScreen`: Admin leave management console (`duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`) with a 3-tab segment ("Applications", "Calendar", "Balances & Rules"). Allows admins to review pending leaves with approve and reject actions (optional rejection reason modal), directly assign/grant approved Casual Leave or Comp-Off to any staff member without prior employee request (`AdminGrantLeaveModal`), view individual employee monthly calendars with staff picker, configure global annual CL allowance and leave year, and edit individual employee CL allowances.
 
 ## API / Backend Integration
+- `POST /api/leaves/admin-grant`:
+  - Access: Admin only.
+  - Payload: `{ employeeId, leaveType: 'casual_leave' | 'comp_off', startDate, endDate, reason, adminRemarks }`.
+  - Behavior: Verifies employee existence, validates working days (excluding Sundays & company holidays), ensures sufficient balance, prevents overlapping records, creates approved leave record directly, records admin reviewer and remarks, sends in-app and FCM push notifications to employee, and deducts leave balance immediately.
 - `GET /api/leaves/balances`:
   - Access: Authenticated employees (own balances) and admins (own balances or via `?employeeId=<id>`).
   - Response: `{ success: true, data: { employeeId, leaveYear, casualLeave: { allowance, used, pending, available }, compOff: { earned, used, pending, available } } }`.
@@ -155,6 +159,43 @@
   - Behavior: Verifies available balance at approval time; deducts balance upon approval; does NOT deduct on rejection.
 
 ## Change History
+
+### 2026-10-27
+#### Admin Direct Leave Assignment, Interactive Summary Date Lists & Modern Calendar Redesign
+- What was changed:
+  - **Admin Direct Leave Grant Without Employee Request (`leaveController.js`, `leaveValidator.js`, `leaveRoutes.js`, `leaveApi.js`, `LeaveRequestsScreen.jsx`)**:
+    - Created `POST /api/leaves/admin-grant` allowing administrators to assign approved Casual Leave or Comp-Off directly to any employee.
+    - Added `validateAdminGrantLeave` validator ensuring valid `employeeId`, valid date range, and working-day constraints.
+    - Verified employee available balances on backend before creation; prevented overlapping leaves; set status to `approved`, recorded `adminReviewer` and `reviewedAt`, and safely deducted balance immediately.
+    - Dispatched in-app notification and FCM push notification to the employee.
+    - In `LeaveRequestsScreen.jsx`, added a prominent top action banner ("Assign Leave to Staff") and individual "+ Assign Leave" buttons on each employee row in the Balances tab.
+    - Built interactive `AdminGrantLeaveModal`: employee picker, real-time balance preview card (showing available CL days & Comp-Off credits), Casual Leave vs Comp-Off toggle, start/end date pickers, calculated working days count (excluding Sundays), quick-preset reason chips ("Management Granted", "Medical Emergency", etc.), and admin remarks input.
+  - **Interactive Summary Square Boxes with Date Listing (`MonthlyCalendarView.jsx`)**:
+    - Transformed all 7 monthly KPI summary cards (Working Days, Days Worked, Holidays, Casual Leave Taken, Comp-Off Used, Sunday Works, Comp-Off Earned) into touchable interactive cards.
+    - Added visual cues ("Tap any card to view dates", tap list icon pill, "View dates ›" hint).
+    - Clicking any summary card opens `SummaryDateListModal`: displays a modern sliding sheet with category icon, title, count, and scrollable list of matching dates.
+    - Each date list card displays: day number badge, uppercase weekday, colored status dot, full status title, check-in/out times, duration, duty/site, leave type/reason, and chevron.
+    - Tapping any date in the summary list immediately opens that date's full inspection details modal.
+  - **Modern User-Friendly Calendar Design (`MonthlyCalendarView.jsx`)**:
+    - Redesigned day tiles with soft pastel background tints based on status (e.g. `#ECFDF5` for present, `#FEFCE8` for Sunday holiday, `#FEF2F2` for casual leave, `#EFF6FF` for comp-off, `#FFF7ED` for Sunday work, `#FAF5FF` for pending leave).
+    - Rounded day card corners (`borderRadius: 10`) with subtle colored borders and mini status pills.
+    - Added vibrant Indigo circular badge for "Today" with white text, making the current day instantly recognizable.
+    - Sunday column highlighted with bold crimson text (`#DC2626`).
+    - Re-engineered the color legend into modern wrapping pill chips with tinted backgrounds and vibrant color dots.
+- Files changed:
+  - `backend/src/controllers/leaveController.js`
+  - `backend/src/validators/leaveValidator.js`
+  - `backend/src/routes/leaveRoutes.js`
+  - `duty-management-app/src/api/leaveApi.js`
+  - `duty-management-app/src/components/MonthlyCalendarView.jsx`
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Admins can directly sanction approved leaves for staff without waiting for employee applications.
+  - Summary KPI cards are clickable and open a filtered list of dates for inspection.
+  - Calendar day cells feature modern card styling with soft pastel tints, clear "Today" badging, and improved visual contrast.
+- Reason: User requested: "also add admin - employee add to leave without employee request/etc...; fix the feture; also calender -color is there but not user friendly make modern and user friendly degin' also summary suqure box have like dayworks,holiday,etc.. click the list the dates; fix user friendly;".
+- Impact: Streamlined HR administration for manual leave sanctions, vastly improved calendar aesthetics and legibility, and effortless 1-tap drilling from monthly summary metrics to exact dates.
 
 ### 2026-10-27
 #### Leave Management (Casual Leave & Comp-Off), Automated Sunday Attendance Credit & Monthly Calendar with Colour Coding
@@ -2733,8 +2774,13 @@
   - **Admin Panel**:
     - `LeaveRequestsScreen.jsx` upgraded with a 3-segment switcher: "Applications", "Calendar", and "Balances & Rules".
     - Admin approval and rejection workflow with modal for optional rejection reason.
+    - Admin Direct Grant Leave: Administrators can directly sanction approved Casual Leave or Comp-Off for any employee without prior request (`POST /api/leaves/admin-grant`) with real-time balance validation, employee dropdown, start/end date pickers, reason presets, and instant balance deduction.
     - Admin staff monthly calendar inspection with employee dropdown picker.
-    - Admin leave configuration and employee balance list with individual CL allowance editing.
+    - Admin leave configuration and employee balance list with individual CL allowance editing and direct assign buttons.
+  - **Modern Calendar & Interactive Summary Boxes**:
+    - All 7 monthly summary cards are interactive touchable square boxes; tapping opens `SummaryDateListModal` with full filtered date lists, check-in/out times, leave/holiday details, and tap-to-inspect date details.
+    - Modern day cells with soft pastel background tints, rounded corners, highlighted "Today" ring indicator, Sunday crimson styling, and wrapping chip color legend.
+
   - Form validation completion gating: Check-In and Work Details Submit buttons are strictly disabled until 100% of required fields are filled, with dynamic informative missing-field hint boxes.
   - Added Location field to Employee Personal Details across backend (User model, authValidator, authController, employeeController) and mobile frontend (ProfileScreen, EmployeeDetailsScreen, EmployeeFormScreen).
   - Landscape auto-rotating signature pad using `expo-screen-orientation` (`OrientationLock.LANDSCAPE`) with automatic return to portrait (`OrientationLock.PORTRAIT_UP`) and enhanced smooth stroke width.
