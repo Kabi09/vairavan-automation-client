@@ -79,8 +79,44 @@
 - `EmployeeMessagesModal`: Employee modal displaying the list of received management notices and announcements with unread indicators and 1-tap full detail viewing.
 - `MessageDetailsModal`: Full message view modal displaying sender, timestamp, broadcast/direct tag, and complete notice content.
 - `BrandingFooter`: Reusable minimal branding attribution footer ("Developed by Ameyy Digital Services") with a clickable link to `https://www.ameyy.in/` supporting web and mobile opening in a new tab/browser.
+- `ExpenseClaimDetailModal`: Dedicated full-details modal for expense claims linked to work visits and duties. Displays claim KPI summary, approval status badge, work metadata, itemized calculations (km distances, units, rates), notes, and responsive proof photo thumbnails with tap-to-zoom in `ImageViewerModal`.
 
 ## Change History
+
+### 2026-10-27
+#### Work Visit Details & Admin Work Details Expense ObjectId Bug Fix & Tap-to-View Proof Image Detail Modal
+- What was changed:
+  - **Expense Category Name Resolution & Calculation Display (`dutyController.js`, `DutyDetailsScreen.jsx`, `AllDutiesScreen.jsx`, `ExpenseClaimDetailModal.jsx`)**:
+    - Resolved bug where expense claim items in Work Visit Details and Admin Work Details were showing raw 24-character Mongoose ObjectIds (e.g., `67...`) instead of human-readable category names.
+    - Updated `attachExpensesToDuties` and `getDutyById` in `backend/src/controllers/dutyController.js` to deep-populate `items.category` (`name`, `calculationMode`, `unit`, `ratePerUnit`), `company`, and `client`.
+    - Created utility `parseExpenseItem(item, index)` in `ExpenseClaimDetailModal.jsx` which safely resolves category display titles from `categoryName`, `category.name`, `customCategory`, or humanized fallback, ensuring no raw ObjectId is ever displayed.
+    - Resolved calculation text dynamically (e.g. `12 km + 12 km = 24 km @ ₹5/km` or `10 units @ ₹50/unit`).
+  - **Clean Full Text Detail without List Image Clutter (`DutyDetailsScreen.jsx`, `AllDutiesScreen.jsx`)**:
+    - In both Employee Work Visit Details (`DutyDetailsScreen.jsx`) and Admin Panel Work Details (`AllDutiesScreen.jsx`), removed large cluttered proof thumbnail images from the main list.
+    - Listed complete itemized information directly on the card: Category Title, Calculation Breakdown, Description/Notes, Total Amount, and a compact `proofCountPill` badge showing the number of attached proof photos (e.g., `2 Proofs`).
+    - Added an intuitive prompt at the base of each claim card: `"Tap to view full detail with proof img >"`.
+  - **Tap-to-View Full Detail Modal with Proof Photos (`ExpenseClaimDetailModal.jsx`)**:
+    - Clicking any expense claim card opens `ExpenseClaimDetailModal`.
+    - Modal displays:
+      - Header with Claim ID (`EXP-...`) and Status Badge (`submitted`, `approved`, `rejected`).
+      - Summary Banner with Total Claim Amount, Expense Date, and Category Count.
+      - Linked Work Info card showing Duty ID, Work Type, and Customer / Office Name.
+      - Itemized Breakdown Cards: Category title, calculation formula, unit rate, and description.
+      - Attached Proof Documents section displaying proof photos with a "Tap to Zoom" overlay.
+      - Integrated with `ImageViewerModal` for full-screen pan and zoom viewing when tapping proof photos.
+    - Integrated seamlessly into both `DutyDetailsScreen.jsx` and `AllDutiesScreen.jsx`.
+- Files changed:
+  - `backend/src/controllers/dutyController.js`
+  - `duty-management-app/src/components/ExpenseClaimDetailModal.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Raw unpopulated ObjectIds are replaced with human-readable category titles and dynamic calculations.
+  - Work visit details lists are clean and uncluttered without direct thumbnail images.
+  - Dedicated interactive modal handles full claim inspection and zoomable proof photos on tap.
+- Reason: User requested: "one small bug- work visit details- expense&claims only show on the id iwant to full detail without img click the particular expense rhen show the full detail with proof img;;also admin pannel-work details;;fix;".
+- Impact: Solved raw ObjectId display bug across both Employee and Admin work details, eliminated image clutter in work visit views, and provided a seamless tap-to-inspect experience for expense claims and proof documents.
 
 ### 2026-10-27
 #### Employee Dashboard Quick Action Reordering & Comprehensive Expense Export & Filter Enhancements

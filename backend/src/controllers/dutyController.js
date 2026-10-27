@@ -37,7 +37,11 @@ const attachExpensesToDuties = async (duties) => {
       { duty: { $in: dutyIds } },
       ...(dutyCodes.length > 0 ? [{ relatedDuty: { $in: dutyCodes } }] : []),
     ],
-  }).sort({ createdAt: -1 });
+  })
+    .populate('company', 'companyName location companyPhoneNumber')
+    .populate('client', 'name clientName phoneNumber clientPhoneNumber')
+    .populate('items.category', 'name calculationMode unit ratePerUnit')
+    .sort({ createdAt: -1 });
 
   return duties.map((d) => {
     const dObj = d.toObject ? d.toObject() : { ...d };
@@ -47,7 +51,10 @@ const attachExpensesToDuties = async (duties) => {
         (d.dutyId && e.relatedDuty === d.dutyId)
     );
     dObj.expenses = matched;
-    dObj.totalExpenseAmount = matched.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
+    dObj.totalExpenseAmount = matched.reduce(
+      (sum, e) => sum + Number(e.grandTotal ?? e.totalAmount ?? e.amount ?? 0),
+      0
+    );
     return dObj;
   });
 };
@@ -586,11 +593,18 @@ export const getDutyById = asyncHandler(async (req, res) => {
       { duty: duty._id },
       ...(duty.dutyId ? [{ relatedDuty: duty.dutyId }] : []),
     ],
-  }).sort({ createdAt: -1 });
+  })
+    .populate('company', 'companyName location companyPhoneNumber')
+    .populate('client', 'name clientName phoneNumber clientPhoneNumber')
+    .populate('items.category', 'name calculationMode unit ratePerUnit')
+    .sort({ createdAt: -1 });
 
   const dutyObj = duty.toObject ? duty.toObject() : { ...duty };
   dutyObj.expenses = expenses;
-  dutyObj.totalExpenseAmount = expenses.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
+  dutyObj.totalExpenseAmount = expenses.reduce(
+    (sum, e) => sum + Number(e.grandTotal ?? e.totalAmount ?? e.amount ?? 0),
+    0
+  );
 
   return ApiResponse.success(res, 200, 'Duty report retrieved successfully', { duty: dutyObj, expenses });
 });

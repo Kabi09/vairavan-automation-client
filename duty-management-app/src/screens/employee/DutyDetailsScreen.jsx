@@ -21,6 +21,7 @@ import ErrorMessage from '../../components/ErrorMessage';
 import { useAuth } from '../../context/AuthContext';
 import SignatureImage from '../../components/SignatureImage';
 import ImageViewerModal from '../../components/ImageViewerModal';
+import ExpenseClaimDetailModal, { parseExpenseItem } from '../../components/ExpenseClaimDetailModal';
 import { formatDate, formatTime } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
@@ -36,6 +37,7 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
   const [resolvedCheckInAddress, setResolvedCheckInAddress] = useState('');
   const [resolvedCheckOutAddress, setResolvedCheckOutAddress] = useState('');
   const [dutyExpenses, setDutyExpenses] = useState([]);
+  const [selectedExpenseForModal, setSelectedExpenseForModal] = useState(null);
 
   // Lightbox preview modal state
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
@@ -589,54 +591,60 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
                   }
                 ];
 
+                const totalClaimAmt = Number(exp.grandTotal ?? exp.totalAmount ?? exp.amount ?? 0);
+
                 return (
-                  <View key={exp._id || `exp-${expIdx}`} style={styles.expenseClaimCard}>
+                  <TouchableOpacity
+                    key={exp._id || `exp-${expIdx}`}
+                    style={styles.expenseClaimCard}
+                    onPress={() => setSelectedExpenseForModal(exp)}
+                    activeOpacity={0.85}
+                  >
                     <View style={styles.expenseClaimHeader}>
                       <View>
-                        <Text style={styles.expenseClaimId}>{claimId}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.expenseClaimId}>{claimId}</Text>
+                          {exp.status ? <StatusBadge status={exp.status} /> : null}
+                        </View>
                         {expDate ? <Text style={styles.expenseClaimDate}>{expDate}</Text> : null}
                       </View>
-                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                      <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.expenseClaimTotal}>
-                          ₹{(Number(exp.totalAmount) || Number(exp.amount) || 0).toLocaleString('en-IN')}
+                          ₹{totalClaimAmt.toLocaleString('en-IN')}
                         </Text>
-                        {exp.status ? <StatusBadge status={exp.status} /> : null}
                       </View>
                     </View>
 
-                    {/* Itemized lines */}
+                    {/* Itemized lines without large images cluttering */}
                     <View style={styles.expenseItemsTable}>
-                      {items.map((item, itemIdx) => {
-                        const itemCat = item.customCategory || item.category || 'Expense';
-                        const calcText = item.distanceKm && item.ratePerKm
-                          ? `${item.distanceKm} km × ₹${item.ratePerKm}/km`
-                          : null;
-                        const proofImg = item.billProof?.url || (typeof item.billProof === 'string' ? item.billProof : null);
+                      {items.map((itemRaw, itemIdx) => {
+                        const item = parseExpenseItem(itemRaw, itemIdx);
 
                         return (
                           <View key={`item-${itemIdx}`} style={styles.expenseItemRow}>
                             <View style={{ flex: 1, paddingRight: 8 }}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                 <View style={styles.itemBullet} />
-                                <Text style={styles.expenseItemCat}>{itemCat}</Text>
+                                <Text style={styles.expenseItemCat}>{item.displayTitle}</Text>
                               </View>
-                              {calcText && <Text style={styles.expenseItemCalc}>{calcText}</Text>}
-                              {item.description ? <Text style={styles.expenseItemDesc}>{item.description}</Text> : null}
+                              {item.calcText ? (
+                                <Text style={styles.expenseItemCalc}>{item.calcText}</Text>
+                              ) : null}
+                              {item.description ? (
+                                <Text style={styles.expenseItemDesc}>{item.description}</Text>
+                              ) : null}
                             </View>
                             <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                              <Text style={styles.expenseItemAmount}>₹{(Number(item.amount) || 0).toLocaleString('en-IN')}</Text>
-                              {proofImg && (
-                                <TouchableOpacity
-                                  style={styles.proofThumbnailBtn}
-                                  onPress={() => handleOpenExpensePhotoPreview(proofImg, itemCat)}
-                                  activeOpacity={0.8}
-                                >
-                                  <Image source={{ uri: proofImg }} style={styles.proofThumbnail} />
-                                  <View style={styles.proofBadgeOverlay}>
-                                    <Ionicons name="eye" size={9} color="#FFFFFF" />
-                                    <Text style={styles.proofBadgeText}>Proof</Text>
-                                  </View>
-                                </TouchableOpacity>
+                              <Text style={styles.expenseItemAmount}>
+                                ₹{item.amount.toLocaleString('en-IN')}
+                              </Text>
+                              {item.proofUrls.length > 0 && (
+                                <View style={styles.proofCountPill}>
+                                  <Ionicons name="document-attach" size={11} color="#0369A1" />
+                                  <Text style={styles.proofCountPillText}>
+                                    {item.proofUrls.length} {item.proofUrls.length === 1 ? 'Proof' : 'Proofs'}
+                                  </Text>
+                                </View>
                               )}
                             </View>
                           </View>
@@ -644,29 +652,12 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
                       })}
                     </View>
 
-                    {/* Global proofs if any attached at claim level */}
-                    {Array.isArray(exp.proofs) && exp.proofs.length > 0 && (
-                      <View style={styles.claimProofsRow}>
-                        <Text style={styles.claimProofsLabel}>Attachments:</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                          {exp.proofs.map((proof, pIdx) => {
-                            const pUrl = proof.url || (typeof proof === 'string' ? proof : null);
-                            if (!pUrl) return null;
-                            return (
-                              <TouchableOpacity
-                                key={`proof-${pIdx}`}
-                                style={styles.proofThumbnailBtn}
-                                onPress={() => handleOpenExpensePhotoPreview(pUrl, `Attachment #${pIdx + 1}`)}
-                                activeOpacity={0.8}
-                              >
-                                <Image source={{ uri: pUrl }} style={styles.proofThumbnail} />
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </ScrollView>
-                      </View>
-                    )}
-                  </View>
+                    {/* Tap to view full detail with proof img hint */}
+                    <View style={styles.claimTapHintRow}>
+                      <Text style={styles.claimTapHintText}>Tap to view full detail with proof img</Text>
+                      <Ionicons name="chevron-forward" size={13} color={COLORS.primary} />
+                    </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -735,6 +726,14 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
         )}
 
       </ScrollView>
+
+      <ExpenseClaimDetailModal
+        visible={Boolean(selectedExpenseForModal)}
+        expense={selectedExpenseForModal}
+        duty={duty}
+        onClose={() => setSelectedExpenseForModal(null)}
+        onOpenPhoto={(url, title) => handleOpenExpensePhotoPreview(url, title)}
+      />
 
       <ImageViewerModal
         visible={previewModalVisible}
@@ -1271,6 +1270,38 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: COLORS.textSecondary,
+  },
+  proofCountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    marginTop: 2,
+  },
+  proofCountPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  claimTapHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  claimTapHintText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
 });
 

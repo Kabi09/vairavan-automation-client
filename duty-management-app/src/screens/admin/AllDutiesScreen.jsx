@@ -29,6 +29,7 @@ import DropdownPickerModal from '../../components/DropdownPickerModal';
 import SignatureImage from '../../components/SignatureImage';
 import ImageViewerModal from '../../components/ImageViewerModal';
 import ExportLoadingModal from '../../components/ExportLoadingModal';
+import ExpenseClaimDetailModal, { parseExpenseItem } from '../../components/ExpenseClaimDetailModal';
 import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
 import { formatDate, formatTime, formatISODateOnly, getYesterdayDateString } from '../../utils/dateUtils';
@@ -83,6 +84,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
   const [selectedDuty, setSelectedDuty] = useState(null);
   const [selectedDutyCheckInAddress, setSelectedDutyCheckInAddress] = useState('');
   const [selectedDutyCheckOutAddress, setSelectedDutyCheckOutAddress] = useState('');
+  const [selectedExpenseForModal, setSelectedExpenseForModal] = useState(null);
 
   // Lightbox preview modal state
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
@@ -972,9 +974,15 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                           billProof: exp.billProof || null,
                         }
                       ];
+                      const totalClaimAmt = Number(exp.grandTotal ?? exp.totalAmount ?? exp.amount ?? 0);
 
                       return (
-                        <View key={exp._id || `exp-${expIdx}`} style={styles.dutyExpenseCard}>
+                        <TouchableOpacity
+                          key={exp._id || `exp-${expIdx}`}
+                          style={styles.dutyExpenseCard}
+                          onPress={() => setSelectedExpenseForModal(exp)}
+                          activeOpacity={0.85}
+                        >
                           <View style={styles.dutyExpenseCardHeader}>
                             <View>
                               <Text style={styles.dutyExpenseClaimId}>{claimCode}</Text>
@@ -982,47 +990,48 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                             </View>
                             <View style={{ alignItems: 'flex-end', gap: 4 }}>
                               <Text style={styles.dutyExpenseClaimAmt}>
-                                ₹{(Number(exp.totalAmount) || Number(exp.amount) || 0).toLocaleString('en-IN')}
+                                ₹{totalClaimAmt.toLocaleString('en-IN')}
                               </Text>
                               {exp.status ? <StatusBadge status={exp.status} /> : null}
                             </View>
                           </View>
 
-                          {/* Items breakdown */}
+                          {/* Items breakdown - full text detail without cluttered img */}
                           <View style={{ gap: 6, marginTop: 4 }}>
                             {items.map((it, itIdx) => {
-                              const itCat = it.customCategory || it.category || 'Expense';
-                              const calc = it.distanceKm && it.ratePerKm
-                                ? `${it.distanceKm} km × ₹${it.ratePerKm}/km`
-                                : null;
-                              const pImg = it.billProof?.url || (typeof it.billProof === 'string' ? it.billProof : null);
+                              const item = parseExpenseItem(it, itIdx);
 
                               return (
                                 <View key={`item-${itIdx}`} style={styles.dutyExpenseItemRow}>
                                   <View style={{ flex: 1, paddingRight: 6 }}>
-                                    <Text style={styles.dutyExpenseItemTitle}>{itCat}</Text>
-                                    {calc ? <Text style={styles.dutyExpenseItemCalc}>{calc}</Text> : null}
-                                    {it.description ? <Text style={styles.dutyExpenseItemDesc}>{it.description}</Text> : null}
+                                    <Text style={styles.dutyExpenseItemTitle}>{item.displayTitle}</Text>
+                                    {item.calcText ? <Text style={styles.dutyExpenseItemCalc}>{item.calcText}</Text> : null}
+                                    {item.description ? <Text style={styles.dutyExpenseItemDesc}>{item.description}</Text> : null}
                                   </View>
                                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                                     <Text style={styles.dutyExpenseItemAmt}>
-                                      ₹{(Number(it.amount) || 0).toLocaleString('en-IN')}
+                                      ₹{item.amount.toLocaleString('en-IN')}
                                     </Text>
-                                    {pImg && (
-                                      <TouchableOpacity
-                                        onPress={() => handleOpenExpensePhotoPreview(pImg, itCat)}
-                                        activeOpacity={0.8}
-                                        style={styles.dutyExpenseProofThumb}
-                                      >
-                                        <Image source={{ uri: pImg }} style={{ width: 36, height: 36, borderRadius: 4 }} />
-                                      </TouchableOpacity>
+                                    {item.proofUrls.length > 0 && (
+                                      <View style={styles.proofCountPill}>
+                                        <Ionicons name="document-attach" size={11} color="#0369A1" />
+                                        <Text style={styles.proofCountPillText}>
+                                          {item.proofUrls.length} {item.proofUrls.length === 1 ? 'Proof' : 'Proofs'}
+                                        </Text>
+                                      </View>
                                     )}
                                   </View>
                                 </View>
                               );
                             })}
                           </View>
-                        </View>
+
+                          {/* Tap hint to view full detail with proof img */}
+                          <View style={styles.claimTapHintRow}>
+                            <Text style={styles.claimTapHintText}>Tap to view full detail with proof img</Text>
+                            <Ionicons name="chevron-forward" size={13} color={COLORS.primary} />
+                          </View>
+                        </TouchableOpacity>
                       );
                     })}
                   </View>
@@ -1312,6 +1321,14 @@ export const AllDutiesScreen = ({ route, navigation }) => {
           id: c._id,
           subtitle: `${c.companyType === 'office' ? 'Office' : 'Client Site'}: ${c.location || ''}${c.companyPhoneNumber ? ' • ' + c.companyPhoneNumber : ''}`,
         }))}
+      />
+
+      <ExpenseClaimDetailModal
+        visible={Boolean(selectedExpenseForModal)}
+        expense={selectedExpenseForModal}
+        duty={selectedDuty}
+        onClose={() => setSelectedExpenseForModal(null)}
+        onOpenPhoto={(url, title) => handleOpenExpensePhotoPreview(url, title)}
       />
 
       <ImageViewerModal
@@ -2132,6 +2149,38 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
+  },
+  proofCountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    marginTop: 2,
+  },
+  proofCountPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  claimTapHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  claimTapHintText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
 });
 
