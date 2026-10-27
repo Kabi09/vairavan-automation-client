@@ -633,30 +633,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
           <>
             {/* Quick Actions */}
             <View style={styles.quickActionsRow}>
-              <TouchableOpacity
-                style={[styles.quickActionBtn, styles.dutyQuickAction]}
-                onPress={() => navigation.navigate('DutyForm')}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: '#DBEAFE' }]}>
-                  <Ionicons name="add-circle" size={24} color={COLORS.primary} />
-                </View>
-                <Text style={styles.quickActionTitle}>Submit Work</Text>
-                <Text style={styles.quickActionSub}>Log visit</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.quickActionBtn, styles.messageQuickAction]}
-                onPress={() => setMessagesModalVisible(true)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: '#E0F2FE' }]}>
-                  <Ionicons name="chatbubble-ellipses" size={24} color="#0284C7" />
-                </View>
-                <Text style={styles.quickActionTitle}>Messages</Text>
-                <Text style={styles.quickActionSub}>From Admin</Text>
-              </TouchableOpacity>
-
+              {/* 1. Highlights (First) */}
               <TouchableOpacity
                 style={[styles.quickActionBtn, styles.highlightsAction]}
                 onPress={() => setHighlightsModalVisible(true)}
@@ -669,6 +646,33 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                 <Text style={styles.quickActionSub}>This month</Text>
               </TouchableOpacity>
 
+              {/* 2. Messages (Second, Right) */}
+              <TouchableOpacity
+                style={[styles.quickActionBtn, styles.messageQuickAction]}
+                onPress={() => setMessagesModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons name="chatbubble-ellipses" size={24} color="#0284C7" />
+                </View>
+                <Text style={styles.quickActionTitle}>Messages</Text>
+                <Text style={styles.quickActionSub}>From Admin</Text>
+              </TouchableOpacity>
+
+              {/* 3. Expenses (Third, replacing Highlights slot) */}
+              <TouchableOpacity
+                style={[styles.quickActionBtn, styles.expenseQuickAction]}
+                onPress={() => navigation.navigate('MyExpenses')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: '#EEF2FF' }]}>
+                  <Ionicons name="wallet" size={24} color="#4F46E5" />
+                </View>
+                <Text style={styles.quickActionTitle}>Expenses</Text>
+                <Text style={styles.quickActionSub}>Claims & travel</Text>
+              </TouchableOpacity>
+
+              {/* 4. Leave (Fourth, Right) */}
               <TouchableOpacity
                 style={[styles.quickActionBtn, styles.leaveQuickAction]}
                 onPress={() => navigation.navigate('LeaveRequest')}
@@ -1156,6 +1160,10 @@ const styles = StyleSheet.create({
   dutyQuickAction: {
     borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
+  },
+  expenseQuickAction: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#4F46E5',
   },
   messageQuickAction: {
     borderLeftWidth: 4,

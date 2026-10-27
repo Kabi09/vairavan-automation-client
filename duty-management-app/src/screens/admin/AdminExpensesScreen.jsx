@@ -120,9 +120,13 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
           startDate: startDate || undefined,
           endDate: endDate || undefined,
           employee: selectedEmployeeId || undefined,
+          employeeId: selectedEmployeeId || undefined,
           company: selectedCompanyId || undefined,
+          companyId: selectedCompanyId || undefined,
           category: selectedCategoryId || undefined,
-          search: search || undefined,
+          categoryId: selectedCategoryId || undefined,
+          search: search ? search.trim() : undefined,
+          limit: 1000,
         }),
         expenseApi.getCategories(),
         employeeApi.getEmployees(),
@@ -182,18 +186,25 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
       if (startDate || endDate) filterParts.push(`Date: ${startDate || 'Start'} to ${endDate || 'Present'}`);
       if (selectedEmployeeId) {
         const emp = employees.find((e) => e._id === selectedEmployeeId);
-        if (emp) filterParts.push(`Staff: ${emp.employeeName}`);
+        if (emp) filterParts.push(`Staff: ${emp.employeeName} (${emp.employeeId})`);
       }
       if (selectedCompanyId) {
         const comp = companies.find((c) => c._id === selectedCompanyId);
         if (comp) filterParts.push(`Company: ${comp.companyName}`);
       }
+      if (selectedCategoryId) {
+        const cat = categories.find((c) => c._id === selectedCategoryId);
+        if (cat) filterParts.push(`Category: ${cat.name}`);
+      }
+      if (search && search.trim()) {
+        filterParts.push(`Search: "${search.trim()}"`);
+      }
 
       await exportExpensesToPDF({
         title: 'Expense Claims Report',
-        subtitle: 'All Staff Submitted Expenses',
+        subtitle: 'Official Employee Expense Submissions & Itemized Breakdown',
         expenses,
-        filterInfo: filterParts.join(' • '),
+        filterInfo: filterParts.length > 0 ? filterParts.join(' • ') : '',
       });
     } finally {
       setExportingType(null);
@@ -466,6 +477,16 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
                   <Text style={styles.activeFilterPillText}>
                     {startDate ? formatDate(startDate) : 'Start'} - {endDate ? formatDate(endDate) : 'End'}
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setStartDate('');
+                      setEndDate('');
+                    }}
+                    style={{ marginLeft: 4 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={14} color={COLORS.textMuted} />
+                  </TouchableOpacity>
                 </View>
               ) : null}
 
@@ -475,6 +496,13 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
                   <Text style={styles.activeFilterPillText}>
                     {employees.find((e) => e._id === selectedEmployeeId)?.employeeName || 'Staff'}
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedEmployeeId('')}
+                    style={{ marginLeft: 4 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={14} color={COLORS.textMuted} />
+                  </TouchableOpacity>
                 </View>
               ) : null}
 
@@ -484,6 +512,13 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
                   <Text style={styles.activeFilterPillText}>
                     {companies.find((c) => c._id === selectedCompanyId)?.companyName || 'Company'}
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedCompanyId('')}
+                    style={{ marginLeft: 4 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={14} color={COLORS.textMuted} />
+                  </TouchableOpacity>
                 </View>
               ) : null}
 
@@ -493,12 +528,19 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
                   <Text style={styles.activeFilterPillText}>
                     {categories.find((c) => c._id === selectedCategoryId)?.name || 'Category'}
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedCategoryId('')}
+                    style={{ marginLeft: 4 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={14} color={COLORS.textMuted} />
+                  </TouchableOpacity>
                 </View>
               ) : null}
 
               <TouchableOpacity onPress={clearFilters} style={styles.clearActiveFiltersBtn}>
                 <Ionicons name="close-circle" size={14} color={COLORS.danger} />
-                <Text style={styles.clearActiveFiltersText}>Clear</Text>
+                <Text style={styles.clearActiveFiltersText}>Clear All</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>

@@ -330,38 +330,99 @@ export const getAllExpenses = asyncHandler(async (req, res) => {
 
   const { employeeId, companyId, clientId, category, startDate, endDate, search } = req.query;
 
+  const targetEmployeeId = employeeId || req.query.employee;
+  const targetCompanyId = companyId || req.query.company;
+  const targetClientId = clientId || req.query.client;
+  const targetCategory = category || req.query.categoryId;
+
   const filter = {};
 
-  if (employeeId && employeeId !== 'all') filter.employee = employeeId;
-  if (companyId && companyId !== 'all') filter.company = companyId;
-  if (clientId && clientId !== 'all') filter.client = clientId;
-  if (category && category !== 'all') filter['items.categoryName'] = category;
+  if (targetEmployeeId && targetEmployeeId !== 'all') {
+    filter.employee = targetEmployeeId;
+  }
+  if (targetCompanyId && targetCompanyId !== 'all') {
+    filter.company = targetCompanyId;
+  }
+  if (targetClientId && targetClientId !== 'all') {
+    filter.client = targetClientId;
+  }
+
+  if (targetCategory && targetCategory !== 'all') {
+    if (mongoose.Types.ObjectId.isValid(targetCategory)) {
+      const catObj = await ExpenseCategory.findById(targetCategory);
+      if (catObj) {
+        filter.$and = filter.$and || [];
+        filter.$and.push({
+          $or: [
+            { 'items.category': new mongoose.Types.ObjectId(targetCategory) },
+            { 'items.categoryName': catObj.name },
+            { 'items.categoryName': new RegExp(`^${catObj.name}$`, 'i') },
+          ],
+        });
+      } else {
+        filter['items.category'] = new mongoose.Types.ObjectId(targetCategory);
+      }
+    } else {
+      filter['items.categoryName'] = new RegExp(targetCategory.trim(), 'i');
+    }
+  }
 
   if (startDate || endDate) {
     filter.expenseDate = {};
     if (startDate) {
-      const s = new Date(startDate);
-      s.setUTCHours(0, 0, 0, 0);
-      filter.expenseDate.$gte = s;
+      const dateParts = String(startDate).split('T')[0].split('-');
+      if (dateParts.length === 3) {
+        const y = parseInt(dateParts[0], 10);
+        const m = parseInt(dateParts[1], 10) - 1;
+        const d = parseInt(dateParts[2], 10);
+        // Start of day in IST (00:00:00 IST -> UTC)
+        const startIST = new Date(Date.UTC(y, m, d) - 5.5 * 60 * 60 * 1000);
+        filter.expenseDate.$gte = startIST;
+      } else {
+        const s = new Date(startDate);
+        s.setUTCHours(0, 0, 0, 0);
+        filter.expenseDate.$gte = s;
+      }
     }
     if (endDate) {
-      const e = new Date(endDate);
-      e.setUTCHours(23, 59, 59, 999);
-      filter.expenseDate.$lte = e;
+      const dateParts = String(endDate).split('T')[0].split('-');
+      if (dateParts.length === 3) {
+        const y = parseInt(dateParts[0], 10);
+        const m = parseInt(dateParts[1], 10) - 1;
+        const d = parseInt(dateParts[2], 10);
+        // End of day in IST (23:59:59.999 IST -> UTC)
+        const endIST = new Date(Date.UTC(y, m, d + 1) - 5.5 * 60 * 60 * 1000 - 1);
+        filter.expenseDate.$lte = endIST;
+      } else {
+        const e = new Date(endDate);
+        e.setUTCHours(23, 59, 59, 999);
+        filter.expenseDate.$lte = e;
+      }
     }
   }
 
   if (search && search.trim()) {
     const searchRegex = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
-    const matchingEmployees = await User.find({
-      $or: [
-        { employeeName: searchRegex },
-        { employeeId: searchRegex },
-        { email: searchRegex },
-      ],
-    }).select('_id');
+    const [matchingEmployees, matchingCompanies, matchingClients] = await Promise.all([
+      User.find({
+        $or: [
+          { employeeName: searchRegex },
+          { employeeId: searchRegex },
+          { email: searchRegex },
+        ],
+      }).select('_id'),
+      Company.find({
+        companyName: searchRegex,
+      }).select('_id'),
+      Client.find({
+        clientName: searchRegex,
+      }).select('_id'),
+    ]);
+
     const matchingEmployeeIds = matchingEmployees.map((e) => e._id);
+    const matchingCompanyIds = matchingCompanies.map((c) => c._id);
+    const matchingClientIds = matchingClients.map((c) => c._id);
 
     const searchOrConditions = [
       { expenseId: searchRegex },
@@ -373,6 +434,12 @@ export const getAllExpenses = asyncHandler(async (req, res) => {
 
     if (matchingEmployeeIds.length > 0) {
       searchOrConditions.push({ employee: { $in: matchingEmployeeIds } });
+    }
+    if (matchingCompanyIds.length > 0) {
+      searchOrConditions.push({ company: { $in: matchingCompanyIds } });
+    }
+    if (matchingClientIds.length > 0) {
+      searchOrConditions.push({ client: { $in: matchingClientIds } });
     }
 
     if (filter.$and) {
@@ -402,9 +469,10 @@ export const getAllExpenses = asyncHandler(async (req, res) => {
       .sort({ expenseDate: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('employee', 'employeeName employeeId email designation avatar')
+      .populate('employee', 'employeeName employeeId email designation avatar phoneNumber')
       .populate('company', 'companyName location companyPhoneNumber companyType')
-      .populate('client', 'clientName clientPhoneNumber status'),
+      .populate('client', 'clientName clientPhoneNumber status')
+      .populate('duty', 'dutyId machineName workType'),
     Expense.countDocuments(filter),
     Expense.aggregate([
       {

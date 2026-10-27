@@ -83,6 +83,49 @@
 ## Change History
 
 ### 2026-10-27
+#### Employee Dashboard Quick Action Reordering & Comprehensive Expense Export & Filter Enhancements
+- What was changed:
+  - **Employee Dashboard Quick Action Reordering (`EmployeeDashboardScreen.jsx`)**:
+    - Replaced the redundant "Submit Work" quick action (already present in the bottom navigation bar and Check-in/Check-out visit flow) with a dedicated "Expenses" shortcut that navigates directly to `MyExpenses`.
+    - Re-ordered the 4 quick action square boxes into the user-specified arrangement:
+      1. **Highlights** (1st, top-left) - View work performance, hours, and statistics.
+      2. **Messages** (2nd, top-right) - Access management notices with unread count badge.
+      3. **Expenses** (3rd, bottom-left) - Direct access to submit and review personal expense claims.
+      4. **Leave** (4th, bottom-right) - Request time off and track application status.
+    - Added dedicated styling (`expenseQuickAction`) with an indigo accent indicator (`#4F46E5`).
+  - **Backend Expense Filters & Population (`expenseController.js`)**:
+    - **Dual Query Parameter Aliases**: Supported both `employeeId` / `employee`, `companyId` / `company`, and `clientId` / `client` to prevent silent query mismatches between frontend pickers and backend controllers.
+    - **Category ID & Name Resolution**: When filtering by category, resolves category `_id` against `ExpenseCategory` so the filter accurately matches both `items.category` (ObjectId) and `items.categoryName` (string).
+    - **IST Date Boundaries**: Corrected `startDate` and `endDate` parsing into full IST day bounds (`00:00:00.000` to `23:59:59.999`) to prevent timezone boundary clipping.
+    - **Cross-Entity Search**: Expanded global search query (`search`) to match employee names, company names (`Company`), and client names (`Client`).
+    - **Deep Population**: Added population of `duty` (`dutyId`, `machineName`, `workType`), employee `phoneNumber` and `designation`, and company `location` / `city`.
+  - **Admin Expense Screen Filter Dismissal & Full Query Sync (`AdminExpensesScreen.jsx`)**:
+    - Added `limit: 1000` to `fetchData` parameters, eliminating the default 20-item pagination limit that previously clipped export datasets.
+    - Provided individual `(x)` dismissal buttons on active filter pills (Status, Employee, Company, Category, Date range, and Search) for intuitive 1-tap filter reset.
+    - Sent dual query parameter keys ensuring robust backend filter matching.
+  - **Comprehensive Executive PDF Export (`exportUtils.js`)**:
+    - Re-engineered `exportExpensesToPDF` to use an executive landscape A4 layout with high-density readable styling.
+    - Added KPI Executive Summary Cards at the top of the report: Total Claims, Total Value (₹), Total Line Items, and Proof Documents Attached.
+    - Included all data fields: Employee Name, Employee ID, Designation, Contact Phone/Email, Date, Company Name, Client Name, Client Phone Number, Related Work/Duty ID, Item Category & Custom Titles, Outbound & Return Distances (km) with rate calculation, Item Notes/Descriptions, Proof Photo Counts, and General Description.
+  - **19-Column Excel / CSV Export (`exportUtils.js`)**:
+    - Re-engineered `exportExpensesToExcel` to export 19 detailed columns:
+      1. Claim ID, 2. Employee Name, 3. Employee ID, 4. Designation, 5. Employee Phone, 6. Employee Email, 7. Expense Date, 8. Company Name, 9. Company Location, 10. Client Name, 11. Client Phone, 12. Related Duty / Work ID, 13. Categories & Custom Titles, 14. Calculation Details (Distance km @ rate), 15. Item Notes & Details, 16. General Description, 17. Proof Photos Count, 18. Grand Total (₹), 19. Submitted At.
+- Files changed:
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `backend/src/controllers/expenseController.js`
+  - `duty-management-app/src/screens/admin/AdminExpensesScreen.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `project.md`
+- Logic changed:
+  - Employee dashboard 4 quick action square boxes rearranged: Highlights (1st), Messages (2nd), Expenses (3rd), Leave (4th).
+  - Admin expense query now searches companies and clients, parses IST day boundaries, handles both category IDs and names, and accepts dual parameter names.
+  - Full details (distances, rates, item notes, client contacts, duty IDs, photo counts) now populate in PDF and Excel exports.
+- Reason: User requested:
+  - "employee login- four squre box have like submit work,messages,higliglits,leave; remove to submit work that place to add on expenses; fix small change the order heiglight first,message 2 right alredy; heigliligh box expences add; leave already fourth; fix;"
+  - "admin - expence export- full detail not there so fix; also filter option not working some screio; fix export- pdf,excel full detail show; fix;"
+- Impact: Clean, intuitive Employee dashboard matching daily workflow; fully functional Admin expense filters; comprehensive, audit-ready PDF and Excel export reports with complete itemization and client details.
+
+### 2026-10-27
 #### Expense Dashboard Metrics, Notification Deep-Link Navigation & Proof Photos Attachment Fix
 - What was changed:
   - **Expense Dashboard Metrics Harmonization (`expenseController.js`, `AdminExpensesScreen.jsx`, `MyExpensesScreen.jsx`)**:

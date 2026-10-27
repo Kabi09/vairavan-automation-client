@@ -1692,11 +1692,11 @@ export const exportCompaniesToExcel = async ({
 };
 
 /**
- * Export Expenses to PDF
+ * Export Expenses to PDF (Full Executive Landscape Report)
  */
 export const exportExpensesToPDF = async ({
   title = 'Expense Claims Report',
-  subtitle = 'VairaWorks Employee Expense Submissions',
+  subtitle = 'VairaWorks Employee Expense Submissions & Itemized Details',
   expenses = [],
   filterInfo = '',
 }) => {
@@ -1707,34 +1707,103 @@ export const exportExpensesToPDF = async ({
 
   try {
     const totalAmount = expenses.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
+    const totalItemsCount = expenses.reduce((sum, e) => sum + (e.items?.length || 0), 0);
+    const totalProofPhotos = expenses.reduce(
+      (sum, e) =>
+        sum +
+        (e.items || []).reduce((itemSum, it) => itemSum + (it.attachments?.length || 0), 0),
+      0
+    );
 
     const rowsHtml = expenses
       .map((e, index) => {
+        const expId = escapeHtml(e.expenseId || `EXP-${index + 1}`);
+        const dateStr = escapeHtml(formatDate(e.expenseDate));
+        const createdAtStr = escapeHtml(`${formatDate(e.createdAt)} ${formatTimeIST(e.createdAt)}`);
+
+        // Employee
         const empName = escapeHtml(e.employee?.employeeName || 'Employee');
         const empId = escapeHtml(e.employee?.employeeId || '');
-        const comp = escapeHtml(e.company?.companyName || '—');
-        const client = escapeHtml(e.client?.name || '');
-        const dateStr = escapeHtml(formatDate(e.expenseDate));
-        const expId = escapeHtml(e.expenseId || `EXP-${index + 1}`);
-        const total = (e.grandTotal || 0).toLocaleString('en-IN');
+        const designation = escapeHtml(e.employee?.designation || '');
+        const empContact = escapeHtml(e.employee?.phoneNumber || e.employee?.email || '');
 
-        const itemsSummary = (e.items || [])
-          .map((it) => {
-            const name = it.categoryName === 'Others' && it.customCategoryName ? it.customCategoryName : it.categoryName;
-            const amt = (it.amount || 0).toLocaleString('en-IN');
-            return `${escapeHtml(name)}: ₹${amt}`;
+        // Company & Client
+        const compName = escapeHtml(e.company?.companyName || '—');
+        const compLoc = escapeHtml(e.company?.location || '');
+        const clientName = escapeHtml(e.client?.clientName || e.client?.name || '');
+        const clientPhone = escapeHtml(e.client?.clientPhoneNumber || e.client?.phoneNumber || '');
+
+        // Related Duty / Work
+        const dutyId = escapeHtml(e.duty?.dutyId || e.relatedDuty || '');
+        const machine = escapeHtml(e.duty?.machineName || '');
+
+        // Items Breakdown
+        const itemsHtml = (e.items || [])
+          .map((it, iIdx) => {
+            const isOthers = it.categoryName === 'Others';
+            const customTitle = it.customTitle || it.customCategoryName || '';
+            const itemTitle = isOthers && customTitle ? `Others: ${customTitle}` : (customTitle ? `${it.categoryName} (${customTitle})` : it.categoryName || `Item #${iIdx + 1}`);
+
+            let calcText = '';
+            if (it.calculationMode === 'automatic') {
+              const out = it.outboundDistance ?? it.outboundDistanceKm ?? 0;
+              const ret = it.returnDistance ?? it.returnDistanceKm ?? 0;
+              const tot = it.totalDistance || it.quantity || (out + ret);
+              const rate = it.ratePerUnit || it.appliedRate || 0;
+              const unit = it.unit || 'km';
+              calcText = `Outbound: ${out} km • Return: ${ret} km • Total: ${tot} ${unit} @ ₹${rate}/${unit}`;
+            }
+
+            const itemDesc = it.description ? escapeHtml(it.description.trim()) : '';
+            const photoCount = Array.isArray(it.attachments) ? it.attachments.length : 0;
+            const amtStr = (it.amount || 0).toLocaleString('en-IN');
+
+            return `
+              <div class="item-row">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <span style="font-weight: 700; color: #0f172a; font-size: 10px;">${escapeHtml(itemTitle)}</span>
+                  <span style="font-weight: 800; color: #1e40af; font-size: 10.5px;">₹${amtStr}</span>
+                </div>
+                ${calcText ? `<div style="font-size: 8.5px; color: #0284c7; margin-top: 1px; font-weight: 600;">${escapeHtml(calcText)}</div>` : ''}
+                ${itemDesc ? `<div style="font-size: 8.5px; color: #64748b; font-style: italic; margin-top: 1px;">“${itemDesc}”</div>` : ''}
+                ${photoCount > 0 ? `<div class="proof-tag">📷 ${photoCount} proof photo(s) attached</div>` : ''}
+              </div>
+            `;
           })
-          .join('<br/>');
+          .join('');
+
+        const generalDesc = e.generalDescription ? escapeHtml(e.generalDescription.trim()) : '';
+        const grandTotalStr = (e.grandTotal || 0).toLocaleString('en-IN');
 
         return `
           <tr>
-            <td style="text-align: center;">${index + 1}</td>
-            <td><strong>${expId}</strong></td>
-            <td>${empName} <br/><span style="font-size: 9px; color: #64748b;">${empId}</span></td>
-            <td>${dateStr}</td>
-            <td>${comp}${client ? `<br/><span style="font-size: 9px; color: #64748b;">Contact: ${client}</span>` : ''}</td>
-            <td style="font-size: 10px;">${itemsSummary}</td>
-            <td style="text-align: right; font-weight: bold; color: #1e40af;">₹${total}</td>
+            <td style="text-align: center; font-weight: bold; color: #64748b;">${index + 1}</td>
+            <td>
+              <strong style="color: #0f172a; font-size: 11px;">${expId}</strong>
+              <div style="font-size: 8.5px; color: #475569; margin-top: 2px;">Date: <strong>${dateStr}</strong></div>
+              <div style="font-size: 8px; color: #94a3b8;">Logged: ${createdAtStr}</div>
+              ${dutyId ? `<div style="margin-top: 3px;"><span class="duty-tag">Work: ${dutyId}${machine ? ` (${machine})` : ''}</span></div>` : ''}
+            </td>
+            <td>
+              <strong style="font-size: 10.5px; color: #0f172a;">${empName}</strong>
+              <div style="font-size: 9px; color: #475569; font-weight: 600;">${empId}${designation ? ` • ${designation}` : ''}</div>
+              ${empContact ? `<div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">📞 ${empContact}</div>` : ''}
+            </td>
+            <td>
+              <strong style="font-size: 10.5px; color: #0f172a;">${compName}</strong>
+              ${compLoc ? `<div style="font-size: 8.5px; color: #64748b; margin-top: 1px;">📍 ${compLoc}</div>` : ''}
+              ${clientName ? `<div style="font-size: 9px; color: #0284c7; font-weight: 600; margin-top: 2px;">👤 ${clientName}${clientPhone ? `<br/><span style="font-size: 8px; color: #64748b; font-weight: normal;">📞 ${clientPhone}</span>` : ''}</div>` : ''}
+            </td>
+            <td>
+              <div style="font-size: 9.5px;">
+                ${itemsHtml || '<span style="color: #94a3b8;">No items recorded</span>'}
+                ${generalDesc ? `<div class="general-desc-box"><strong>General Note:</strong> ${generalDesc}</div>` : ''}
+              </div>
+            </td>
+            <td style="text-align: right;">
+              <strong style="font-size: 12.5px; color: #1e40af;">₹${grandTotalStr}</strong>
+              <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">${e.items?.length || 0} item(s)</div>
+            </td>
           </tr>
         `;
       })
@@ -1747,21 +1816,141 @@ export const exportExpensesToPDF = async ({
         <meta charset="utf-8" />
         <title>${escapeHtml(title)}</title>
         <style>
-          @page { size: A4; margin: 12mm; }
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 0; font-size: 11px; }
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 12px; }
-          .logo { height: 40px; }
-          .title { font-size: 18px; font-weight: 800; color: #1e3a8a; margin: 0; }
-          .subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
-          .filter-bar { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-size: 10px; margin-bottom: 12px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
-          th { background-color: #f1f5f9; color: #334155; font-weight: 700; font-size: 10px; text-transform: uppercase; border: 1px solid #cbd5e1; padding: 7px 6px; text-align: left; }
-          td { border: 1px solid #e2e8f0; padding: 7px 6px; vertical-align: top; }
-          tr:nth-child(even) { background-color: #f8fafc; }
-          .summary-card { background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px 14px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
-          .summary-label { font-size: 12px; font-weight: 700; color: #1e40af; }
-          .summary-value { font-size: 18px; font-weight: 900; color: #1e40af; }
-          .footer-note { margin-top: 16px; font-size: 9px; color: #94a3b8; text-align: center; }
+          @page { size: A4 landscape; margin: 9mm; }
+          body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #0f172a;
+            margin: 0;
+            padding: 0;
+            font-size: 10px;
+            background-color: #ffffff;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2.5px solid #1e40af;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+          }
+          .logo { height: 38px; }
+          .title { font-size: 18px; font-weight: 900; color: #1e3a8a; margin: 0; }
+          .subtitle { font-size: 10px; color: #64748b; margin-top: 2px; }
+          
+          .kpi-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+          }
+          .kpi-card {
+            flex: 1;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 6px 10px;
+          }
+          .kpi-card-highlight {
+            background-color: #eff6ff;
+            border-color: #bfdbfe;
+          }
+          .kpi-label {
+            font-size: 8.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #64748b;
+          }
+          .kpi-value {
+            font-size: 15px;
+            font-weight: 900;
+            color: #0f172a;
+            margin-top: 1px;
+          }
+          .kpi-value-highlight {
+            color: #1e40af;
+          }
+
+          .filter-bar {
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 9px;
+            margin-bottom: 8px;
+            color: #334155;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+          }
+          th {
+            background-color: #f1f5f9;
+            color: #1e293b;
+            font-weight: 800;
+            font-size: 9px;
+            text-transform: uppercase;
+            border: 1px solid #cbd5e1;
+            padding: 6px 6px;
+            text-align: left;
+          }
+          td {
+            border: 1px solid #e2e8f0;
+            padding: 5px 6px;
+            vertical-align: top;
+          }
+          tr:nth-child(even) {
+            background-color: #fbfcfe;
+          }
+
+          .item-row {
+            margin-bottom: 4px;
+            padding-bottom: 3px;
+            border-bottom: 1px dashed #e2e8f0;
+          }
+          .item-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+          }
+          .proof-tag {
+            display: inline-block;
+            background-color: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+            border-radius: 3px;
+            font-size: 7.5px;
+            font-weight: 700;
+            padding: 1px 4px;
+            margin-top: 1px;
+          }
+          .duty-tag {
+            display: inline-block;
+            background-color: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+            border-radius: 3px;
+            font-size: 8px;
+            font-weight: 700;
+            padding: 1px 4px;
+          }
+          .general-desc-box {
+            margin-top: 4px;
+            padding: 3px 6px;
+            background-color: #fefce8;
+            border: 1px solid #fef08a;
+            border-radius: 4px;
+            font-size: 8.5px;
+            color: #713f12;
+            font-style: italic;
+          }
+
+          .footer-note {
+            margin-top: 8px;
+            font-size: 8.5px;
+            color: #94a3b8;
+            text-align: center;
+          }
         </style>
       </head>
       <body>
@@ -1773,18 +1962,36 @@ export const exportExpensesToPDF = async ({
           <img src="${LOGO_URL}" class="logo" alt="Logo" />
         </div>
 
-        ${filterInfo ? `<div class="filter-bar"><strong>Filters:</strong> ${escapeHtml(filterInfo)}</div>` : ''}
+        <div class="kpi-row">
+          <div class="kpi-card">
+            <div class="kpi-label">Total Expense Claims</div>
+            <div class="kpi-value">${expenses.length} Records</div>
+          </div>
+          <div class="kpi-card kpi-card-highlight">
+            <div class="kpi-label">Cumulative Amount</div>
+            <div class="kpi-value kpi-value-highlight">₹${totalAmount.toLocaleString('en-IN')}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Total Line Items</div>
+            <div class="kpi-value">${totalItemsCount} Items</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Proof Documents</div>
+            <div class="kpi-value">${totalProofPhotos} Photos</div>
+          </div>
+        </div>
+
+        ${filterInfo ? `<div class="filter-bar"><strong>Active Filters:</strong> ${escapeHtml(filterInfo)}</div>` : ''}
 
         <table>
           <thead>
             <tr>
-              <th style="width: 30px; text-align: center;">#</th>
-              <th style="width: 75px;">ID</th>
-              <th>Employee</th>
-              <th style="width: 75px;">Date</th>
-              <th>Company / Client</th>
-              <th>Items & Details</th>
-              <th style="width: 80px; text-align: right;">Total</th>
+              <th style="width: 25px; text-align: center;">#</th>
+              <th style="width: 110px;">Claim ID & Date</th>
+              <th style="width: 140px;">Employee Details</th>
+              <th style="width: 140px;">Company & Client</th>
+              <th>Itemized Breakdown & Calculations</th>
+              <th style="width: 85px; text-align: right;">Total (₹)</th>
             </tr>
           </thead>
           <tbody>
@@ -1792,13 +1999,8 @@ export const exportExpensesToPDF = async ({
           </tbody>
         </table>
 
-        <div class="summary-card">
-          <div class="summary-label">Total Expenses (${expenses.length} Records)</div>
-          <div class="summary-value">₹${totalAmount.toLocaleString('en-IN')}</div>
-        </div>
-
         <div class="footer-note">
-          Official Expense Report • Vairavan Automation System
+          Official Expense Documentation • Generated on ${formatDate(new Date())} • Vairavan Automation Duty Management System
           ${BRANDING_PDF_FOOTER_HTML}
         </div>
       </body>
@@ -1825,7 +2027,7 @@ export const exportExpensesToPDF = async ({
 };
 
 /**
- * Export Expenses to Excel / CSV
+ * Export Expenses to Excel / CSV (Full Itemized Columns)
  */
 export const exportExpensesToExcel = async ({
   filename = 'Expense_Claims_Report',
@@ -1842,42 +2044,89 @@ export const exportExpensesToExcel = async ({
       'Expense ID',
       'Employee Name',
       'Employee ID',
+      'Designation',
+      'Employee Contact',
       'Expense Date',
       'Company Name',
+      'Company Location',
       'Client Name',
       'Client Phone',
-      'Related Duty',
-      'Items Breakdown',
+      'Related Duty / Work ID',
       'Total Items Count',
+      'Items Breakdown & Calculations',
+      'Item Descriptions / Notes',
+      'General Claim Notes',
+      'Proof Photos Count',
       'Grand Total Amount (INR)',
-      'General Description',
-      'Submitted At',
+      'Submitted Date & Time (IST)',
     ];
 
     const rows = expenses.map((e, index) => {
-      const itemsStr = (e.items || [])
-        .map((it) => {
-          const name = it.categoryName === 'Others' && it.customCategoryName ? it.customCategoryName : it.categoryName;
-          const calc = it.calculationMode === 'automatic' ? ` (${it.quantity || 0}km @ Rs.${it.appliedRate})` : '';
-          return `${name}${calc}: Rs.${it.amount || 0}`;
+      const empName = e.employee?.employeeName || 'Employee';
+      const empId = e.employee?.employeeId || '';
+      const designation = e.employee?.designation || '';
+      const empContact = e.employee?.phoneNumber || e.employee?.email || '';
+      const compName = e.company?.companyName || '';
+      const compLoc = e.company?.location || '';
+      const clientName = e.client?.clientName || e.client?.name || '';
+      const clientPhone = e.client?.clientPhoneNumber || e.client?.phoneNumber || '';
+      const dutyCode = e.duty?.dutyId || e.relatedDuty || '';
+      const totalPhotos = (e.items || []).reduce((acc, it) => acc + (it.attachments?.length || 0), 0);
+
+      const itemsBreakdownStr = (e.items || [])
+        .map((it, iIdx) => {
+          const isOthers = it.categoryName === 'Others';
+          const customTitle = it.customTitle || it.customCategoryName || '';
+          const cat = isOthers && customTitle ? `Others: ${customTitle}` : (customTitle ? `${it.categoryName} (${customTitle})` : it.categoryName);
+
+          let calc = '';
+          if (it.calculationMode === 'automatic') {
+            const out = it.outboundDistance ?? it.outboundDistanceKm ?? 0;
+            const ret = it.returnDistance ?? it.returnDistanceKm ?? 0;
+            const tot = it.totalDistance || it.quantity || (out + ret);
+            const rate = it.ratePerUnit || it.appliedRate || 0;
+            const unit = it.unit || 'km';
+            calc = ` (Out: ${out}km, Ret: ${ret}km, Total: ${tot}${unit} @ Rs.${rate}/${unit})`;
+          }
+          const amt = it.amount || 0;
+          return `[#${iIdx + 1}] ${cat}${calc}: Rs.${amt}`;
         })
-        .join('; ');
+        .join(' | ');
+
+      const itemsNotesStr = (e.items || [])
+        .map((it, iIdx) => {
+          const desc = it.description ? it.description.trim() : '';
+          const photoCount = it.attachments?.length || 0;
+          const extras = [];
+          if (desc) extras.push(`Note: "${desc}"`);
+          if (photoCount > 0) extras.push(`${photoCount} photo(s)`);
+          return extras.length > 0 ? `[#${iIdx + 1}] ${extras.join(', ')}` : '';
+        })
+        .filter(Boolean)
+        .join(' | ');
+
+      const submittedAtStr = e.createdAt ? `${formatDate(e.createdAt)} ${formatTimeIST(e.createdAt)}` : '';
 
       return [
         index + 1,
         escapeCsv(e.expenseId || `EXP-${index + 1}`),
-        escapeCsv(e.employee?.employeeName || ''),
-        escapeCsv(e.employee?.employeeId || ''),
+        escapeCsv(empName),
+        escapeCsv(empId),
+        escapeCsv(designation),
+        escapeCsv(empContact),
         escapeCsv(formatDate(e.expenseDate)),
-        escapeCsv(e.company?.companyName || ''),
-        escapeCsv(e.client?.name || ''),
-        escapeCsv(e.client?.phoneNumber || ''),
-        escapeCsv(e.relatedDuty || ''),
-        escapeCsv(itemsStr),
+        escapeCsv(compName),
+        escapeCsv(compLoc),
+        escapeCsv(clientName),
+        escapeCsv(clientPhone),
+        escapeCsv(dutyCode),
         e.items?.length || 0,
-        e.grandTotal || 0,
+        escapeCsv(itemsBreakdownStr),
+        escapeCsv(itemsNotesStr),
         escapeCsv(e.generalDescription || ''),
-        escapeCsv(formatDate(e.createdAt)),
+        totalPhotos,
+        e.grandTotal || 0,
+        escapeCsv(submittedAtStr),
       ].join(',');
     });
 
