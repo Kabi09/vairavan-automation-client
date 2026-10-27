@@ -92,6 +92,7 @@
     - Connected `useAuth()` to evaluate the current logged-in user (`currentUser`).
     - **Developer Admin Logged In**: Displays ALL employees and ALL admins across directories, user lists, and selection options.
     - **Normal Admin Logged In**: Displays all employees and normal admins, but strictly hides the Developer Admin account (`mailtokabilan056@gmail.com` / `mailtokabilan@gmail.com` / `8883280816`).
+    
 - Files changed:
   - `duty-management-app/src/utils/validators.js`
   - `duty-management-app/src/screens/admin/EmployeeListScreen.jsx`
