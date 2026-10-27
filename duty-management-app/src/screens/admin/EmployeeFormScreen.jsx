@@ -47,7 +47,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState(existingEmployee?.phoneNumber || '');
   const [designation, setDesignation] = useState(existingEmployee?.designation || '');
-  const [address, setAddress] = useState(existingEmployee?.address || '');
+  const [address, setAddress] = useState(existingEmployee?.location || existingEmployee?.address || '');
   const [dateOfBirth, setDateOfBirth] = useState(
     existingEmployee?.dateOfBirth ? formatISODateOnly(existingEmployee.dateOfBirth) : ''
   );
@@ -103,6 +103,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
           phoneNumber: phone.trim(),
           designation: designation.trim(),
           address: address.trim(),
+          location: address.trim(),
           dateOfBirth: dateOfBirth || null,
           role: role || 'employee',
         });
@@ -118,6 +119,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
           phoneNumber: phone.trim(),
           designation: designation.trim() || (role === 'admin' ? 'Administrator' : 'Service Engineer'),
           address: address.trim(),
+          location: address.trim(),
           dateOfBirth: dateOfBirth || null,
           role: role || 'employee',
           accountStatus: 'active',
@@ -302,8 +304,8 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
             </View>
 
             <TextInputField
-              label="Address / Branch"
-              placeholder="e.g. Coimbatore Branch"
+              label="Location / Address"
+              placeholder="e.g. Coimbatore, Tamil Nadu"
               value={address}
               onChangeText={setAddress}
               multiline

@@ -11,6 +11,7 @@ import DutyDetailsScreen from '../screens/employee/DutyDetailsScreen';
 import MyLeavesScreen from '../screens/employee/MyLeavesScreen';
 import LeaveRequestScreen from '../screens/employee/LeaveRequestScreen';
 import HolidayListScreen from '../screens/employee/HolidayListScreen';
+import EmployeeCalendarScreen from '../screens/employee/EmployeeCalendarScreen';
 import NotificationsScreen from '../screens/admin/NotificationsScreen';
 import MyExpensesScreen from '../screens/employee/MyExpensesScreen';
 import ExpenseFormScreen from '../screens/employee/ExpenseFormScreen';
@@ -113,6 +114,7 @@ export const EmployeeNavigator = () => {
       <Stack.Screen name="LeaveRequest" component={LeaveRequestScreen} />
       <Stack.Screen name="MyLeaves" component={MyLeavesScreen} />
       <Stack.Screen name="HolidayList" component={HolidayListScreen} />
+      <Stack.Screen name="EmployeeCalendar" component={EmployeeCalendarScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />

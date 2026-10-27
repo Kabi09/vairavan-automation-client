@@ -132,7 +132,7 @@ export const getMe = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const updateProfile = asyncHandler(async (req, res) => {
-  const { employeeName, phoneNumber, email, avatar, dateOfBirth } = req.body;
+  const { employeeName, phoneNumber, email, avatar, dateOfBirth, location, address } = req.body;
 
   const user = await User.findById(req.user._id);
   if (!user) {
@@ -188,6 +188,12 @@ export const updateProfile = asyncHandler(async (req, res) => {
 
   if (dateOfBirth !== undefined) {
     user.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+  }
+
+  const locVal = location !== undefined ? location : address;
+  if (locVal !== undefined) {
+    user.location = locVal.trim();
+    user.address = locVal.trim();
   }
 
   await user.save();

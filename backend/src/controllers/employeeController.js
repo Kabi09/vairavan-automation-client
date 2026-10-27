@@ -62,7 +62,8 @@ export const createEmployee = asyncHandler(async (req, res) => {
     email: email.toLowerCase().trim(),
     password,
     phoneNumber: phoneNumber ? phoneNumber.trim() : '',
-    address,
+    address: req.body.location !== undefined ? req.body.location : (address || ''),
+    location: req.body.location !== undefined ? req.body.location : (address || ''),
     designation,
     joiningDate: joiningDate || Date.now(),
     dateOfBirth: dateOfBirth || null,
@@ -222,7 +223,11 @@ export const updateEmployee = asyncHandler(async (req, res) => {
     }
   }
 
-  if (address !== undefined) employee.address = address;
+  const locVal = req.body.location !== undefined ? req.body.location : address;
+  if (locVal !== undefined) {
+    employee.address = locVal;
+    employee.location = locVal;
+  }
   if (designation !== undefined) employee.designation = designation;
   if (joiningDate) employee.joiningDate = joiningDate;
   if (dateOfBirth !== undefined) employee.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;

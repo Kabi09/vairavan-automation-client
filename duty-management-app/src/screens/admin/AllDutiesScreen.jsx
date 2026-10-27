@@ -1040,7 +1040,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
             </ScrollView>
 
-            {/* Admin Action Buttons */}
+            {/* Admin Action Buttons (Work cannot be deleted) */}
             <View style={styles.modalActionFooter}>
               <TouchableOpacity
                 style={[styles.modalActionBtn, styles.modalEditBtn]}
@@ -1048,16 +1048,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                 activeOpacity={0.8}
               >
                 <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.modalActionBtnText}>Edit Report</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalActionBtn, styles.modalDeleteBtn]}
-                onPress={() => handleDeleteDuty(selectedDuty._id)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.modalActionBtnText}>Delete</Text>
+                <Text style={styles.modalActionBtnText}>Edit Duty Report</Text>
               </TouchableOpacity>
             </View>
           </View>

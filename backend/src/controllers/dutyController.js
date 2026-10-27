@@ -8,6 +8,7 @@ import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import notificationService from '../services/notificationService.js';
+import { awardSundayCompOffCredit } from '../services/leaveService.js';
 
 /**
  * Helper to convert Date to HH:mm 24-hour string
@@ -200,6 +201,14 @@ export const createDuty = asyncHandler(async (req, res) => {
   }
 
   const duty = await Duty.create(dutyData);
+
+  if (duty.inTime && duty.outTime) {
+    try {
+      await awardSundayCompOffCredit({ employeeId: duty.employee, duty });
+    } catch (creditErr) {
+      console.warn('Sunday credit check error:', creditErr.message);
+    }
+  }
 
   const populatedDuty = await Duty.findById(duty._id)
     .populate('company', 'companyName location companyPhoneNumber companyType')
@@ -455,6 +464,12 @@ export const checkOut = asyncHandler(async (req, res) => {
 
   await duty.save();
 
+  try {
+    await awardSundayCompOffCredit({ employeeId: duty.employee, duty });
+  } catch (creditErr) {
+    console.warn('Sunday credit check error on checkout:', creditErr.message);
+  }
+
   const populatedDuty = await Duty.findById(duty._id)
     .populate('company', 'companyName location companyPhoneNumber companyType')
     .populate('client', 'clientName clientPhoneNumber status')
@@ -641,17 +656,12 @@ export const updateDuty = asyncHandler(async (req, res) => {
     throw ApiError.notFound('Duty report not found');
   }
 
-  // Ownership verification
-  if (duty.employee.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-    throw ApiError.forbidden('You can only edit your own duty reports');
-  }
-
-  // Edit policy check
-  if (duty.status === 'approved' && req.user.role !== 'admin') {
-    throw ApiError.badRequest('Approved duty reports cannot be modified by employees');
-  }
-  if (duty.status === 'rejected' && req.user.role !== 'admin') {
-    throw ApiError.badRequest('Rejected duty reports cannot be modified by employees');
+  // Edit permission check: Employees do not have permission to edit work reports
+  if (req.user.role !== 'admin') {
+    if (duty.status === 'approved') {
+      throw ApiError.badRequest('Approved duty reports cannot be modified by employees');
+    }
+    throw ApiError.forbidden('Employees do not have permission to edit work reports. Only administrators can edit submitted work details.');
   }
 
   // Time validation

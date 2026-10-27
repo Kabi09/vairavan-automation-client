@@ -11,6 +11,11 @@ export const leaveApi = {
     return res.data;
   },
 
+  getLeaveBalances: async (params = {}) => {
+    const res = await apiClient.get('/leaves/balances', { params });
+    return res.data;
+  },
+
   getAllLeaves: async (params = {}) => {
     const res = await apiClient.get('/leaves', { params });
     return res.data;
@@ -28,6 +33,21 @@ export const leaveApi = {
 
   cancelLeave: async (id) => {
     const res = await apiClient.patch(`/leaves/${id}/cancel`);
+    return res.data;
+  },
+
+  getLeaveConfig: async () => {
+    const res = await apiClient.get('/leaves/config');
+    return res.data;
+  },
+
+  updateLeaveConfig: async (configData) => {
+    const res = await apiClient.patch('/leaves/config', configData);
+    return res.data;
+  },
+
+  updateEmployeeAllowance: async (employeeId, allowanceData) => {
+    const res = await apiClient.patch(`/leaves/employee-allowance/${employeeId}`, allowanceData);
     return res.data;
   },
 };

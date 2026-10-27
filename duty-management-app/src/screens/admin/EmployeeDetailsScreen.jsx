@@ -356,6 +356,22 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
             Joined: {formatDate(employee?.joiningDate || employee?.createdAt)}
           </Text>
         </View>
+
+        {(employee?.location || employee?.address || employee?.dateOfBirth) ? (
+          <View style={[styles.profileDetailsRow, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: '#F1F5F9' }]}>
+            {(employee?.location || employee?.address) ? (
+              <Text style={styles.phoneText}>
+                <Ionicons name="location-outline" size={13} color={COLORS.primary} />{' '}
+                {employee.location || employee.address}
+              </Text>
+            ) : <View />}
+            {employee?.dateOfBirth ? (
+              <Text style={styles.joinedText}>
+                DOB: {formatDate(employee.dateOfBirth)}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </Card>
 
       {/* Main Mode Toggle: [ Work ], [ Leave ] and [ Expenses ] */}

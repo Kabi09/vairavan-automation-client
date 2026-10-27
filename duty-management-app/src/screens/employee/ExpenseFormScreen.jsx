@@ -31,6 +31,7 @@ import ImageViewerModal from '../../components/ImageViewerModal';
 import { formatDate, formatISODateOnly, formatTime } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { saveExpenseDraft, getExpenseDraft, clearExpenseDraft } from '../../utils/draftStorage';
 
 // Helper to determine if a company represents internal office
 const isOfficeCompany = (c) => {
@@ -101,6 +102,113 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
 
   // New Items list
   const [items, setItems] = useState([]);
+
+  // Draft persistence state
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftLoadedOnce, setDraftLoadedOnce] = useState(false);
+
+  // Load draft on mount (if no route duty is passed, or if draft matches route duty)
+  useEffect(() => {
+    let isMounted = true;
+    const loadDraft = async () => {
+      try {
+        const draft = await getExpenseDraft();
+        if (draft && isMounted) {
+          const isMatchingDuty =
+            !routeDuty ||
+            !draft.selectedDutyId ||
+            String(draft.selectedDutyId) === String(routeDuty._id);
+
+          if (isMatchingDuty) {
+            if (draft.expenseDate) setExpenseDate(draft.expenseDate);
+            if (draft.companyCategory) setCompanyCategory(draft.companyCategory);
+            if (draft.selectedCompanyId) setSelectedCompanyId(draft.selectedCompanyId);
+            if (draft.selectedClientId) setSelectedClientId(draft.selectedClientId);
+            if (draft.selectedDutyId) setSelectedDutyId(draft.selectedDutyId);
+            if (draft.relatedDutyId) setRelatedDutyId(draft.relatedDutyId);
+            if (draft.generalDescription) setGeneralDescription(draft.generalDescription);
+            if (Array.isArray(draft.items) && draft.items.length > 0) {
+              setItems(draft.items);
+            }
+            if (
+              (Array.isArray(draft.items) && draft.items.length > 0) ||
+              (draft.generalDescription && draft.generalDescription.trim())
+            ) {
+              setDraftRestored(true);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[ExpenseForm] Draft load error:', err);
+      } finally {
+        if (isMounted) setDraftLoadedOnce(true);
+      }
+    };
+
+    loadDraft();
+    return () => {
+      isMounted = false;
+    };
+  }, [routeDuty]);
+
+  // Auto-save draft on changes (debounced 800ms)
+  useEffect(() => {
+    if (!draftLoadedOnce) return;
+
+    const hasContent = Boolean(
+      (items && items.length > 0) ||
+      (generalDescription && generalDescription.trim()) ||
+      selectedDutyId ||
+      relatedDutyId
+    );
+
+    if (!hasContent) return;
+
+    const timer = setTimeout(() => {
+      saveExpenseDraft({
+        expenseDate,
+        companyCategory,
+        selectedCompanyId,
+        selectedClientId,
+        selectedDutyId,
+        relatedDutyId,
+        generalDescription,
+        items,
+      });
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [
+    draftLoadedOnce,
+    expenseDate,
+    companyCategory,
+    selectedCompanyId,
+    selectedClientId,
+    selectedDutyId,
+    relatedDutyId,
+    generalDescription,
+    items,
+  ]);
+
+  const handleDiscardDraft = () => {
+    Alert.alert(
+      'Discard Draft',
+      'Are you sure you want to discard your saved expense draft and start fresh?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            await clearExpenseDraft();
+            setItems([]);
+            setGeneralDescription('');
+            setDraftRestored(false);
+          },
+        },
+      ]
+    );
+  };
 
   // Modals
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -613,6 +721,8 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       };
 
       const res = await expenseApi.createExpense(payload);
+      await clearExpenseDraft();
+      setDraftRestored(false);
       const expenseObj = res.data?.expense || res.data?.data?.expense || res.expense;
       const expenseCode = expenseObj?.expenseId || '';
 
@@ -666,6 +776,18 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         showsVerticalScrollIndicator={false}
       >
         <ErrorMessage message={error} />
+
+        {draftRestored && (
+          <View style={styles.draftBanner}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <Ionicons name="document-text" size={16} color="#047857" />
+              <Text style={styles.draftBannerText}>Draft restored from your last session</Text>
+            </View>
+            <TouchableOpacity onPress={handleDiscardDraft} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.discardDraftText}>Discard</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* 1. Work Duty Association Card */}
         <Card style={styles.card}>
@@ -1991,6 +2113,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: SPACING.md,
     marginTop: SPACING.sm,
+  },
+  draftBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  draftBannerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#065F46',
+  },
+  discardDraftText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+    textDecorationLine: 'underline',
   },
 });
 

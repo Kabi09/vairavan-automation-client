@@ -1,9 +1,16 @@
 import Leave from '../models/Leave.js';
 import Notification from '../models/Notification.js';
+import User from '../models/User.js';
+import LeaveConfig from '../models/LeaveConfig.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import notificationService from '../services/notificationService.js';
+import {
+  calculateLeaveWorkingDays,
+  getEmployeeLeaveBalances,
+  getActiveLeaveConfig,
+} from '../services/leaveService.js';
 
 /**
  * @desc    Submit a leave request
@@ -11,7 +18,7 @@ import notificationService from '../services/notificationService.js';
  * @access  Private/Employee
  */
 export const createLeave = asyncHandler(async (req, res) => {
-  const { reason, startDate, endDate } = req.body;
+  const { reason, startDate, endDate, leaveType = 'casual_leave' } = req.body;
 
   const start = new Date(startDate);
   const end = new Date(endDate);
@@ -34,11 +41,42 @@ export const createLeave = asyncHandler(async (req, res) => {
     );
   }
 
+  // Calculate eligible working days (Mon-Sat, excluding Sundays and company holidays)
+  const { totalWorkingDays } = await calculateLeaveWorkingDays(start, end);
+  if (totalWorkingDays <= 0) {
+    throw ApiError.badRequest(
+      'Selected date range contains no scheduled working days. Sundays and company holidays are not counted as leave days.'
+    );
+  }
+
+  const reqYear = start.getFullYear();
+
+  // Validate balance
+  const balances = await getEmployeeLeaveBalances(req.user._id, reqYear);
+  const selectedType = leaveType === 'comp_off' ? 'comp_off' : 'casual_leave';
+
+  if (selectedType === 'casual_leave') {
+    if (totalWorkingDays > balances.casualLeave.available) {
+      throw ApiError.badRequest(
+        `Insufficient Casual Leave balance. Available: ${balances.casualLeave.available} day(s), Requested: ${totalWorkingDays} working day(s).`
+      );
+    }
+  } else if (selectedType === 'comp_off') {
+    if (totalWorkingDays > balances.compOff.available) {
+      throw ApiError.badRequest(
+        `Insufficient Comp-Off credits. Available: ${balances.compOff.available} credit(s), Requested: ${totalWorkingDays} working day(s).`
+      );
+    }
+  }
+
   const leave = await Leave.create({
     employee: req.user._id,
+    leaveType: selectedType,
     reason: reason.trim(),
     startDate: start,
     endDate: end,
+    daysCount: totalWorkingDays,
+    leaveYear: reqYear,
     status: 'pending',
   });
 
@@ -47,16 +85,20 @@ export const createLeave = asyncHandler(async (req, res) => {
     'employeeName employeeId email'
   );
 
+  const typeLabel = selectedType === 'comp_off' ? 'Comp-Off Leave' : 'Casual Leave';
+
   // Create in-app notification for Admins
   try {
     await Notification.create({
       recipientRole: 'admin',
       sender: req.user._id,
       type: 'leave_request',
-      title: 'New Leave Request Submitted',
-      message: `${req.user.employeeName} (${req.user.employeeId}) requested leave: ${reason.trim()}`,
+      title: `New ${typeLabel} Request Submitted`,
+      message: `${req.user.employeeName} (${req.user.employeeId}) requested ${totalWorkingDays} day(s) ${typeLabel}: ${reason.trim()}`,
       data: {
         leaveId: leave._id,
+        leaveType: selectedType,
+        daysCount: totalWorkingDays,
         employeeId: req.user.employeeId,
         employeeName: req.user.employeeName,
         reason: reason.trim(),
@@ -69,10 +111,10 @@ export const createLeave = asyncHandler(async (req, res) => {
     console.error('[Notification] Failed to create in-app notification:', notifErr.message);
   }
 
-  // Notify Admins only via FCM (await dispatch to ensure delivery before serverless runtime terminates)
+  // Notify Admins only via FCM
   const notificationPayload = {
-    title: 'New Leave Request Submitted',
-    body: `${req.user.employeeName} (${req.user.employeeId}) requested leave from ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`,
+    title: `New ${typeLabel} Request Submitted`,
+    body: `${req.user.employeeName} (${req.user.employeeId}) requested ${totalWorkingDays} day(s) ${typeLabel} from ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`,
   };
 
   try {
@@ -100,12 +142,16 @@ export const getMyLeaves = asyncHandler(async (req, res) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '10', 10)));
   const skip = (page - 1) * limit;
 
-  const { status, year } = req.query;
+  const { status, year, leaveType } = req.query;
 
   const filter = { employee: req.user._id };
 
   if (status) {
     filter.status = status;
+  }
+
+  if (leaveType) {
+    filter.leaveType = leaveType;
   }
 
   if (year) {
@@ -139,6 +185,24 @@ export const getMyLeaves = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @desc    Get leave balances (CL & Comp-Off)
+ * @route   GET /api/leaves/balances
+ * @access  Private (Employee or Admin)
+ */
+export const getLeaveBalances = asyncHandler(async (req, res) => {
+  let employeeId = req.user._id;
+
+  if (req.query.employeeId && req.user.role === 'admin') {
+    employeeId = req.query.employeeId;
+  }
+
+  const year = parseInt(req.query.year || new Date().getFullYear(), 10);
+  const balances = await getEmployeeLeaveBalances(employeeId, year);
+
+  return ApiResponse.success(res, 200, 'Leave balances retrieved successfully', balances);
+});
+
+/**
  * @desc    Get single leave request by ID
  * @route   GET /api/leaves/:id
  * @access  Private (Admin or request owner)
@@ -147,7 +211,7 @@ export const getLeaveById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const leave = await Leave.findById(id)
-    .populate('employee', 'employeeName employeeId email designation')
+    .populate('employee', 'employeeName employeeId email designation casualLeaveAllowance')
     .populate('adminReviewer', 'employeeName employeeId');
 
   if (!leave) {
@@ -172,15 +236,24 @@ export const getAllLeaves = asyncHandler(async (req, res) => {
   const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit || '20', 10)));
   const skip = (page - 1) * limit;
 
-  const { status, employeeId, startDate, endDate } = req.query;
+  const { status, employeeId, startDate, endDate, leaveType, year } = req.query;
 
   const filter = {};
 
   if (status) filter.status = status;
   if (employeeId) filter.employee = employeeId;
+  if (leaveType) filter.leaveType = leaveType;
+
+  if (year) {
+    const yr = parseInt(year, 10);
+    filter.startDate = {
+      $gte: new Date(`${yr}-01-01T00:00:00.000Z`),
+      $lte: new Date(`${yr}-12-31T23:59:59.999Z`),
+    };
+  }
 
   if (startDate || endDate) {
-    filter.startDate = {};
+    filter.startDate = filter.startDate || {};
     if (startDate) filter.startDate.$gte = new Date(startDate);
     if (endDate) {
       const endD = new Date(endDate);
@@ -194,7 +267,7 @@ export const getAllLeaves = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('employee', 'employeeName employeeId email designation')
+      .populate('employee', 'employeeName employeeId email designation casualLeaveAllowance')
       .populate('adminReviewer', 'employeeName employeeId'),
     Leave.countDocuments(filter),
   ]);
@@ -213,19 +286,19 @@ export const getAllLeaves = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Review leave request (Approve or Reject)
+ * @desc    Review leave request (Approve or Reject with optional rejection reason)
  * @route   PATCH /api/leaves/:id/review
  * @access  Private/Admin
  */
 export const reviewLeave = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status, adminRemarks } = req.body;
+  const { status, adminRemarks, rejectionReason } = req.body;
 
   if (!['approved', 'rejected'].includes(status)) {
     throw ApiError.badRequest("Decision status must be either 'approved' or 'rejected'");
   }
 
-  const leave = await Leave.findById(id).populate('employee', 'employeeName employeeId');
+  const leave = await Leave.findById(id).populate('employee', 'employeeName employeeId email');
   if (!leave) {
     throw ApiError.notFound('Leave request not found');
   }
@@ -234,9 +307,31 @@ export const reviewLeave = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Cannot review a leave request that has already been cancelled');
   }
 
+  const finalRemarks = adminRemarks || rejectionReason || '';
+
+  // If approving, re-verify available balance
+  if (status === 'approved') {
+    const balances = await getEmployeeLeaveBalances(leave.employee._id, leave.leaveYear);
+    const neededDays = leave.daysCount || 1;
+    const type = leave.leaveType || 'casual_leave';
+
+    if (type === 'casual_leave' && balances.casualLeave.available < neededDays) {
+      throw ApiError.badRequest(
+        `Cannot approve: Employee has only ${balances.casualLeave.available} available Casual Leave day(s), but this request requires ${neededDays} day(s).`
+      );
+    }
+
+    if (type === 'comp_off' && balances.compOff.available < neededDays) {
+      throw ApiError.badRequest(
+        `Cannot approve: Employee has only ${balances.compOff.available} available Comp-Off credit(s), but this request requires ${neededDays} credit(s).`
+      );
+    }
+  }
+
   leave.status = status;
   leave.adminReviewer = req.user._id;
-  leave.adminRemarks = adminRemarks || '';
+  leave.adminRemarks = finalRemarks;
+  leave.rejectionReason = status === 'rejected' ? finalRemarks : '';
   leave.reviewedAt = new Date();
 
   await leave.save();
@@ -248,7 +343,7 @@ export const reviewLeave = asyncHandler(async (req, res) => {
       {
         $set: {
           'data.status': status,
-          'data.adminRemarks': adminRemarks || '',
+          'data.adminRemarks': finalRemarks,
           isRead: true,
         },
       }
@@ -261,7 +356,7 @@ export const reviewLeave = asyncHandler(async (req, res) => {
         sender: req.user._id,
         type: 'leave_reviewed',
         title: `Leave Request ${status === 'approved' ? 'Approved' : 'Rejected'}`,
-        message: `Your leave request from ${leave.startDate.toISOString().split('T')[0]} to ${leave.endDate.toISOString().split('T')[0]} has been ${status}.${adminRemarks ? ` Remarks: ${adminRemarks}` : ''}`,
+        message: `Your leave request from ${leave.startDate.toISOString().split('T')[0]} to ${leave.endDate.toISOString().split('T')[0]} has been ${status}.${finalRemarks ? ` Remarks: ${finalRemarks}` : ''}`,
         data: {
           leaveId: leave._id,
           employeeId: leave.employee.employeeId,
@@ -270,7 +365,7 @@ export const reviewLeave = asyncHandler(async (req, res) => {
           startDate: leave.startDate,
           endDate: leave.endDate,
           status,
-          adminRemarks: adminRemarks || '',
+          adminRemarks: finalRemarks,
         },
       });
     }
@@ -278,26 +373,25 @@ export const reviewLeave = asyncHandler(async (req, res) => {
     console.error('[Notification] Error updating in-app notifications on leave review:', notifErr.message);
   }
 
-  // Send push notification to the employee (await dispatch to ensure delivery before serverless runtime terminates)
+  // Notify Employee via FCM
   if (leave.employee) {
-    const notificationPayload = {
+    const pushPayload = {
       title: `Leave Request ${status === 'approved' ? 'Approved' : 'Rejected'}`,
-      body: `Your leave request from ${leave.startDate.toISOString().split('T')[0]} to ${leave.endDate.toISOString().split('T')[0]} has been ${status}.${adminRemarks ? ` Remarks: ${adminRemarks}` : ''}`,
+      body: `Your leave request has been ${status}.${finalRemarks ? ` Remarks: ${finalRemarks}` : ''}`,
     };
+
     try {
-      await notificationService.sendNotificationToUser(leave.employee._id, notificationPayload, {
+      await notificationService.sendNotificationToUser(leave.employee._id, pushPayload, {
         leaveId: leave._id.toString(),
-        status,
         type: 'leave_reviewed',
+        status,
       });
     } catch (pushErr) {
-      console.error('[FCM] Error notifying employee on leave decision:', pushErr.message);
+      console.error('[FCM] Error dispatching leave review push notification to employee:', pushErr.message);
     }
   }
 
-  return ApiResponse.success(res, 200, `Leave request has been ${status} successfully`, {
-    leave,
-  });
+  return ApiResponse.success(res, 200, `Leave request ${status} successfully`, { leave });
 });
 
 /**
@@ -332,11 +426,80 @@ export const cancelLeave = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Get leave rules configuration
+ * @route   GET /api/leaves/config
+ * @access  Private/Admin
+ */
+export const getLeaveConfig = asyncHandler(async (req, res) => {
+  const config = await getActiveLeaveConfig();
+  return ApiResponse.success(res, 200, 'Leave configuration retrieved', { config });
+});
+
+/**
+ * @desc    Update annual CL allowance and leave rules configuration
+ * @route   PATCH /api/leaves/config
+ * @access  Private/Admin
+ */
+export const updateLeaveConfig = asyncHandler(async (req, res) => {
+  const { defaultCasualLeaveAllowance, leaveYear, weeklyHoliday, workingDays } = req.body;
+  const config = await getActiveLeaveConfig();
+
+  if (defaultCasualLeaveAllowance !== undefined) {
+    config.defaultCasualLeaveAllowance = Math.max(1, Number(defaultCasualLeaveAllowance));
+  }
+  if (leaveYear !== undefined) {
+    config.leaveYear = Number(leaveYear);
+  }
+  if (weeklyHoliday) {
+    config.weeklyHoliday = weeklyHoliday;
+  }
+  if (Array.isArray(workingDays) && workingDays.length > 0) {
+    config.workingDays = workingDays;
+  }
+
+  await config.save();
+  return ApiResponse.success(res, 200, 'Leave configuration updated successfully', { config });
+});
+
+/**
+ * @desc    Update specific employee's casual leave allowance
+ * @route   PATCH /api/leaves/employee-allowance/:id
+ * @access  Private/Admin
+ */
+export const updateEmployeeAllowance = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { casualLeaveAllowance } = req.body;
+
+  const employee = await User.findById(id);
+  if (!employee) {
+    throw ApiError.notFound('Employee not found');
+  }
+
+  if (casualLeaveAllowance !== undefined) {
+    employee.casualLeaveAllowance = Math.max(0, Number(casualLeaveAllowance));
+    await employee.save();
+  }
+
+  return ApiResponse.success(res, 200, 'Employee CL allowance updated successfully', {
+    employee: {
+      _id: employee._id,
+      employeeName: employee.employeeName,
+      employeeId: employee.employeeId,
+      casualLeaveAllowance: employee.casualLeaveAllowance,
+    },
+  });
+});
+
 export default {
   createLeave,
   getMyLeaves,
+  getLeaveBalances,
   getLeaveById,
   getAllLeaves,
   reviewLeave,
   cancelLeave,
+  getLeaveConfig,
+  updateLeaveConfig,
+  updateEmployeeAllowance,
 };

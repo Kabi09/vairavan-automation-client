@@ -38,6 +38,8 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
 import { APP_CONFIG } from '../../constants/config';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
+import { saveWorkDraft, getWorkDraft, clearWorkDraft } from '../../utils/draftStorage';
 
 const PRESET_FEATURES = ['PLC', 'HMI', 'VFD', 'Sensor', 'Servo', 'HDM', 'Wiring', 'Pneumatics'];
 
@@ -213,6 +215,156 @@ export const DutyFormScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
+
+  const { user, isAdmin } = useAuth();
+
+  // Permission guard: Employees cannot edit submitted work reports (Admin only)
+  useEffect(() => {
+    if (isEditing && !isAdmin) {
+      Alert.alert(
+        'Permission Denied',
+        'Employees do not have permission to edit submitted work records. Only administrators can edit work details.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    }
+  }, [isEditing, isAdmin, navigation]);
+
+  // Draft persistence state
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftLoadedOnce, setDraftLoadedOnce] = useState(false);
+
+  // 0. Load draft on mount for new duty (if not editing an existing report)
+  useEffect(() => {
+    if (isEditing) return;
+
+    let isMounted = true;
+    const loadDraft = async () => {
+      try {
+        const draft = await getWorkDraft();
+        if (draft && isMounted) {
+          if (draft.dutyDate) setDutyDate(draft.dutyDate);
+          if (draft.companyCategory) setCompanyCategory(draft.companyCategory);
+          if (draft.selectedCompanyId) setSelectedCompanyId(draft.selectedCompanyId);
+          if (draft.selectedClientId) setSelectedClientId(draft.selectedClientId);
+          if (draft.customerName) setCustomerName(draft.customerName);
+          if (draft.customerPhone) setCustomerPhone(draft.customerPhone);
+          if (draft.machineName) setMachineName(draft.machineName);
+          if (draft.workType) setWorkType(draft.workType);
+          if (draft.customWorkDetails) setCustomWorkDetails(draft.customWorkDetails);
+          if (draft.workDescription) setWorkDescription(draft.workDescription);
+          if (Array.isArray(draft.features) && draft.features.length > 0) setFeatures(draft.features);
+          if (Array.isArray(draft.manpowerMembers) && draft.manpowerMembers.length > 0) setManpowerMembers(draft.manpowerMembers);
+          if (draft.signatureData) setSignatureData(draft.signatureData);
+          if (Array.isArray(draft.photos) && draft.photos.length > 0) setPhotos(draft.photos);
+          setDraftRestored(true);
+        }
+      } catch (err) {
+        console.warn('[DutyForm] Draft load error:', err);
+      } finally {
+        if (isMounted) setDraftLoadedOnce(true);
+      }
+    };
+
+    loadDraft();
+    return () => {
+      isMounted = false;
+    };
+  }, [isEditing]);
+
+  // Auto-save draft on changes (debounced 800ms)
+  useEffect(() => {
+    if (isEditing || !draftLoadedOnce) return;
+
+    const hasContent = Boolean(
+      selectedCompanyId || customerName || customerPhone || machineName ||
+      workDescription || customWorkDetails || features.length > 0 ||
+      manpowerMembers.length > 0 || signatureData || photos.length > 0
+    );
+
+    if (!hasContent) return;
+
+    const timer = setTimeout(() => {
+      saveWorkDraft({
+        dutyDate,
+        companyCategory,
+        selectedCompanyId,
+        selectedClientId,
+        customerName,
+        customerPhone,
+        machineName,
+        workType,
+        customWorkDetails,
+        workDescription,
+        features,
+        manpowerMembers,
+        signatureData,
+        photos,
+      });
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [
+    isEditing,
+    draftLoadedOnce,
+    dutyDate,
+    companyCategory,
+    selectedCompanyId,
+    selectedClientId,
+    customerName,
+    customerPhone,
+    machineName,
+    workType,
+    customWorkDetails,
+    workDescription,
+    features,
+    manpowerMembers,
+    signatureData,
+    photos,
+  ]);
+
+  const handleDiscardDraft = () => {
+    Alert.alert(
+      'Discard Draft',
+      'Are you sure you want to discard your saved draft and start fresh?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: async () => {
+            await clearWorkDraft();
+            setCustomerName('');
+            setCustomerPhone('');
+            setMachineName('');
+            setWorkDescription('');
+            setCustomWorkDetails('');
+            setFeatures([]);
+            setManpowerMembers([]);
+            setSignatureData(null);
+            setPhotos([]);
+            setDraftRestored(false);
+          },
+        },
+      ]
+    );
+  };
+
+  // Required Fields Completion Verification
+  const isCheckInComplete = Boolean(
+    dutyDate &&
+    selectedCompanyId &&
+    (companyCategory === 'office'
+      ? true
+      : (selectedClientId || (customerName.trim() && customerPhone.trim().length === 10))) &&
+    checkInLocationCoords?.latitude
+  );
+
+  const isWorkDetailsComplete = Boolean(
+    machineName.trim() &&
+    workDescription.trim() &&
+    (workType === 'Other' ? customWorkDetails.trim() : workType) &&
+    signatureData
+  );
 
   // Helper to determine if company is office
   const isOfficeCompany = (c) => {
@@ -960,6 +1112,9 @@ export const DutyFormScreen = ({ navigation, route }) => {
         setCustomWorkDetails('');
         setFieldErrors({});
 
+        await clearWorkDraft();
+        setDraftRestored(false);
+
         Alert.alert(
           'Checkout Complete',
           'Checked out and work details submitted successfully!',
@@ -1006,6 +1161,18 @@ export const DutyFormScreen = ({ navigation, route }) => {
           keyboardShouldPersistTaps="handled"
         >
           <ErrorMessage message={error} />
+
+          {draftRestored && (
+            <View style={styles.draftBanner}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <Ionicons name="document-text" size={16} color="#047857" />
+                <Text style={styles.draftBannerText}>Draft restored from your last session</Text>
+              </View>
+              <TouchableOpacity onPress={handleDiscardDraft} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.discardDraftText}>Discard</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Dynamic Switch: Checking Session Loader -> Stage 1 Check-In -> Stage 2 Work Details */}
           {checkingSession ? (
@@ -1273,9 +1440,19 @@ export const DutyFormScreen = ({ navigation, route }) => {
                 title="Check In"
                 onPress={handleCheckIn}
                 loading={loading}
+                disabled={!isCheckInComplete || loading}
                 icon="log-in-outline"
-                style={{ marginTop: SPACING.lg }}
+                style={[{ marginTop: SPACING.lg }, !isCheckInComplete && styles.submitBtnDisabled]}
               />
+
+              {!isCheckInComplete && (
+                <View style={styles.requiredFieldsHintBox}>
+                  <Ionicons name="information-circle-outline" size={14} color="#D97706" />
+                  <Text style={styles.requiredFieldsHintText}>
+                    Please complete all required fields (Date, {companyCategory === 'office' ? 'Office' : 'Client & Phone'}, and GPS Location) to enable Check-In.
+                  </Text>
+                </View>
+              )}
             </Card>
           ) : (
             /* STAGE 2: CHECKED-IN SESSION & WORK DETAILS FORM */
@@ -1770,8 +1947,19 @@ export const DutyFormScreen = ({ navigation, route }) => {
                     title={isEditing ? 'Update Work Report' : 'Submit Work Details & Checkout'}
                     onPress={handleCheckoutOrSubmit}
                     loading={loading}
+                    disabled={!isWorkDetailsComplete || loading}
                     icon="checkmark-done"
+                    style={!isWorkDetailsComplete && styles.submitBtnDisabled}
                   />
+
+                  {!isWorkDetailsComplete && (
+                    <View style={styles.requiredFieldsHintBox}>
+                      <Ionicons name="information-circle-outline" size={14} color="#D97706" />
+                      <Text style={styles.requiredFieldsHintText}>
+                        Please complete all required fields (Machine Name, Work Description & Signature) to enable submission.
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </Card>
             </>
@@ -2915,6 +3103,51 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     marginTop: 2,
     marginBottom: 6,
+  },
+  submitBtnDisabled: {
+    opacity: 0.5,
+  },
+  requiredFieldsHintBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.sm,
+    marginTop: SPACING.xs,
+  },
+  requiredFieldsHintText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '500',
+    lineHeight: 15,
+  },
+  draftBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  draftBannerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#065F46',
+  },
+  discardDraftText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+    textDecorationLine: 'underline',
   },
 });
 

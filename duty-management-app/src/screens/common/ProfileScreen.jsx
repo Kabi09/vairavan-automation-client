@@ -40,12 +40,13 @@ export const ProfileScreen = ({ navigation }) => {
   // Avatar upload state
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  // Edit profile info state (Name, Phone, Email, and Date of Birth)
+  // Edit profile info state (Name, Phone, Email, Date of Birth, and Location)
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editDob, setEditDob] = useState('');
+  const [editLocation, setEditLocation] = useState('');
   const [dobPickerVisible, setDobPickerVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [editError, setEditError] = useState('');
@@ -105,6 +106,7 @@ export const ProfileScreen = ({ navigation }) => {
     setEditPhone(user?.phoneNumber || '');
     setEditEmail(user?.email || '');
     setEditDob(user?.dateOfBirth ? formatISODateOnly(user.dateOfBirth) : '');
+    setEditLocation(user?.location || user?.address || '');
     setEditError('');
     setEditModalVisible(true);
   };
@@ -113,6 +115,7 @@ export const ProfileScreen = ({ navigation }) => {
     const cleanName = editName.trim();
     const cleanEmail = editEmail.trim().toLowerCase();
     const cleanPhone = editPhone.trim().replace(/\D/g, '').slice(-10);
+    const cleanLoc = editLocation.trim();
 
     if (!cleanName) {
       setEditError('Full name is required');
@@ -139,6 +142,8 @@ export const ProfileScreen = ({ navigation }) => {
         email: cleanEmail,
         phoneNumber: cleanPhone,
         dateOfBirth: editDob || null,
+        location: cleanLoc,
+        address: cleanLoc,
       });
 
       if (res?.data?.user) {
@@ -150,6 +155,8 @@ export const ProfileScreen = ({ navigation }) => {
           email: cleanEmail,
           phoneNumber: cleanPhone,
           dateOfBirth: editDob || null,
+          location: cleanLoc,
+          address: cleanLoc,
         });
       }
 
@@ -256,15 +263,13 @@ export const ProfileScreen = ({ navigation }) => {
             </View>
           </View>
 
-          {user?.address ? (
-            <View style={styles.infoRow}>
-              <Ionicons name="location-outline" size={20} color={COLORS.primary} style={styles.infoIcon} />
-              <View>
-                <Text style={styles.infoLabel}>Branch / Address</Text>
-                <Text style={styles.infoValue}>{user.address}</Text>
-              </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={20} color={COLORS.primary} style={styles.infoIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.infoLabel}>Location / Address</Text>
+              <Text style={styles.infoValue}>{user?.location || user?.address || 'Not provided'}</Text>
             </View>
-          ) : null}
+          </View>
 
           {user?.joiningDate ? (
             <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
@@ -358,6 +363,14 @@ export const ProfileScreen = ({ navigation }) => {
               keyboardType="phone-pad"
               maxLength={10}
               icon="call-outline"
+            />
+
+            <TextInputField
+              label="Location / City"
+              placeholder="e.g. Coimbatore, Tamil Nadu"
+              value={editLocation}
+              onChangeText={setEditLocation}
+              icon="location-outline"
             />
 
             <View style={styles.dobContainer}>

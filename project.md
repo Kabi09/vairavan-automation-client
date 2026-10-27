@@ -9,24 +9,36 @@
 ## Project Structure
 - Important folders:
   - `backend/`: Root directory of the REST API backend.
+    - `backend/src/models/`: Mongoose models (`User.js`, `Company.js`, `Client.js`, `Duty.js`, `Leave.js`, `Holiday.js`, `Expense.js`, `ExpenseCategory.js`, `Notification.js`, `CompOffCredit.js`, `LeaveConfig.js`).
+    - `backend/src/services/`: Shared business logic (`leaveService.js`, `notificationService.js`, `r2Service.js`).
+    - `backend/src/controllers/`: Route controllers (`authController.js`, `companyController.js`, `clientController.js`, `dutyController.js`, `leaveController.js`, `holidayController.js`, `expenseController.js`, `notificationController.js`, `calendarController.js`).
+    - `backend/src/routes/`: Express routers (`authRoutes.js`, `companyRoutes.js`, `clientRoutes.js`, `dutyRoutes.js`, `leaveRoutes.js`, `holidayRoutes.js`, `expenseRoutes.js`, `notificationRoutes.js`, `calendarRoutes.js`).
   - `duty-management-app/`: Root directory of the React Native Expo mobile application.
-    - `duty-management-app/src/api/`: Central Axios client and modular API endpoints (`apiClient.js`, `authApi.js`, `companyApi.js`, `employeeApi.js`, `dutyApi.js`, `leaveApi.js`, `holidayApi.js`, `dashboardApi.js`, `uploadApi.js`, `notificationApi.js`).
-    - `duty-management-app/src/components/`: Reusable UI primitives (`PrimaryButton.jsx`, `SecondaryButton.jsx`, `TextInputField.jsx`, `Card.jsx`, `StatusBadge.jsx`, `LoadingIndicator.jsx`, `ErrorMessage.jsx`, `EmptyState.jsx`, `ScreenHeader.jsx`, `ConfirmationDialog.jsx`, `SignaturePadModal.jsx`).
+    - `duty-management-app/src/api/`: Central Axios client and modular API endpoints (`apiClient.js`, `authApi.js`, `companyApi.js`, `employeeApi.js`, `dutyApi.js`, `leaveApi.js`, `holidayApi.js`, `dashboardApi.js`, `uploadApi.js`, `notificationApi.js`, `calendarApi.js`).
+    - `duty-management-app/src/components/`: Reusable UI primitives (`PrimaryButton.jsx`, `SecondaryButton.jsx`, `TextInputField.jsx`, `Card.jsx`, `StatusBadge.jsx`, `LoadingIndicator.jsx`, `ErrorMessage.jsx`, `EmptyState.jsx`, `ScreenHeader.jsx`, `ConfirmationDialog.jsx`, `SignaturePadModal.jsx`, `MonthlyCalendarView.jsx`, `ExpenseClaimDetailModal.jsx`).
     - `duty-management-app/src/constants/`: Configuration and design tokens (`config.js`, `theme.js`).
-    - `duty-management-app/src/context/`: Authentication state provider (`AuthContext.jsx`).
+    - `duty-management-app/src/context/`: Authentication state provider (`AuthContext.jsx`, `NotificationContext.jsx`).
     - `duty-management-app/src/navigation/`: Role-based navigation (`RootNavigator.jsx`, `AdminNavigator.jsx`, `EmployeeNavigator.jsx`).
     - `duty-management-app/src/screens/`:
       - `auth/`: `LoginScreen.jsx`
-      - `admin/`: `AdminDashboardScreen.jsx`, `CompanyListScreen.jsx`, `CompanyFormScreen.jsx`, `EmployeeListScreen.jsx`, `EmployeeFormScreen.jsx`, `AllDutiesScreen.jsx`, `LeaveRequestsScreen.jsx`, `HolidayManagementScreen.jsx`.
-      - `employee/`: `EmployeeDashboardScreen.jsx`, `DutyFormScreen.jsx`, `MyDutiesScreen.jsx`, `DutyDetailsScreen.jsx`, `LeaveRequestScreen.jsx`, `MyLeavesScreen.jsx`, `HolidayListScreen.jsx`.
+      - `admin/`: `AdminDashboardScreen.jsx`, `CompanyListScreen.jsx`, `CompanyFormScreen.jsx`, `EmployeeListScreen.jsx`, `EmployeeFormScreen.jsx`, `AllDutiesScreen.jsx`, `LeaveRequestsScreen.jsx`, `HolidayManagementScreen.jsx`, `AdminExpensesScreen.jsx`.
+      - `employee/`: `EmployeeDashboardScreen.jsx`, `DutyFormScreen.jsx`, `MyDutiesScreen.jsx`, `DutyDetailsScreen.jsx`, `LeaveRequestScreen.jsx`, `MyLeavesScreen.jsx`, `HolidayListScreen.jsx`, `MyExpensesScreen.jsx`, `ExpenseFormScreen.jsx`, `EmployeeCalendarScreen.jsx`.
       - `common/`: `ProfileScreen.jsx`, `ChangePasswordScreen.jsx`.
-    - `duty-management-app/src/utils/`: `validators.js`, `dateUtils.js`, `errorUtils.js`, `notificationService.js`.
+    - `duty-management-app/src/utils/`: `validators.js`, `dateUtils.js`, `errorUtils.js`, `notificationService.js`, `draftStorage.js`, `exportUtils.js`.
 
 ## UI & Styling Rules
 - React Native StyleSheet: Strictly standard React Native `StyleSheet.create()`. No Tailwind CSS or Bootstrap.
 - Design Tokens (`src/constants/theme.js`):
   - Primary: Deep Indigo `#1E40AF`, Secondary: Slate `#0F172A`, Accent: Amber `#D97706`.
   - Semantic: Success `#059669`, Danger `#DC2626`, Warning `#D97706`, Info `#2563EB`.
+  - Calendar Palette:
+    - Green: Present / Worked (`#059669`)
+    - Red: Approved Leave (Casual Leave) (`#DC2626`)
+    - Yellow: Sunday / Weekly Holiday (`#EAB308`)
+    - Blue: Comp-Off Leave (`#2563EB`)
+    - Orange: Sunday Work / Comp-Off Earned (`#EA580C`)
+    - Grey: Future Date or No Attendance Record (`#94A3B8`)
+    - Purple: Pending Leave Request (`#9333EA`)
   - Neutral Backgrounds: Off-white canvas `#F8FAFC`, Pure Card `#FFFFFF`, Border `#E2E8F0`.
   - Typography: Clean platform sans-serif hierarchy (h1: 24/700, h2: 20/700, h3: 16/600, body: 14/400, caption: 12/400).
   - Radii: Standard sm (4), md (8), lg (12), xl (16), full (9999).
@@ -41,22 +53,50 @@
   - Automatic 401 interceptor purges credentials and triggers seamless redirect to Login screen.
 - Role-Based Navigation:
   - `RootNavigator` observes `isAuthenticated` and user role (`admin` vs `employee`).
-  - Admin gets `AdminNavigator` (Bottom tabs: Dashboard, Duties, Companies, Staff, Leaves + Stack: Forms, Holidays, Profile).
-  - Employee gets `EmployeeNavigator` (Bottom tabs: Dashboard, My Duties, New Duty, Leaves, Profile + Stack: Details, Request Leave, Holidays).
+  - Admin gets `AdminNavigator` (Bottom tabs: Dashboard, Duties, Companies, Staff, Leaves + Stack: Forms, Holidays, Profile, Expenses, Calendar).
+  - Employee gets `EmployeeNavigator` (Bottom tabs: Dashboard, My Duties, New Duty, Leaves, Profile + Stack: Details, Request Leave, Holidays, Expenses, Calendar).
+- Leave Rules & Balances:
+  - Working days: Monday to Saturday. Weekly holiday: Every Sunday.
+  - Annual Casual Leave (CL): Configurable (default 12 days/year per employee). Stored in `LeaveConfig` and individually customizable per employee in `User.casualLeaveAllowance`.
+  - Two leave types tracked separately:
+    - Casual Leave (`casual_leave`)
+    - Comp-Off (`comp_off`)
+  - Sunday Comp-Off Earned: Automatically awarded when an employee has a valid check-in and checkout on Sunday in IST (`isSundayInIST`).
+  - **No working-hour or OT-hour calculations**: Comp-Off is awarded strictly on valid Sunday attendance, maximum 1 credit per employee per Sunday.
+  - Strict Idempotency: `CompOffCredit` model uses a compound unique index `{ employee: 1, sundayDateString: 1 }`, guaranteeing that repeated checkouts, updates, or duty edits never award duplicate credits.
+  - Working Day Leave Calculation: Date ranges requested for leave are counted excluding Sundays (day 0) and recognized active company holidays (`Holiday`).
+  - Strict Balance Deduction: Leave requests deduct from balances **only after admin approval**. Pending and rejected requests never deduct balances.
+- Monthly Calendar & Attendance Insights:
+  - Navigation between months and years with current month quick-jump.
+  - 7 Monthly KPI summary metrics calculated without double-counting:
+    1. Total Scheduled Working Days
+    2. Days Worked
+    3. Total Holidays (Sundays + official holidays)
+    4. Casual Leave Taken
+    5. Comp-Off Leave Taken
+    6. Sunday Work Days
+    7. Comp-Off Credits Earned
+  - Color Coding & Visual Legend:
+    - Green (`#059669`): Present / Worked
+    - Red (`#DC2626`): Approved Casual Leave
+    - Yellow (`#EAB308`): Sunday / Weekly Holiday
+    - Blue (`#2563EB`): Comp-Off Leave
+    - Orange (`#EA580C`): Sunday Work / Comp-Off Earned (takes precedence over Yellow holiday)
+    - Grey (`#94A3B8`): Future Date or No Attendance Record
+    - Purple (`#9333EA`): Pending Leave Request
+  - Interactive Date Inspection: Tapping any date opens a modal displaying date, day of week, scheduled status (Working Day / Holiday), attendance status, check-in and checkout times, work duration, leave type & status, and Comp-Off earned badge.
 - Duty Report Submission (Field Service):
   - Dynamic company picker loaded from `GET /companies`.
   - GPS Service Location: Fetched via `expo-location` with permission prompt and lat/lng recording.
-  - Customer Signature: Interactive SVG drawing canvas modal using `PanResponder` and `react-native-svg`. Captured path data is converted to an image and uploaded to `POST /uploads/signature`.
+  - Customer Signature: Interactive SVG drawing canvas modal using `PanResponder` and `react-native-svg` with auto-rotating landscape orientation. Captured path data is uploaded to `POST /uploads/signature`.
   - Proof Photos: Captured or picked via `expo-image-picker`, uploaded to `POST /uploads/proof-photos`.
   - Validation ensures valid customer phone, shift times (`inTime < outTime`), and required fields before submission.
 - Admin Review & Verification:
   - Admin filters reports by status (`submitted`, `approved`, `correction_requested`, `rejected`).
   - Interactive modal displays full machine details, service coordinates, signature, and site photos.
   - Admin records status decision and review remarks with instant list refresh.
-- Leave & Holiday Management:
-  - Employees apply for leave with start/end date validation and reason; can cancel pending requests.
-  - Admins review all employee leaves and approve/reject with remarks.
-  - Admins create and manage company holidays; employees view holiday calendars.
+  - Admin approves or rejects employee leave requests with optional rejection reason; approvals safely deduct balance once.
+  - Admin inspects individual staff member monthly calendars with the same 7 summary cards and interactive day modal.
 
 ## Components
 ### UI Components (`duty-management-app/src/components/`)
@@ -80,8 +120,164 @@
 - `MessageDetailsModal`: Full message view modal displaying sender, timestamp, broadcast/direct tag, and complete notice content.
 - `BrandingFooter`: Reusable minimal branding attribution footer ("Developed by Ameyy Digital Services") with a clickable link to `https://www.ameyy.in/` supporting web and mobile opening in a new tab/browser.
 - `ExpenseClaimDetailModal`: Dedicated full-details modal for expense claims linked to work visits and duties. Displays claim KPI summary, approval status badge, work metadata, itemized calculations (km distances, units, rates), notes, and responsive proof photo thumbnails with tap-to-zoom in `ImageViewerModal`.
+- `MonthlyCalendarView`: Reusable monthly calendar view component used across both Employee and Admin panels (`duty-management-app/src/components/MonthlyCalendarView.jsx`). Features month and year navigation with previous/next buttons and "Current Month" quick reset, 7 monthly KPI summary cards (Total Scheduled Working Days, Days Worked, Holidays, Casual Leave Taken, Comp-Off Taken, Sunday Work Days, Comp-Off Credits Earned), an interactive calendar grid with 7 distinct status colors, a visible color legend, and an interactive tap-to-inspect date modal displaying full attendance, duty, check-in/out times, duration, and leave details.
+- `EmployeeCalendarScreen`: Dedicated monthly calendar screen for employees (`duty-management-app/src/screens/employee/EmployeeCalendarScreen.jsx`) accessible from the dashboard and bottom tab navigation.
+- `LeaveRequestScreen`: Dual-type leave application screen (`duty-management-app/src/screens/employee/LeaveRequestScreen.jsx`) supporting Casual Leave (`casual_leave`) and Comp-Off (`comp_off`). Displays real-time balance cards, start/end date pickers, calculated working days count (excluding Sundays and company holidays), reason input, and client-side balance validation.
+- `MyLeavesScreen`: Employee leave overview screen (`duty-management-app/src/screens/employee/MyLeavesScreen.jsx`) with live balance summary cards (Annual CL Allowance, Used, Available; Comp-Off Earned, Used, Available), dual-mode toggle ("My Leaves" request list vs "Monthly Calendar"), and tap-to-inspect request details.
+- `LeaveRequestsScreen`: Admin leave management console (`duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`) with a 3-tab segment ("Applications", "Calendar", "Balances & Rules"). Allows admins to review pending leaves with approve and reject actions (optional rejection reason modal), view individual employee monthly calendars with staff picker, configure global annual CL allowance and leave year, and edit individual employee CL allowances.
+
+## API / Backend Integration
+- `GET /api/leaves/balances`:
+  - Access: Authenticated employees (own balances) and admins (own balances or via `?employeeId=<id>`).
+  - Response: `{ success: true, data: { employeeId, leaveYear, casualLeave: { allowance, used, pending, available }, compOff: { earned, used, pending, available } } }`.
+- `GET /api/leaves/config`:
+  - Access: Authenticated users.
+  - Response: `{ success: true, data: { leaveYear, defaultAnnualCasualLeaveAllowance, compOffCreditPerSunday, workingDays: ['Monday', ...], weeklyHoliday: 'Sunday' } }`.
+- `PUT /api/leaves/config`:
+  - Access: Admin only.
+  - Payload: `{ defaultAnnualCasualLeaveAllowance, leaveYear, compOffCreditPerSunday }`.
+  - Response: Updated configuration.
+- `PUT /api/leaves/employee-allowance/:id`:
+  - Access: Admin only.
+  - Payload: `{ casualLeaveAllowance }`.
+  - Response: Updated employee user record with customized allowance.
+- `GET /api/calendar/monthly`:
+  - Access: Authenticated employees (own calendar) and admins (own calendar or `?employeeId=<id>`).
+  - Query params: `year` (e.g. 2026), `month` (1-12), `employeeId` (optional for admin).
+  - Response: `{ success: true, data: { year, month, employeeId, summary: { totalScheduledWorkingDays, daysWorked, totalHolidays, casualLeaveTaken, compOffLeaveTaken, sundayWorkDays, compOffCreditsEarned }, days: [ { dateString, dayOfMonth, dayOfWeek, dayName, isSunday, isWorkingDay, isFuture, status, color, attendance: { hasAttendance, checkInTime, checkOutTime, durationHours, ... }, leave: { hasLeave, leaveType, status, reason }, compOff: { earnedCredit } } ] } }`.
+- `POST /api/leaves`:
+  - Access: Authenticated employee.
+  - Payload: `{ leaveType: 'casual_leave' | 'comp_off', startDate, endDate, reason }`.
+  - Behavior: Computes working days (excluding Sundays & company holidays) and validates available balance before creating pending request. Does NOT deduct balance.
+- `PUT /api/leaves/:id/review`:
+  - Access: Admin only.
+  - Payload: `{ status: 'approved' | 'rejected', remarks, rejectionReason }`.
+  - Behavior: Verifies available balance at approval time; deducts balance upon approval; does NOT deduct on rejection.
 
 ## Change History
+
+### 2026-10-27
+#### Leave Management (Casual Leave & Comp-Off), Automated Sunday Attendance Credit & Monthly Calendar with Colour Coding
+- What was changed:
+  - **Leave Rules & Balance Tracking Architecture (`CompOffCredit.js`, `LeaveConfig.js`, `Leave.js`, `User.js`, `leaveService.js`)**:
+    - Enforced working days: Monday to Saturday; weekly holiday: Every Sunday.
+    - Default Annual Casual Leave (CL) allowance set to 12 days per employee per year, configurable by admin globally in `LeaveConfig` and individually per employee in `User.casualLeaveAllowance`.
+    - Added support for two distinct leave types: Casual Leave (`casual_leave`) and Comp-Off (`comp_off`), tracked strictly independently.
+    - Added Mongoose models `CompOffCredit.js` (with compound unique index `{ employee: 1, sundayDateString: 1 }` preventing duplicate credits) and `LeaveConfig.js` (storing global leave rules).
+    - Updated `Leave.js` with `leaveType` enum, `daysCount`, `leaveYear`, `rejectionReason`, and optimized compound index.
+    - Created `backend/src/services/leaveService.js` handling IST date conversion (`toISTDateString`, `isSundayInIST`), working-day computation excluding Sundays & company holidays (`calculateLeaveWorkingDays`), automatic Sunday comp-off credit awarding (`awardSundayCompOffCredit`), and employee balance calculation (`getEmployeeLeaveBalances`).
+    - Enforced balance deduction rule: leave balances are deducted **only after admin approval**. Pending and rejected leave requests never deduct balances.
+  - **Automated Sunday Attendance Comp-Off Award (`dutyController.js`, `leaveService.js`)**:
+    - When an employee has a valid check-in and checkout on Sunday in IST, automatically awards 1 Comp-Off credit.
+    - **No working-hour or OT-hour calculations**: Comp-Off is awarded strictly on attendance records (valid checkInTime and checkOutTime), not hours worked.
+    - Guaranteed idempotency: repeated check-ins, check-outs, or duty updates on the same Sunday never create duplicate Comp-Off credits.
+  - **Monthly Calendar API & Multi-Colour Coding (`calendarController.js`, `calendarRoutes.js`)**:
+    - Created `GET /api/calendar/monthly` supporting `year`, `month`, and optional `employeeId` for admin.
+    - Calculates 7 monthly summary metrics without double-counting: Total Scheduled Working Days, Days Worked, Total Holidays, Casual Leave Taken, Comp-Off Leave Taken, Sunday Work Days, Comp-Off Credits Earned.
+    - Implemented calendar day status and colour coding with priority hierarchy:
+      - Green (`#059669`): Present / Worked
+      - Red (`#DC2626`): Approved Casual Leave
+      - Yellow (`#EAB308`): Sunday / Weekly Holiday
+      - Blue (`#2563EB`): Comp-Off Leave
+      - Orange (`#EA580C`): Sunday Work / Comp-Off Earned (takes precedence over Sunday holiday)
+      - Grey (`#94A3B8`): Future Date or No Attendance Record
+      - Purple (`#9333EA`): Pending Leave Request
+    - Returns rich day metadata: scheduled status, attendance check-in/out, duty duration, leave type & status, and comp-off earned credit.
+  - **Mobile Calendar View Component (`MonthlyCalendarView.jsx`)**:
+    - Created reusable mobile component used in both Employee and Admin panels.
+    - Features Month/Year navigation bar with previous/next arrows and "Current Month" quick reset.
+    - 7 KPI summary cards displayed in a responsive grid.
+    - Color-coded calendar days with a visible legend and day-state badges.
+    - Interactive tap-to-inspect date modal showing date, day of week, scheduled status, attendance details, and leave information.
+  - **Employee Panel Upgrades (`LeaveRequestScreen.jsx`, `MyLeavesScreen.jsx`, `EmployeeCalendarScreen.jsx`, `EmployeeDashboardScreen.jsx`)**:
+    - `LeaveRequestScreen`: Leave type switcher (Casual Leave vs Comp-Off), live balance preview card, start & end date pickers, calculated working days count, reason input, and client-side balance validation.
+    - `MyLeavesScreen`: Top balance overview cards for CL and Comp-Off, dual-mode toggle ("My Leaves" vs "Monthly Calendar"), and leave request cards with type badges and working day counts.
+    - `EmployeeCalendarScreen`: Full calendar view accessible from navigation and dashboard.
+    - `EmployeeDashboardScreen`: Added calendar prompt on the leave status card.
+  - **Admin Panel Upgrades (`LeaveRequestsScreen.jsx`)**:
+    - Added 3-segment switcher: "Applications", "Calendar", and "Balances & Rules".
+    - Applications tab: Approve and Reject actions with a dedicated modal for optional rejection reasons. Balance is verified and deducted upon approval.
+    - Calendar tab: Employee switcher dropdown and interactive monthly calendar for the selected staff member.
+    - Balances & Rules tab: Global annual CL allowance configuration, leave year setting, and employee balance list with individual CL allowance editing.
+- Files changed:
+  - `backend/src/models/CompOffCredit.js` (Created)
+  - `backend/src/models/LeaveConfig.js` (Created)
+  - `backend/src/models/Leave.js`
+  - `backend/src/models/User.js`
+  - `backend/src/services/leaveService.js` (Created)
+  - `backend/src/controllers/dutyController.js`
+  - `backend/src/controllers/leaveController.js`
+  - `backend/src/validators/leaveValidator.js`
+  - `backend/src/routes/leaveRoutes.js`
+  - `backend/src/controllers/calendarController.js` (Created)
+  - `backend/src/routes/calendarRoutes.js` (Created)
+  - `backend/src/routes/index.js`
+  - `duty-management-app/src/api/leaveApi.js`
+  - `duty-management-app/src/api/calendarApi.js` (Created)
+  - `duty-management-app/src/components/MonthlyCalendarView.jsx` (Created)
+  - `duty-management-app/src/screens/employee/LeaveRequestScreen.jsx`
+  - `duty-management-app/src/screens/employee/MyLeavesScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeCalendarScreen.jsx` (Created)
+  - `duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/navigation/EmployeeNavigator.jsx`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `project.md`
+- Logic changed:
+  - Previous behavior: Only basic leave without leaveType existed; leaves were not deducted against distinct allowances; Sunday work did not earn Comp-Off credits; there was no monthly calendar or attendance/leave color coding.
+  - New behavior: Casual Leave (12 days) and Comp-Off are tracked separately; valid Sunday check-in and checkout automatically awards 1 Comp-Off credit idempotently without calculating working hours or OT hours; balances deduct only upon admin approval; monthly calendar calculates 7 KPI metrics and displays full attendance and leave details using 7 designated colors.
+  - Reason for change: User request to implement Leave Management and Monthly Calendar features for Admin and Employee panels.
+  - Impact: Accurate leave balance accounting, automated Sunday comp-off rewards, transparent monthly attendance visibility, and unified admin review and configuration workflows.
+
+### 2026-10-27
+#### Form Validation Completion Gating, Employee Location Field, Auto-Rotating Signature Pad, Work Permissions Fix & App-Restart Draft Persistence
+- What was changed:
+  - **Work Form Required Fields Completion Gating & Disabled Submit (`DutyFormScreen.jsx`)**:
+    - Strictly enforced `isCheckInComplete` (Company selected, Client contact selected for client duty, Check-in GPS captured) before Check-In button is enabled.
+    - Strictly enforced `isWorkDetailsComplete` (In Time, Out Time, Customer Name, Customer Phone, Machine Name, Work Description, Features, Manpower Members, Customer Signature, Proof Photos, Check-Out GPS) before Checkout/Submit button is enabled.
+    - Submissions buttons visually styled with `styles.submitBtnDisabled` (opacity 0.45, disabled background `#94A3B8`) when incomplete.
+    - Informational amber warning banner (`requiredFieldsHintBox`) rendered dynamically above the submit button indicating the exact required fields remaining.
+  - **Employee Personal Details - Add Location Field (`User.js`, `authValidator.js`, `authController.js`, `employeeController.js`, `ProfileScreen.jsx`, `EmployeeFormScreen.jsx`, `EmployeeDetailsScreen.jsx`)**:
+    - Added `location: { type: String, trim: true, default: '' }` to Mongoose `User.js` schema.
+    - Added `location` and `address` to `validateUpdateProfile` in `authValidator.js`.
+    - Handled `location` and `address` in `authController.js` (`updateProfile`), `employeeController.js` (`createEmployee`, `updateEmployee`), and ensured both fields sync seamlessly.
+    - Added "Location / City" info row to the Personal Details card in `ProfileScreen.jsx` and added a dedicated "Location / City" text input in the Edit Profile Modal.
+    - Updated `EmployeeFormScreen.jsx` to include "Location / Address" and pass `location` in payload.
+    - Updated `EmployeeDetailsScreen.jsx` header card to display the employee's location/address.
+  - **Auto-Rotating Smooth Signature Pad with Landscape Orientation (`SignaturePadModal.jsx`)**:
+    - Installed and integrated `expo-screen-orientation`.
+    - Automatically locks screen orientation to Landscape (`OrientationLock.LANDSCAPE`) as soon as the customer signature pad opens, maximizing canvas width and signature comfort.
+    - Automatically locks screen orientation back to Portrait (`OrientationLock.PORTRAIT_UP`) upon saving the signature, cancelling, closing the modal, or on unmount.
+    - Configured responsive dimensions using `useWindowDimensions()` and increased stroke width to 3.5 for ultra-smooth vector signing.
+  - **Permissions Fix for Work Reports (`DutyDetailsScreen.jsx`, `AllDutiesScreen.jsx`, `dutyController.js`)**:
+    - Employee cannot edit work details: Set `canEdit = Boolean(isAdmin)` in `DutyDetailsScreen.jsx`. If an employee tries to open edit mode in `DutyFormScreen.jsx`, an alert prompts "Employees do not have permission to edit submitted work records" and returns back. In backend `dutyController.js`, `updateDuty` is restricted to admin only (`req.user.role === 'admin'`).
+    - Admin cannot delete work reports: Disabled and removed the Delete button from `AllDutiesScreen.jsx` and `DutyDetailsScreen.jsx` (`canDelete = false`). Work duty records are immutable historical field service audits.
+  - **App Close / Reopen Draft Persistence (`draftStorage.js`, `DutyFormScreen.jsx`, `ExpenseFormScreen.jsx`)**:
+    - Installed `@react-native-async-storage/async-storage` and created `duty-management-app/src/utils/draftStorage.js` with helpers: `saveWorkDraft`, `getWorkDraft`, `clearWorkDraft`, `saveExpenseDraft`, `getExpenseDraft`, `clearExpenseDraft`.
+    - In `DutyFormScreen.jsx`, restored saved work draft data on mount when opening a new work report; auto-saves debounced (800ms) as the user types; clears draft on checkout success.
+    - In `ExpenseFormScreen.jsx`, restored saved expense draft data on mount; auto-saves debounced (800ms) with items, category, date, and description; clears draft on claim submit.
+    - Added a user-friendly emerald `draftBanner` with a "Draft restored from your last session" prompt and an optional "Discard" action to start fresh.
+- Files changed:
+  - `duty-management-app/src/utils/draftStorage.js`
+  - `duty-management-app/src/components/SignaturePadModal.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/common/ProfileScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/ExpenseFormScreen.jsx`
+  - `backend/src/models/User.js`
+  - `backend/src/validators/authValidator.js`
+  - `backend/src/controllers/authController.js`
+  - `backend/src/controllers/employeeController.js`
+  - `backend/src/controllers/dutyController.js`
+  - `project.md`
+- Logic changed:
+  - Previous behavior: Submit button could be pressed before all required fields were filled; Employee personal details only had Name, Phone, Email, DOB without Location; Signature pad stayed in portrait mode; Employees could edit submitted work reports and Admins had a delete button; Draft data was lost if the app was closed or restarted.
+  - New behavior: Submit buttons are strictly disabled until 100% of required fields are completed; Location is tracked and editable in employee personal details; Signature pad auto-rotates phone to landscape and reverts to portrait on submit/cancel; Employees cannot edit work reports and admins cannot delete work reports; In-progress work details and expense claims auto-save as drafts and restore automatically when reopening the app.
+  - Reason for change: User request for form completion gating, employee location tracking, auto-rotating signature pad, fixed permissions for work reports, and draft retention across app close/reopen.
+- Impact: Substantially improved data entry validation, user comfort during signature capture, field service audit security, and resilience against accidental app closes.
 
 ### 2026-10-27
 #### Work Visit Details & Admin Work Details Expense ObjectId Bug Fix & Tap-to-View Proof Image Detail Modal
@@ -2515,6 +2711,35 @@
 
 ## Current Progress
 - Completed:
+  - **Leave Management & Separate Balance Tracking**:
+    - Working days configured as Monday to Saturday; Sundays identified as weekly holidays.
+    - Default Annual Casual Leave allowance of 12 days per employee per year with admin override capability globally and individually.
+    - Separate balance accounting for Casual Leave (`casual_leave`) and Comp-Off (`comp_off`).
+    - Dedicated balance endpoint `GET /api/leaves/balances` returning allowance, used, pending, and available days for both leave types.
+    - Automated Sunday attendance Comp-Off award: valid check-in and checkout on Sunday in IST automatically awards 1 Comp-Off credit.
+    - Strictly no calculation of working hours or OT hours for Comp-Off credit; awarded purely on attendance verification.
+    - Strict idempotency via MongoDB compound unique index `{ employee: 1, sundayDateString: 1 }` on `CompOffCredit` preventing duplicate credits.
+    - Working-day calculation logic excluding Sundays and recognized company holidays from leave deduction.
+    - Strict balance deduction rule: leave balances are deducted **only after admin approval**.
+  - **Monthly Calendar & Attendance Summaries**:
+    - Reusable `MonthlyCalendarView.jsx` component for both Employee and Admin panels with month/year navigation and quick reset.
+    - 7 Monthly KPI summary metrics calculated without double-counting: Total Scheduled Working Days, Days Worked, Total Holidays, Casual Leave Taken, Comp-Off Leave Taken, Sunday Work Days, Comp-Off Credits Earned.
+    - 7-color status coding and visible legend: Green (Present/Worked), Red (Approved CL), Yellow (Sunday Holiday), Blue (Comp-Off Leave), Orange (Sunday Work/Comp-Off Earned), Grey (Future/No Record), Purple (Pending Leave).
+    - Interactive tap-to-inspect date modal displaying full attendance, duty, check-in/out times, and leave details.
+  - **Employee Panel**:
+    - `LeaveRequestScreen.jsx` updated with leave type selector (CL vs Comp-Off), live balance preview card, start/end date pickers, calculated working days count, and validation.
+    - `MyLeavesScreen.jsx` upgraded with CL and Comp-Off balance summary cards, dual-mode switcher ("My Leaves" vs "Monthly Calendar"), and leave request cards with badges.
+    - `EmployeeCalendarScreen.jsx` created and mounted into navigation and dashboard.
+  - **Admin Panel**:
+    - `LeaveRequestsScreen.jsx` upgraded with a 3-segment switcher: "Applications", "Calendar", and "Balances & Rules".
+    - Admin approval and rejection workflow with modal for optional rejection reason.
+    - Admin staff monthly calendar inspection with employee dropdown picker.
+    - Admin leave configuration and employee balance list with individual CL allowance editing.
+  - Form validation completion gating: Check-In and Work Details Submit buttons are strictly disabled until 100% of required fields are filled, with dynamic informative missing-field hint boxes.
+  - Added Location field to Employee Personal Details across backend (User model, authValidator, authController, employeeController) and mobile frontend (ProfileScreen, EmployeeDetailsScreen, EmployeeFormScreen).
+  - Landscape auto-rotating signature pad using `expo-screen-orientation` (`OrientationLock.LANDSCAPE`) with automatic return to portrait (`OrientationLock.PORTRAIT_UP`) and enhanced smooth stroke width.
+  - Work Details permissions fixed: Employees cannot edit submitted work reports (`canEdit = Boolean(isAdmin)`), and admins cannot delete work reports (`canDelete = false`), keeping work audit records immutable.
+  - Offline Draft Persistence across app close/reopen: Automatic debounced saving and session restoration for both Work Details (`DutyFormScreen.jsx`) and Expense Claims (`ExpenseFormScreen.jsx`) using `@react-native-async-storage/async-storage` with clear/discard prompts.
   - Employee dashboard bottom "Expenses & Claims" card removed; 3rd quick-action square tile is the single clean entry point.
   - Pure work-centric expense form with automatic company/client binding and date synchronization.
   - Previous expenses card displayed at the top of the expense form when adding expenses for an existing work report.
@@ -2524,7 +2749,7 @@
   - Work Details PDF & Excel exports updated to include complete expense breakdowns, totals, and attached photo proof arrays.
   - Admin Employee Details screen (`EmployeeDetailsScreen.jsx`) upgraded with a 3rd `Expenses` tab, KPI metrics, itemized claim cards, proof photos, and PDF/Excel export buttons.
   - Backend schema and controllers updated with `relatedDuty` two-way referencing and automatic expense population.
-  - All test suites passing with 0 failures.
+  - All test suites passing with 0 failures (49/49 tests pass).
 
 ## Known Issues
 - Issue: None. All requested features and fixes completed and verified.
@@ -2532,6 +2757,22 @@
 - Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
+- Decision: Compound unique index on CompOffCredit for idempotent Sunday credits.
+  Reason: Placing a unique index on `{ employee: 1, sundayDateString: 1 }` guarantees at the database level that multiple duty updates, checkout re-submissions, or concurrent requests never generate duplicate Comp-Off credits for the same Sunday.
+  Date: 2026-10-27
+
+- Decision: Automatic Sunday Comp-Off credit triggered upon valid attendance without hour/OT computation.
+  Reason: Strictly adheres to user rule: Comp-Off is earned when an employee has valid check-in and checkout records on Sunday. Working hours or OT hours must not be calculated.
+  Date: 2026-10-27
+
+- Decision: Deduct leave balance only upon Admin approval.
+  Reason: Pending and rejected leave requests should not lock out or deduct an employee's leave balance. When approved, balance is validated and deducted exactly once.
+  Date: 2026-10-27
+
+- Decision: Working days calculation excluding Sundays and official company holidays.
+  Reason: When calculating leave duration, calendar iterations skip Sundays (weekly holiday) and recognized holidays from the `Holiday` collection, ensuring fair leave deduction only for scheduled working days.
+  Date: 2026-10-27
+
 - Decision: Dedicated ExpenseItemModal for multi-item claims.
   Reason: Adding multiple expense items inline caused excessive vertical page scrolling on mobile viewports. A modal keeps the main claim view compact while giving each item focused input space.
   Date: 2026-10-27

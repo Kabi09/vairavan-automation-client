@@ -1,6 +1,10 @@
 import { body, param } from 'express-validator';
 
 export const validateCreateLeave = [
+  body('leaveType')
+    .optional()
+    .isIn(['casual_leave', 'comp_off'])
+    .withMessage("Leave type must be either 'casual_leave' or 'comp_off'"),
   body('reason')
     .trim()
     .notEmpty()
@@ -41,6 +45,11 @@ export const validateReviewLeave = [
     .trim()
     .isLength({ max: 500 })
     .withMessage('Admin remarks cannot exceed 500 characters'),
+  body('rejectionReason')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Rejection reason cannot exceed 500 characters'),
 ];
 
 export const validateLeaveIdParam = [

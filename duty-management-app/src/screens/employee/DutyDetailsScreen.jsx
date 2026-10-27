@@ -134,10 +134,10 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
     );
   }
 
-  const canEdit =
-    isAdmin ||
-    (user && duty?.employee && (duty.employee._id === user._id || duty.employee === user._id));
-  const canDelete = isAdmin;
+  // Only Admin has permission to edit submitted work reports (Employees cannot edit)
+  const canEdit = Boolean(isAdmin);
+  // Work records are permanent audit records; work reports cannot be deleted
+  const canDelete = false;
   const displayDutyId = duty.dutyId || ('WORK-' + duty._id.substring(duty._id.length - 6).toUpperCase());
 
   const isOffice =

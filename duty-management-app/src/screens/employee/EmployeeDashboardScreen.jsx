@@ -714,6 +714,14 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                   <Text style={styles.pillLabel}>Rejected</Text>
                 </View>
               </View>
+
+              <View style={styles.calendarPromptRow}>
+                <Ionicons name="calendar" size={14} color={COLORS.primary} />
+                <Text style={styles.calendarPromptText}>
+                  View Monthly Attendance Calendar & Comp-Offs
+                </Text>
+                <Ionicons name="arrow-forward" size={12} color={COLORS.primary} />
+              </View>
             </Card>
 
 
@@ -1212,6 +1220,21 @@ const styles = StyleSheet.create({
     width: 1,
     height: 28,
     backgroundColor: COLORS.border,
+  },
+  calendarPromptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginTop: 10,
+    paddingTop: 8,
+  },
+  calendarPromptText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   sectionHeaderRow: {
     flexDirection: 'row',

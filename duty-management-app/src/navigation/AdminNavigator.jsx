@@ -23,6 +23,7 @@ import ProfileScreen from '../screens/common/ProfileScreen';
 import ChangePasswordScreen from '../screens/common/ChangePasswordScreen';
 import LeaveRequestScreen from '../screens/employee/LeaveRequestScreen';
 import MyLeavesScreen from '../screens/employee/MyLeavesScreen';
+import EmployeeCalendarScreen from '../screens/employee/EmployeeCalendarScreen';
 import { COLORS } from '../constants/theme';
 
 const Tab = createBottomTabNavigator();
@@ -129,6 +130,7 @@ export const AdminNavigator = () => {
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       <Stack.Screen name="LeaveRequest" component={LeaveRequestScreen} />
       <Stack.Screen name="MyLeaves" component={MyLeavesScreen} />
+      <Stack.Screen name="EmployeeCalendar" component={EmployeeCalendarScreen} />
     </Stack.Navigator>
   );
 };

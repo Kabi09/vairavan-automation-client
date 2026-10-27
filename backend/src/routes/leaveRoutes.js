@@ -2,10 +2,14 @@ import { Router } from 'express';
 import {
   createLeave,
   getMyLeaves,
+  getLeaveBalances,
   getLeaveById,
   getAllLeaves,
   reviewLeave,
   cancelLeave,
+  getLeaveConfig,
+  updateLeaveConfig,
+  updateEmployeeAllowance,
 } from '../controllers/leaveController.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
@@ -19,6 +23,16 @@ import {
 const router = Router();
 
 router.use(authenticate);
+
+// View leave balances (Employee views own, Admin views own or any employee's)
+router.get('/balances', authorize('employee', 'staff', 'admin'), getLeaveBalances);
+
+// Leave configuration (Admin only)
+router.get('/config', authorize('admin'), getLeaveConfig);
+router.patch('/config', authorize('admin'), updateLeaveConfig);
+
+// Specific employee CL allowance configuration (Admin only)
+router.patch('/employee-allowance/:id', authorize('admin'), updateEmployeeAllowance);
 
 // Submit leave request (Employee, Staff, Admin)
 router.post('/', authorize('employee', 'staff', 'admin'), validateCreateLeave, validate, createLeave);

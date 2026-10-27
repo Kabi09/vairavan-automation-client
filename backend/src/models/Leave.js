@@ -33,12 +33,36 @@ const leaveSchema = new mongoose.Schema(
       default: 'pending',
       index: true,
     },
+    leaveType: {
+      type: String,
+      enum: {
+        values: ['casual_leave', 'comp_off'],
+        message: '{VALUE} is not a valid leave type',
+      },
+      default: 'casual_leave',
+      index: true,
+    },
+    daysCount: {
+      type: Number,
+      default: 1,
+      min: [0.5, 'Days count must be at least 0.5'],
+    },
+    leaveYear: {
+      type: Number,
+      default: () => new Date().getFullYear(),
+      index: true,
+    },
     adminReviewer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       default: null,
     },
     adminRemarks: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    rejectionReason: {
       type: String,
       default: '',
       trim: true,
@@ -65,6 +89,7 @@ const leaveSchema = new mongoose.Schema(
 
 // Compound index for overlap checks and employee list queries
 leaveSchema.index({ employee: 1, startDate: 1, endDate: 1, status: 1 });
+leaveSchema.index({ employee: 1, leaveType: 1, status: 1, leaveYear: 1 });
 
 const Leave = mongoose.model('Leave', leaveSchema);
 

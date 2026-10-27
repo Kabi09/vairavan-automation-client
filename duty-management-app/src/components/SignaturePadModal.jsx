@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Modal,
   View,
@@ -6,17 +6,15 @@ import {
   PanResponder,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
+  Platform,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 import PrimaryButton from './PrimaryButton';
 import SecondaryButton from './SecondaryButton';
-
-const { width } = Dimensions.get('window');
-const CANVAS_WIDTH = width - 40;
-const CANVAS_HEIGHT = 220;
 
 /**
  * Helper to format readable timestamp (e.g. "13 Oct 2026, 06:15 PM")
@@ -41,18 +39,47 @@ export const SignaturePadModal = ({
   onClose,
   onSave,
   title = 'Customer Signature',
-  instruction = 'Ask customer to sign with finger inside the box below',
+  instruction = 'Ask customer to sign smoothly with finger inside the box below',
 }) => {
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+
+  // Responsive canvas dimensions
+  const canvasWidth = isLandscape
+    ? Math.max(320, Math.min(width - 48, 860))
+    : Math.max(280, width - 40);
+
+  const canvasHeight = isLandscape
+    ? Math.max(150, Math.min(height - 110, 260))
+    : 220;
+
   const [paths, setPaths] = useState([]);
   const [currentPath, setCurrentPath] = useState('');
   const [currentTimestamp, setCurrentTimestamp] = useState(formatSignatureTimestamp());
 
-  // Refresh timestamp when modal opens
+  // Automatic Screen Orientation: Auto-rotate to LANDSCAPE on open, revert to PORTRAIT on close
   useEffect(() => {
     if (visible) {
       setCurrentTimestamp(formatSignatureTimestamp());
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch((err) => {
+        console.log('[SignaturePad] Orientation lock error:', err?.message || err);
+      });
+    } else {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch((err) => {
+        console.log('[SignaturePad] Orientation unlock error:', err?.message || err);
+      });
     }
+
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
   }, [visible]);
+
+  // Safe close handler ensuring orientation restores to portrait
+  const handleClose = useCallback(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    if (onClose) onClose();
+  }, [onClose]);
 
   // Refs prevent stale closure inside PanResponder handlers
   const pathsRef = useRef([]);
@@ -119,14 +146,17 @@ export const SignaturePadModal = ({
     const now = new Date();
     const timestampStr = formatSignatureTimestamp(now);
 
-    // Build standalone SVG string with responsive viewBox and embedded watermark text in the bottom-right corner
-    const svgString = `<svg viewBox="0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${allPaths
+    // Build standalone SVG string with responsive viewBox and embedded watermark
+    const svgString = `<svg viewBox="0 0 ${canvasWidth} ${canvasHeight}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${allPaths
       .map(
         (p) =>
-          `<path d="${p}" stroke="#0F172A" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
+          `<path d="${p}" stroke="#0F172A" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
       )
-      .join('')}<text x="${CANVAS_WIDTH - 10}" y="${CANVAS_HEIGHT - 8}" text-anchor="end" font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="9" fill="#64748B" font-weight="600">${timestampStr}</text></svg>`;
+      .join('')}<text x="${canvasWidth - 10}" y="${canvasHeight - 8}" text-anchor="end" font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="9" fill="#64748B" font-weight="600">${timestampStr}</text></svg>`;
     const dataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svgString)}`;
+
+    // Revert orientation back to normal portrait before closing
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
 
     onSave({
       dataUri,
@@ -136,24 +166,57 @@ export const SignaturePadModal = ({
       timestamp: timestampStr,
     });
     handleClear();
-    onClose();
+    if (onClose) onClose();
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.instruction}>{instruction}</Text>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={handleClose}
+      supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+    >
+      <View style={[styles.overlay, isLandscape && styles.overlayLandscape]}>
+        <View style={[styles.container, isLandscape && styles.containerLandscape]}>
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1 }}>
+              <View style={styles.titleWithIcon}>
+                <Ionicons name="pencil" size={18} color={COLORS.primary} />
+                <Text style={styles.title}>{title}</Text>
+                {isLandscape && (
+                  <View style={styles.landscapePill}>
+                    <Ionicons name="phone-landscape-outline" size={12} color="#059669" />
+                    <Text style={styles.landscapePillText}>Landscape Sign Pad</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.instruction} numberOfLines={1}>{instruction}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleClose}
+              style={styles.closeBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
 
-          <View style={styles.canvasContainer} {...panResponder.panHandlers}>
-            <Svg width={CANVAS_WIDTH} height={CANVAS_HEIGHT}>
+          {/* Canvas Box */}
+          <View
+            style={[
+              styles.canvasContainer,
+              { width: canvasWidth, height: canvasHeight },
+            ]}
+            {...panResponder.panHandlers}
+          >
+            <Svg width={canvasWidth} height={canvasHeight}>
               {paths.map((p, index) => (
                 <Path
                   key={index}
                   d={p}
                   stroke={COLORS.text}
-                  strokeWidth={3}
+                  strokeWidth={3.5}
                   fill="none"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -163,15 +226,18 @@ export const SignaturePadModal = ({
                 <Path
                   d={currentPath}
                   stroke={COLORS.text}
-                  strokeWidth={3}
+                  strokeWidth={3.5}
                   fill="none"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               ) : null}
             </Svg>
+
             <View style={styles.signatureLine} />
-            <Text style={styles.signLabel}>Sign on the line (Stroke count: {paths.length})</Text>
+            <Text style={styles.signLabel}>
+              Sign smoothly on the line {paths.length > 0 ? `(${paths.length} strokes)` : ''}
+            </Text>
 
             {/* Bottom Right Corner Watermark: Date & Time */}
             <View style={styles.bottomRightBadge}>
@@ -180,7 +246,8 @@ export const SignaturePadModal = ({
             </View>
           </View>
 
-          <View style={styles.actionsRow}>
+          {/* Action Buttons */}
+          <View style={[styles.actionsRow, isLandscape && styles.actionsRowLandscape]}>
             <SecondaryButton
               title="Clear"
               variant="outline"
@@ -190,7 +257,7 @@ export const SignaturePadModal = ({
             <SecondaryButton
               title="Cancel"
               variant="ghost"
-              onPress={onClose}
+              onPress={handleClose}
               style={styles.actionBtn}
             />
             <PrimaryButton
@@ -211,28 +278,68 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.overlay,
     justifyContent: 'flex-end',
   },
+  overlayLandscape: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.xs,
+  },
   container: {
     backgroundColor: COLORS.card,
     borderTopLeftRadius: RADIUS.xl,
     borderTopRightRadius: RADIUS.xl,
-    padding: SPACING.xl,
+    padding: SPACING.md,
     ...SHADOWS.lg,
   },
+  containerLandscape: {
+    borderRadius: RADIUS.lg,
+    padding: SPACING.sm,
+    maxHeight: '96%',
+    alignSelf: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  titleWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: COLORS.text,
-    textAlign: 'center',
+  },
+  landscapePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginLeft: 6,
+  },
+  landscapePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#047857',
   },
   instruction: {
-    fontSize: 13,
+    fontSize: 11,
     color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginVertical: SPACING.sm,
+    marginTop: 1,
+  },
+  closeBtn: {
+    padding: 4,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
   },
   canvasContainer: {
-    width: CANVAS_WIDTH,
-    height: CANVAS_HEIGHT,
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: COLORS.primary,
@@ -243,7 +350,7 @@ const styles = StyleSheet.create({
   },
   signatureLine: {
     position: 'absolute',
-    bottom: 35,
+    bottom: 30,
     left: 20,
     right: 20,
     height: 1,
@@ -252,15 +359,18 @@ const styles = StyleSheet.create({
   },
   signLabel: {
     position: 'absolute',
-    bottom: 12,
+    bottom: 8,
     alignSelf: 'center',
-    fontSize: 11,
+    fontSize: 10,
     color: COLORS.textMuted,
   },
   actionsRow: {
     flexDirection: 'row',
-    marginTop: SPACING.lg,
+    marginTop: SPACING.sm,
     gap: SPACING.sm,
+  },
+  actionsRowLandscape: {
+    marginTop: 6,
   },
   actionBtn: {
     flex: 1,

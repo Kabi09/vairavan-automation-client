@@ -46,10 +46,19 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    location: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     designation: {
       type: String,
       trim: true,
       default: 'Employee',
+    },
+    casualLeaveAllowance: {
+      type: Number,
+      default: 12,
     },
     joiningDate: {
       type: Date,

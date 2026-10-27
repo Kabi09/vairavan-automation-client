@@ -65,4 +65,10 @@ export const validateUpdateProfile = [
     .optional({ nullable: true, checkFalsy: true })
     .isISO8601()
     .withMessage('Date of birth must be a valid date (YYYY-MM-DD)'),
+  body('location')
+    .optional()
+    .trim(),
+  body('address')
+    .optional()
+    .trim(),
 ];
