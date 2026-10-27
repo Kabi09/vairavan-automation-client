@@ -1,6 +1,7 @@
 import apiClient from './apiClient';
 
 export const uploadApi = {
+  
   /**
    * Upload customer signature image
    * @param {string} uri - Local file uri or base64 file
