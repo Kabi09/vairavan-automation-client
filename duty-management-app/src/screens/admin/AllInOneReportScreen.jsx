@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ScreenHeader from '../../components/ScreenHeader';
+import WebPullToRefresh from '../../components/WebPullToRefresh';
 import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
 import LoadingIndicator from '../../components/LoadingIndicator';
@@ -360,11 +361,23 @@ export const AllInOneReportScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Navigation Header */}
+      {/* Navigation Header with Back Button */}
       <ScreenHeader
         title="All-in-One Report"
+        subtitle="Complete Operational Intelligence"
         navigation={navigation}
-        rightElement={
+        onBack={() => {
+          if (navigation?.canGoBack?.()) {
+            navigation.goBack();
+          } else {
+            try {
+              navigation.navigate('DashboardTab');
+            } catch {
+              navigation.navigate('AdminMainTabs', { screen: 'DashboardTab' });
+            }
+          }
+        }}
+        rightAction={
           <View style={styles.headerActionsRow}>
             <TouchableOpacity
               style={[
@@ -503,26 +516,31 @@ export const AllInOneReportScreen = ({ navigation }) => {
         </ScrollView>
       </View>
 
-      {/* Main Content Area */}
-      {loading && !refreshing ? (
-        <LoadingIndicator message="Aggregating operational analytics & reports..." />
-      ) : error ? (
-        <ErrorMessage message={error} onRetry={() => fetchReport()} />
-      ) : (
-        <ScrollView
-          style={styles.scrollArea}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: insets.bottom + 40 },
-          ]}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => fetchReport(true)}
-              colors={[COLORS.primary]}
-            />
-          }
-        >
+      {/* Main Content Area with Web Pull-to-Refresh */}
+      <WebPullToRefresh
+        onRefresh={() => fetchReport(true)}
+        refreshing={refreshing}
+        style={{ flex: 1 }}
+      >
+        {loading && !refreshing ? (
+          <LoadingIndicator message="Aggregating operational analytics & reports..." />
+        ) : error ? (
+          <ErrorMessage message={error} onRetry={() => fetchReport()} />
+        ) : (
+          <ScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: insets.bottom + 88 },
+            ]}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => fetchReport(true)}
+                colors={[COLORS.primary]}
+              />
+            }
+          >
           {/* Summary Dashboard (9 KPI Cards) */}
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>Operational Summary</Text>
@@ -1514,6 +1532,7 @@ export const AllInOneReportScreen = ({ navigation }) => {
           )}
         </ScrollView>
       )}
+      </WebPullToRefresh>
 
       {/* Advanced Filters Drawer Overlay */}
       {filterDrawerVisible && (

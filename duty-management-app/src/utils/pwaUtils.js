@@ -35,6 +35,17 @@ export const isStandalonePWA = () => {
 /**
  * Hook to manage PWA Installation and Online status
  */
+/**
+ * Check if the browser is running on an iOS device (iPhone/iPad/iPod)
+ */
+export const isIOS = () => {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent || '') ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+};
+
 export const usePWAInstall = () => {
   const [canInstall, setCanInstall] = useState(Boolean(deferredPrompt));
   const [isStandalone, setIsStandalone] = useState(isStandalonePWA());
@@ -88,6 +99,7 @@ export const usePWAInstall = () => {
 
   return {
     isWeb: Platform.OS === 'web',
+    isIOS: isIOS(),
     canInstall,
     isStandalone,
     isOnline,
@@ -97,6 +109,7 @@ export const usePWAInstall = () => {
 
 export default {
   isStandalonePWA,
+  isIOS,
   usePWAInstall,
 };
 

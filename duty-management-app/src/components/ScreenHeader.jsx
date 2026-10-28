@@ -8,10 +8,26 @@ export const ScreenHeader = ({
   title,
   subtitle,
   onBack,
+  navigation,
   rightAction,
+  rightElement,
   style,
 }) => {
   const { isDesktop, maxContentWidth } = useResponsive();
+
+  const handleBack =
+    onBack ||
+    (navigation
+      ? () => {
+          if (navigation.canGoBack?.()) {
+            navigation.goBack();
+          } else if (navigation.navigate) {
+            navigation.navigate('DashboardTab');
+          }
+        }
+      : undefined);
+
+  const action = rightAction || rightElement;
 
   return (
     <View style={[styles.headerWrapper, style]}>
@@ -22,11 +38,12 @@ export const ScreenHeader = ({
         ]}
       >
         <View style={styles.leftRow}>
-          {onBack ? (
+          {handleBack ? (
             <TouchableOpacity
               style={styles.backButton}
-              onPress={onBack}
+              onPress={handleBack}
               activeOpacity={0.7}
+              accessibilityLabel="Go back"
             >
               <Ionicons name="arrow-back" size={24} color={COLORS.text} />
             </TouchableOpacity>
@@ -43,7 +60,7 @@ export const ScreenHeader = ({
           </View>
         </View>
 
-        {rightAction ? <View style={styles.rightAction}>{rightAction}</View> : null}
+        {action ? <View style={styles.rightAction}>{action}</View> : null}
       </View>
     </View>
   );

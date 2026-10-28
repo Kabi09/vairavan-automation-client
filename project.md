@@ -2470,8 +2470,57 @@
 - Reason: Project setup and establishing persistent single source of truth for project memory.
 - Impact: All future changes, features, decisions, and logic must be documented here.
 
+### 2026-10-28 (Web & PWA Pull Up/Down Refresh, All-in-One Header Back Button, High-Contrast Banner, Persistent Bottom Nav Bar, iOS PWA Easy Install Guide & Web Input Focus Fix)
+- What was changed:
+  1. Web & PWA Multi-Directional Pull Refresh:
+     - Implemented `duty-management-app/src/components/WebPullToRefresh.jsx`: listens to touch gestures on Web (`touchstart`, `touchmove`, `touchend`) and provides a pull-down gesture at top of page (> 65px) and pull-up gesture at bottom of page (> 65px).
+     - Renders visual animated feedback pills ("Pull down to refresh" / "Pull up to refresh", "Release to refresh", "Refreshing data...").
+     - On desktop mouse viewports, renders a floating quick-refresh pill.
+     - Preserves native Android/iOS `RefreshControl` without duplication.
+     - Integrated across `AdminDashboardScreen.jsx` and `AllInOneReportScreen.jsx`.
+  2. All-in-One Report Header Back Button:
+     - Updated `duty-management-app/src/components/ScreenHeader.jsx` to accept `navigation` and safely resolve `handleBack` (`onBack || (navigation?.canGoBack?.() ? () => navigation.goBack() : undefined)`).
+     - Configured `ScreenHeader` in `AllInOneReportScreen.jsx` with prominent Back button, subtitle ("Complete Operational Intelligence"), and safe navigation fallback to `DashboardTab`.
+  3. High-Contrast All-in-One Report Banner Styling:
+     - Fixed unreadable white text on light blue `#EFF6FF` background in `AdminDashboardScreen.jsx`.
+     - Replaced with executive dark slate styling (`#0F172A`), royal blue accent border (`#3B82F6`), bold white title (`#FFFFFF`), light slate description (`#CBD5E1`), and high-contrast `#DBEAFE` badge with deep blue text.
+  4. Persistent Admin Bottom Navigation Bar on All-in-One Report:
+     - In `AdminNavigator.jsx`, registered `AllInOneReport` as a `Tab.Screen` in `AdminTabs` with `tabBarItemStyle: { display: 'none' }` and `tabBarButton: () => null`.
+     - Removed `AllInOneReport` from the parent `Stack.Navigator`, ensuring that tapping "View" in the dashboard opens the report inside the bottom tab navigator so the 6 bottom tabs (`Dashboard`, `Works`, `Expenses`, `Companies`, `Employees`, `Leaves`) stay visible.
+  5. Login Screen iOS Safari PWA Easy Install Guide & Native Install:
+     - Updated `pwaUtils.js` with `isIOS` detection function and added `isIOS` property to `usePWAInstall`.
+     - Added a dedicated "Install App / Add to Home Screen" card on `LoginScreen.jsx` for Web/PWA users.
+     - For iOS Safari users, tapping opens an interactive, illustrated 3-step modal guide detailing: 1) Tap Safari Share button, 2) Tap "Add to Home Screen", 3) Tap "Add" at top right.
+     - For Android/Chrome desktop/mobile users, triggers native `promptInstall()` directly with fallback guide.
+  6. Web Input Focus Black Box Fix:
+     - In `TextInputField.jsx`, added `Platform.select({ web: { outlineStyle: 'none', outlineWidth: 0, boxShadow: 'none' } })` to input styles.
+     - In `public/index.html`, added global CSS rules setting `outline: none !important; -webkit-tap-highlight-color: transparent !important; box-shadow: none !important;` on `input`, `textarea`, `select`, and `[contenteditable="true"]`.
+- Files changed:
+  - `duty-management-app/public/index.html`
+  - `duty-management-app/src/components/TextInputField.jsx`
+  - `duty-management-app/src/components/ScreenHeader.jsx`
+  - `duty-management-app/src/components/WebPullToRefresh.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/utils/pwaUtils.js`
+  - `duty-management-app/src/screens/auth/LoginScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Bottom Tab Navigation: `AllInOneReport` now lives in `AdminTabs` preserving persistent bottom bar access.
+  - PWA Install Detection: Added iOS-specific user-agent heuristics and custom 3-step guide modal.
+  - Web Refresh: Added dual-direction touch gesture detection (pull-down & pull-up) for Web browsers.
+- Reason: User requested: 1) pull-up/pull-down refresh for Web/PWA, 2) Back button on All-in-One report page, 3) Redesign All-in-One report dashboard banner with proper text color, 4) Keep bottom navigation bar visible on All-in-One report page, 5) Add iOS easy install guide on login page, 6) Fix black outline box on input click on web login.
+- Impact: Seamless PWA experience with mobile gestures, persistent bottom tab bar on executive reports, legible dashboard cards, frictionless iOS PWA installation, and pristine web inputs.
+
 ## Current Progress
 - Completed:
+  - Added Web & PWA Multi-Directional Pull Refresh (`WebPullToRefresh.jsx`) supporting pull-down at top and pull-up at bottom with animated status pills.
+  - Added Back button in header of `AllInOneReportScreen.jsx` with safe fallback navigation to Dashboard.
+  - Redesigned All-in-One Report banner in `AdminDashboardScreen.jsx` with executive dark slate styling and high-contrast text.
+  - Preserved persistent Admin bottom navigation bar on `AllInOneReportScreen` by embedding in `AdminTabs`.
+  - Added PWA Install card on `LoginScreen.jsx` with dedicated 3-step illustrated iOS Safari guide modal and Android Chrome 1-tap install.
+  - Fixed Web/PWA input click black focus outline across `TextInputField.jsx` and `public/index.html`.
   - Complete React Native Expo mobile frontend in `duty-management-app/`.
   - Centralized Axios client (`src/api/apiClient.js`) configured with `EXPO_PUBLIC_API_URL` and `expo-secure-store` token interceptor.
   - Global `AuthContext` with login, logout, profile update, role detection, and session restore.
@@ -3524,6 +3573,18 @@
 - Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
+- Decision: Register AllInOneReport inside AdminTabs with hidden tab item.
+  Reason: Placing AllInOneReport in the root StackNavigator completely hides child TabNavigators in React Navigation. Registering it as a tab with `tabBarButton: () => null` allows seamless navigation from AdminDashboard while retaining the 6 bottom navigation tabs visible and accessible.
+  Date: 2026-10-28
+
+- Decision: Dedicated 3-step instruction modal for iOS Safari PWA installation.
+  Reason: Apple iOS Safari intentionally does not support the `beforeinstallprompt` JavaScript event. Providing an illustrated step-by-step modal guide (Share -> Add to Home Screen -> Add) guides iPhone users on how to install the app cleanly.
+  Date: 2026-10-28
+
+- Decision: Global CSS and StyleSheet outline suppression for Web inputs.
+  Reason: Browsers default to an aggressive black rectangular focus ring on focused inputs. Setting `outlineStyle: 'none'` in React Native Web StyleSheet and `outline: none !important` in global CSS removes this distraction while maintaining theme border color transitions.
+  Date: 2026-10-28
+
 - Decision: Restrict employee joining date editing strictly to Admin role.
   Reason: Employee joining dates are official employment milestones impacting service tenure, leave allowances, and historical record keeping. Allowing staff to modify this introduces employment data integrity risks. Hence, `PUT /api/employees/:id` is restricted via `authorize('admin')`, while employee self-update (`PATCH /api/auth/profile`) strictly ignores `joiningDate`.
   Date: 2026-10-28

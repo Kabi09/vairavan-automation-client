@@ -5,6 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
@@ -142,6 +143,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.text,
     height: '100%',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outlineWidth: 0,
+        boxShadow: 'none',
+      },
+    }),
   },
   multilineInput: {
     textAlignVertical: 'top',

@@ -23,6 +23,7 @@ import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import AdminSendMessageModal from '../../components/AdminSendMessageModal';
 import BrandingFooter from '../../components/BrandingFooter';
+import WebPullToRefresh from '../../components/WebPullToRefresh';
 import { formatDate, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
@@ -364,19 +365,20 @@ export const AdminDashboardScreen = ({ navigation }) => {
         onRefresh={onRefresh}
         isRefreshing={refreshing}
       />
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          isDesktop && { maxWidth: 1240, width: '100%', alignSelf: 'center' },
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[COLORS.primary]}
-          />
-        }
-      >
+      <WebPullToRefresh onRefresh={onRefresh} refreshing={refreshing} style={{ flex: 1 }}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            isDesktop && { maxWidth: 1240, width: '100%', alignSelf: 'center' },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.primary]}
+            />
+          }
+        >
         {/* Header Greeting */}
         <View style={styles.header}>
           <View style={styles.headerTitleWrap}>
@@ -592,35 +594,34 @@ export const AdminDashboardScreen = ({ navigation }) => {
                 </View>
               </TouchableOpacity>
 
-              {/* All-in-One Operations Report Banner */}
+              {/* All-in-One Operations & Executive Intelligence Banner */}
               <TouchableOpacity
                 style={[
-                  styles.sharedDocsBanner,
-                  { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' },
+                  styles.reportBanner,
                   isDesktop ? { flex: 1, marginTop: 0 } : { marginTop: 10 }
                 ]}
                 onPress={() => navigation.navigate('AllInOneReport')}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
-                <View style={styles.sharedDocsLeft}>
-                  <View style={[styles.sharedDocsIconWrap, { backgroundColor: '#1E40AF' }]}>
-                    <Ionicons name="pie-chart" size={22} color="#FFFFFF" />
+                <View style={styles.reportBannerLeft}>
+                  <View style={styles.reportBannerIconWrap}>
+                    <Ionicons name="bar-chart" size={22} color="#FFFFFF" />
                   </View>
-                  <View style={styles.sharedDocsTextWrap}>
+                  <View style={styles.reportBannerTextWrap}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.sharedDocsTitle}>All-in-One Report</Text>
-                      <View style={[styles.newFilesChip, { backgroundColor: '#DBEAFE' }]}>
-                        <Text style={[styles.newFilesChipText, { color: '#1E40AF' }]}>ANALYTICS</Text>
+                      <Text style={styles.reportBannerTitle}>All-in-One Report</Text>
+                      <View style={styles.reportBannerBadge}>
+                        <Text style={styles.reportBannerBadgeText}>ANALYTICS</Text>
                       </View>
                     </View>
-                    <Text style={styles.sharedDocsSub}>
+                    <Text style={styles.reportBannerSub}>
                       Work, staff, leaves, OT & expenses
                     </Text>
                   </View>
                 </View>
-                <View style={[styles.sharedDocsBtnPill, { backgroundColor: '#1E40AF' }]}>
-                  <Ionicons name="analytics" size={13} color="#FFFFFF" />
-                  <Text style={styles.sharedDocsBtnText}>View</Text>
+                <View style={styles.reportBannerBtnPill}>
+                  <Ionicons name="pie-chart" size={13} color="#FFFFFF" />
+                  <Text style={styles.reportBannerBtnText}>View</Text>
                 </View>
               </TouchableOpacity>
 
@@ -780,6 +781,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
           </>
         )}
       </ScrollView>
+      </WebPullToRefresh>
 
       {/* Calendar & Attendance Modal */}
       <Modal
@@ -1847,6 +1849,81 @@ const styles = StyleSheet.create({
   sharedDocsBtnText: {
     color: '#FFFFFF',
     fontSize: 11.5,
+    fontWeight: '700',
+  },
+  reportBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0F172A',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1.5,
+    borderColor: '#3B82F6',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  reportBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  reportBannerIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.md,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+  },
+  reportBannerTextWrap: {
+    flex: 1,
+  },
+  reportBannerTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  reportBannerBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  reportBannerBadgeText: {
+    color: '#1E40AF',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  reportBannerSub: {
+    fontSize: 11.5,
+    color: '#CBD5E1',
+    marginTop: 2.5,
+    lineHeight: 15,
+  },
+  reportBannerBtnPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    gap: 4,
+  },
+  reportBannerBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '700',
   },
   brandingFooter: {

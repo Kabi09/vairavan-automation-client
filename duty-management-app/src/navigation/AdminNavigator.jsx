@@ -123,6 +123,14 @@ const AdminTabs = () => {
         component={LeaveRequestsScreen}
         options={{ tabBarLabel: 'Leaves' }}
       />
+      <Tab.Screen
+        name="AllInOneReport"
+        component={AllInOneReportScreen}
+        options={{
+          tabBarItemStyle: { display: 'none' },
+          tabBarButton: () => null,
+        }}
+      />
     </Tab.Navigator>
   );
 };
@@ -147,7 +155,6 @@ export const AdminNavigator = () => {
       <Stack.Screen name="MyLeaves" component={MyLeavesScreen} />
       <Stack.Screen name="EmployeeCalendar" component={EmployeeCalendarScreen} />
       <Stack.Screen name="SharedDocuments" component={SharedDocumentsScreen} />
-      <Stack.Screen name="AllInOneReport" component={AllInOneReportScreen} />
     </Stack.Navigator>
   );
 };

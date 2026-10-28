@@ -48,6 +48,21 @@
         user-select: text;
         -webkit-user-select: text;
       }
+      /* Remove browser focus outline (black box) on web */
+      input, textarea, select, [contenteditable="true"] {
+        outline: none !important;
+        outline-style: none !important;
+        box-shadow: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      input:focus, textarea:focus, select:focus {
+        outline: none !important;
+        outline-style: none !important;
+        box-shadow: none !important;
+      }
+      *:focus {
+        outline: none !important;
+      }
       /* Root element full-height */
       #root {
         display: flex;
