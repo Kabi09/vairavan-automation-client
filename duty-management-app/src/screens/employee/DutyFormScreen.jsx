@@ -771,6 +771,7 @@ export const DutyFormScreen = ({ navigation, route }) => {
         address: currentCoords?.address,
       };
 
+      const res = await dutyApi.checkIn(checkInPayload);
       const createdDuty = res.data?.data?.duty || res.data?.duty || res.duty;
       if (createdDuty) {
         setIsCheckedIn(true);
@@ -1787,7 +1788,10 @@ export const DutyFormScreen = ({ navigation, route }) => {
                         activeOpacity={0.8}
                       >
                         <SignatureImage
+                          uri={signatureData.dataUri || signatureData.url}
                           signature={signatureData.dataUri || signatureData.url}
+                          height={120}
+                          timestamp={signatureData.timestamp}
                           style={styles.signaturePreviewImg}
                         />
                       </TouchableOpacity>

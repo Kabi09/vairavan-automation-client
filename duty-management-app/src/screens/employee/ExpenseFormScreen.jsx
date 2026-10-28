@@ -114,12 +114,20 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       try {
         const draft = await getExpenseDraft();
         if (draft && isMounted) {
-          const isMatchingDuty =
-            !routeDuty ||
-            !draft.selectedDutyId ||
-            String(draft.selectedDutyId) === String(routeDuty._id);
-
-          if (isMatchingDuty) {
+          if (routeDuty) {
+            // When opening for a specific work, enforce routeDuty association
+            setSelectedDutyId(String(routeDuty._id));
+            setRelatedDutyId(routeDuty.dutyId || String(routeDuty._id));
+            // Only restore draft items if saved for this exact same duty
+            if (draft.selectedDutyId && String(draft.selectedDutyId) === String(routeDuty._id)) {
+              if (draft.generalDescription) setGeneralDescription(draft.generalDescription);
+              if (Array.isArray(draft.items) && draft.items.length > 0) {
+                setItems(draft.items);
+                setDraftRestored(true);
+              }
+            }
+          } else {
+            // Standalone mode: restore draft as is
             if (draft.expenseDate) setExpenseDate(draft.expenseDate);
             if (draft.companyCategory) setCompanyCategory(draft.companyCategory);
             if (draft.selectedCompanyId) setSelectedCompanyId(draft.selectedCompanyId);
@@ -348,15 +356,21 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
 
         setCategories(activeCats);
         setCompanies(allComps);
-        setDuties(allDuties);
+
+        // Ensure routeDuty is always present in the duties list
+        let mergedDuties = allDuties;
+        if (routeDuty && !allDuties.some((d) => String(d._id) === String(routeDuty._id))) {
+          mergedDuties = [routeDuty, ...allDuties];
+        }
+        setDuties(mergedDuties);
 
         // If route duty was passed, perform full auto-assignment
         if (routeDuty) {
-          const dutyMatch = allDuties.find((d) => String(d._id) === String(routeDuty._id)) || routeDuty;
+          const dutyMatch = mergedDuties.find((d) => String(d._id) === String(routeDuty._id)) || routeDuty;
           applyDutyToState(dutyMatch, allComps);
-        } else if (allDuties.length > 0 && !selectedDutyId) {
+        } else if (mergedDuties.length > 0 && !selectedDutyId) {
           // Pre-select most recent duty
-          applyDutyToState(allDuties[0], allComps);
+          applyDutyToState(mergedDuties[0], allComps);
         }
       } catch (err) {
         if (isMounted) {
@@ -385,9 +399,13 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
 
   // Selected duty object
   const selectedDutyObj = useMemo(() => {
-    if (!selectedDutyId) return null;
-    return duties.find((d) => String(d._id) === String(selectedDutyId)) || null;
-  }, [duties, selectedDutyId]);
+    const targetId = selectedDutyId || (routeDuty?._id ? String(routeDuty._id) : '');
+    if (!targetId) return routeDuty || null;
+    const found = duties.find((d) => String(d._id) === String(targetId));
+    if (found) return found;
+    if (routeDuty && String(routeDuty._id) === String(targetId)) return routeDuty;
+    return routeDuty || null;
+  }, [duties, selectedDutyId, routeDuty]);
 
   // Selected company object
   const selectedCompanyObj = useMemo(() => {
@@ -713,9 +731,9 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         companyId: targetCompId,
         client: targetClientId,
         clientId: targetClientId,
-        relatedDuty: selectedDutyObj?.dutyId || relatedDutyId?.trim() || undefined,
-        duty: selectedDutyObj?._id ? String(selectedDutyObj._id) : undefined,
-        dutyId: selectedDutyObj?._id ? String(selectedDutyObj._id) : undefined,
+        relatedDuty: selectedDutyObj?.dutyId || routeDuty?.dutyId || (relatedDutyId ? relatedDutyId.trim() : undefined),
+        duty: (selectedDutyObj?._id || routeDuty?._id || selectedDutyId) ? String(selectedDutyObj?._id || routeDuty?._id || selectedDutyId) : undefined,
+        dutyId: (selectedDutyObj?._id || routeDuty?._id || selectedDutyId) ? String(selectedDutyObj?._id || routeDuty?._id || selectedDutyId) : undefined,
         generalDescription: generalDescription?.trim() || undefined,
         items: preparedItems,
       };
@@ -810,13 +828,40 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
           </Text>
 
           {/* Select Work / Duty Trigger */}
-          <Text style={styles.inputLabel}>Select Work / Duty *</Text>
+          <View style={styles.workFieldHeaderRow}>
+            <Text style={styles.inputLabel}>
+              {routeDuty ? 'Assigned Work / Duty (Locked)' : 'Select Work / Duty *'}
+            </Text>
+            {routeDuty ? (
+              <View style={styles.lockedWorkTag}>
+                <Ionicons name="lock-closed" size={11} color="#047857" />
+                <Text style={styles.lockedWorkTagText}>Locked to Work</Text>
+              </View>
+            ) : null}
+          </View>
           <TouchableOpacity
-            style={[styles.pickerTrigger, selectedDutyObj && styles.pickerTriggerSelected]}
-            onPress={() => setDutyPickerVisible(true)}
-            activeOpacity={0.8}
+            style={[
+              styles.pickerTrigger,
+              selectedDutyObj && styles.pickerTriggerSelected,
+              routeDuty && styles.pickerTriggerLocked,
+            ]}
+            onPress={() => {
+              if (routeDuty) {
+                Alert.alert(
+                  'Work Order Locked',
+                  `This expense claim is specifically linked to Work #${selectedDutyObj?.dutyId || routeDuty.dutyId}. To claim expenses for another work, go back and select that work from My Expenses or My Duties.`
+                );
+              } else {
+                setDutyPickerVisible(true);
+              }
+            }}
+            activeOpacity={routeDuty ? 0.9 : 0.8}
           >
-            <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+            <Ionicons
+              name={routeDuty ? 'lock-closed' : 'calendar-outline'}
+              size={18}
+              color={routeDuty ? '#059669' : COLORS.primary}
+            />
             <View style={{ flex: 1 }}>
               {selectedDutyObj ? (
                 <Text style={styles.pickerTriggerText} numberOfLines={1}>
@@ -829,7 +874,11 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
                 </Text>
               )}
             </View>
-            <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+            <Ionicons
+              name={routeDuty ? 'checkmark-circle' : 'chevron-down'}
+              size={16}
+              color={routeDuty ? '#059669' : COLORS.textSecondary}
+            />
           </TouchableOpacity>
 
           {/* Highlighted Auto-Assigned Details Box */}
@@ -1477,6 +1526,29 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
   },
+  workFieldHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  lockedWorkTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  lockedWorkTagText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#065F46',
+  },
   inputLabel: {
     fontSize: 12,
     fontWeight: '700',
@@ -1499,6 +1571,10 @@ const styles = StyleSheet.create({
   pickerTriggerSelected: {
     borderColor: '#3B82F6',
     backgroundColor: '#F8FAFC',
+  },
+  pickerTriggerLocked: {
+    borderColor: '#A7F3D0',
+    backgroundColor: '#F0FDF4',
   },
   pickerTriggerText: {
     fontSize: 13,

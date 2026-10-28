@@ -37,6 +37,7 @@ const ensureSvgResponsive = (xml) => {
 export const SignatureImage = ({
   uri,
   url,
+  signature,
   style,
   height = 140,
   width = '100%',
@@ -44,7 +45,14 @@ export const SignatureImage = ({
   timestamp = '',
   onPress,
 }) => {
-  const targetUri = uri || url || '';
+  let targetUri = uri || url || '';
+  if (!targetUri && signature) {
+    if (typeof signature === 'string') {
+      targetUri = signature;
+    } else if (typeof signature === 'object') {
+      targetUri = signature.dataUri || signature.url || '';
+    }
+  }
   const [loadError, setLoadError] = useState(false);
 
   if (!targetUri) {
@@ -78,7 +86,10 @@ export const SignatureImage = ({
     ) {
       try {
         const base64Str = targetUri.replace('data:image/svg+xml;base64,', '');
-        const rawXml = typeof atob === 'function' ? atob(base64Str) : base64Str;
+        const rawXml =
+          typeof globalThis !== 'undefined' && typeof globalThis.atob === 'function'
+            ? globalThis.atob(base64Str)
+            : base64Str;
         const responsiveXml = ensureSvgResponsive(rawXml);
         return <SvgXml xml={responsiveXml} width={width} height={height} />;
       } catch {}

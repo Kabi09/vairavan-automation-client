@@ -19,6 +19,7 @@ import { useNotifications } from '../../context/NotificationContext';
 import dashboardApi from '../../api/dashboardApi';
 import dutyApi from '../../api/dutyApi';
 import notificationApi from '../../api/notificationApi';
+import calendarApi from '../../api/calendarApi';
 import Card from '../../components/Card';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
@@ -36,6 +37,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { unreadCount, refreshNotifications } = useNotifications();
   const [data, setData] = useState(null);
+  const [monthSummary, setMonthSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -127,12 +129,16 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
   const fetchDashboard = useCallback(async () => {
     try {
       setError('');
-      const [dashRes, activeRes] = await Promise.all([
+      const [dashRes, activeRes, calRes] = await Promise.all([
         dashboardApi.getEmployeeDashboard().catch(() => null),
         dutyApi.getActiveCheckIn().catch(() => null),
+        calendarApi.getMonthlyCalendar().catch(() => null),
       ]);
       if (dashRes?.data) {
         setData(dashRes.data);
+      }
+      if (calRes?.data?.summary) {
+        setMonthSummary(calRes.data.summary);
       }
       const activeObj = activeRes?.data?.activeDuty || activeRes?.activeDuty;
       if (activeObj) {
@@ -185,6 +191,19 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     });
   }, [data]);
 
+  // Sunday detection in IST
+  const isSundayToday = useMemo(() => {
+    try {
+      const dayName = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        weekday: 'long',
+      }).format(new Date());
+      return dayName.toLowerCase() === 'sunday';
+    } catch {
+      return new Date().getDay() === 0;
+    }
+  }, []);
+
   const [activeHighlightIndex, setActiveHighlightIndex] = useState(0);
   const carouselRef = useRef(null);
   const activeHighlightIndexRef = useRef(0);
@@ -195,6 +214,104 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
 
   const highlightSlides = useMemo(() => {
     const slides = [];
+
+    // 1. Unified Today's Status: Sunday / Festival Holiday / Combined (Zero Conflict!)
+    if (isSundayToday && todaysHolidays.length > 0) {
+      // Coinciding: Today is BOTH Sunday and a Festival Holiday (e.g. Diwali on Sunday)
+      const holidayNames = todaysHolidays.map((h) => h.holidayName).join(' & ');
+      const desc = todaysHolidays[0]?.description;
+      slides.push({
+        id: 'holiday-sunday-combined',
+        node: (
+          <Card
+            style={[styles.holidaySundayCombinedCard, { marginBottom: 0 }]}
+            onPress={() => setHighlightsModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.birthdayRow}>
+              <View style={styles.holidaySundayAvatarWrapper}>
+                <Ionicons name="sparkles" size={22} color="#B45309" />
+                <View style={styles.holidayBadgeMini}>
+                  <Text style={{ fontSize: 9 }}>🪔</Text>
+                </View>
+              </View>
+              <View style={{ flex: 1, marginLeft: SPACING.md, justifyContent: 'center' }}>
+                <View style={styles.highlightHeaderRow}>
+                  <Text style={styles.holidaySundayTitle} numberOfLines={1}>
+                    Today: {holidayNames} (Sunday Holiday)! 🪔🏖️
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color="#B45309" />
+                </View>
+                <Text style={styles.holidaySundaySub} numberOfLines={2}>
+                  {desc ? `${desc} • ` : ''}Double celebration! Festival holiday & Sunday weekly off. (Field duties today earn 1 Comp-Off credit)
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ),
+      });
+    } else if (isSundayToday) {
+      // Sunday Weekly Holiday ONLY (No festival holiday today)
+      slides.push({
+        id: 'sunday-weekly-holiday',
+        node: (
+          <Card
+            style={[styles.sundayHighlightCard, { marginBottom: 0 }]}
+            onPress={() => navigation.navigate('EmployeeCalendar')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.birthdayRow}>
+              <View style={styles.sundayAvatarWrapper}>
+                <Ionicons name="sunny" size={24} color="#D97706" />
+                <View style={styles.sundayBadgeMini}>
+                  <Text style={{ fontSize: 9 }}>🏖️</Text>
+                </View>
+              </View>
+              <View style={{ flex: 1, marginLeft: SPACING.md, justifyContent: 'center' }}>
+                <View style={styles.highlightHeaderRow}>
+                  <Text style={styles.sundayHighlightTitle}>Today is Sunday (Weekly Holiday)! 🏖️</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#D97706" />
+                </View>
+                <Text style={styles.sundayHighlightSub} numberOfLines={2}>
+                  Weekly off for all staff. Regular working days: Mon-Sat. (Field duties on Sunday earn 1 Comp-Off credit)
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ),
+      });
+    } else if (todaysHolidays.length > 0) {
+      // Company Festival Holiday on regular weekday (Mon - Sat)
+      slides.push({
+        id: 'holiday-today',
+        node: (
+          <Card
+            style={[styles.holidayHighlightCard, { marginBottom: 0 }]}
+            onPress={() => setHighlightsModalVisible(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.birthdayRow}>
+              <View style={styles.holidayIconWrap}>
+                <Ionicons name="sparkles" size={20} color="#15803D" />
+                <View style={styles.holidayBadgeMini}>
+                  <Text style={{ fontSize: 9 }}>🎉</Text>
+                </View>
+              </View>
+              <View style={{ flex: 1, marginLeft: SPACING.md, justifyContent: 'center' }}>
+                <View style={styles.highlightHeaderRow}>
+                  <Text style={styles.holidayHighlightTitle}>Today is a Company Holiday! 🎉</Text>
+                  <Ionicons name="chevron-forward" size={14} color="#15803D" />
+                </View>
+                <Text style={styles.holidayHighlightText} numberOfLines={2}>
+                  {todaysHolidays.map((h) => h.holidayName).join(' • ')}
+                  {todaysHolidays[0]?.description ? ` (${todaysHolidays[0].description})` : ''}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        ),
+      });
+    }
 
     if (isMyBirthday) {
       slides.push({
@@ -376,38 +493,53 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
       });
     }
 
-    if (todaysHolidays.length > 0) {
-      slides.push({
-        id: 'holiday',
-        node: (
-          <Card
-            style={[styles.holidayHighlightCard, { marginBottom: 0 }]}
-            onPress={() => setHighlightsModalVisible(true)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.birthdayRow}>
-              <View style={styles.holidayIconWrap}>
-                <Ionicons name="sparkles" size={20} color="#15803D" />
-                <View style={styles.holidayBadgeMini}>
-                  <Text style={{ fontSize: 9 }}>🎉</Text>
+    // 4. This Month's Holidays in Highlights Carousel
+    const todayStr = getTodayDateString();
+    const remainingThisMonthHolidays = (thisMonthHolidays || []).filter((h) => {
+      const endStr = h.endDate ? h.endDate.split('T')[0] : (h.startDate ? h.startDate.split('T')[0] : '');
+      const startStr = h.startDate ? h.startDate.split('T')[0] : '';
+      // If it is active today, we already displayed the today's holiday card above
+      if (startStr <= todayStr && endStr >= todayStr) return false;
+      return endStr >= todayStr;
+    });
+
+    if (remainingThisMonthHolidays.length > 0) {
+      remainingThisMonthHolidays.slice(0, 2).forEach((mh) => {
+        const isSunCoincide = mh.startDate ? new Date(mh.startDate).getDay() === 0 : false;
+        slides.push({
+          id: `this-month-holiday-${mh._id}`,
+          node: (
+            <Card
+              style={[styles.thisMonthHolidayHighlightCard, { marginBottom: 0 }]}
+              onPress={() => setHighlightsModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.birthdayRow}>
+                <View style={styles.thisMonthHolidayIconWrap}>
+                  <Ionicons name={isSunCoincide ? 'sunny' : 'calendar'} size={20} color="#047857" />
+                  <View style={styles.holidayBadgeMini}>
+                    <Text style={{ fontSize: 9 }}>{isSunCoincide ? '🏖️' : '🎉'}</Text>
+                  </View>
+                </View>
+                <View style={{ flex: 1, marginLeft: SPACING.md, justifyContent: 'center' }}>
+                  <View style={styles.highlightHeaderRow}>
+                    <Text style={styles.thisMonthHolidayHighlightTitle} numberOfLines={1}>
+                      Holiday This Month: {mh.holidayName} 🎉
+                    </Text>
+                    <Ionicons name="chevron-forward" size={14} color="#047857" />
+                  </View>
+                  <Text style={styles.thisMonthHolidayHighlightText} numberOfLines={2}>
+                    {formatDate(mh.startDate)}{mh.startDate !== mh.endDate ? ` - ${formatDate(mh.endDate)}` : ''} • {isSunCoincide ? 'Falls on Sunday (Weekly Off & Holiday)' : (mh.description || 'Official Company Holiday')}
+                  </Text>
                 </View>
               </View>
-              <View style={{ flex: 1, marginLeft: SPACING.md, justifyContent: 'center' }}>
-                <View style={styles.highlightHeaderRow}>
-                  <Text style={styles.holidayHighlightTitle}>Today is a Company Holiday! 🎉</Text>
-                  <Ionicons name="chevron-forward" size={14} color="#15803D" />
-                </View>
-                <Text style={styles.holidayHighlightText} numberOfLines={2}>
-                  {todaysHolidays.map((h) => h.holidayName).join(' • ')}
-                  {todaysHolidays[0]?.description ? ` (${todaysHolidays[0].description})` : ''}
-                </Text>
-              </View>
-            </View>
-          </Card>
-        ),
+            </Card>
+          ),
+        });
       });
-    } else if (holidays.length > 0) {
+    } else if (todaysHolidays.length === 0 && holidays.length > 0) {
       const nextH = holidays[0];
+      const isSunNext = nextH.startDate ? new Date(nextH.startDate).getDay() === 0 : false;
       slides.push({
         id: 'holiday-upcoming',
         node: (
@@ -430,6 +562,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                 </View>
                 <Text style={styles.holidayHighlightText} numberOfLines={2}>
                   {nextH.holidayName} • {formatDate(nextH.startDate)}
+                  {isSunNext ? ' (Falls on Sunday)' : ''}
                   {nextH.description ? ` (${nextH.description})` : ''}
                 </Text>
               </View>
@@ -440,7 +573,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     }
 
     return slides;
-  }, [isMyBirthday, todayBirthdays, todaysLeaves, todaysHolidays, holidays, user]);
+  }, [isMyBirthday, todayBirthdays, todaysLeaves, todaysHolidays, thisMonthHolidays, holidays, user, isSundayToday]);
 
   // Smooth animated auto-scroll for highlight slides (Birthday, Holiday, Leaves)
   useEffect(() => {
@@ -750,13 +883,113 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                 </View>
               </View>
 
-              <View style={styles.calendarPromptRow}>
-                <Ionicons name="calendar" size={14} color={COLORS.primary} />
+              {/* CURRENT MONTH SUMMARY SECTION */}
+              <View style={styles.monthSummarySection}>
+                <View style={styles.monthSummaryDivider} />
+                <View style={styles.monthSummaryHeaderRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="stats-chart" size={14} color={COLORS.primary} />
+                    <Text style={styles.monthSummaryTitle}>
+                      {new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })} Summary
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('EmployeeCalendar')}
+                    activeOpacity={0.7}
+                    style={styles.fullCalActionBtn}
+                  >
+                    <Text style={styles.fullCalActionText}>Full Calendar</Text>
+                    <Ionicons name="chevron-forward" size={11} color={COLORS.primary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* KPI Metrics Grid: 6 Compact Summary Boxes */}
+                <View style={styles.monthSummaryGrid}>
+                  {/* 1. Days Worked */}
+                  <TouchableOpacity
+                    style={[styles.kpiBox, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}
+                    onPress={() => navigation.navigate('EmployeeCalendar')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.kpiValue, { color: '#15803D' }]}>
+                      {monthSummary?.daysWorked ?? 0}
+                    </Text>
+                    <Text style={styles.kpiLabel}>Days Worked</Text>
+                  </TouchableOpacity>
+
+                  {/* 2. Scheduled Working Days */}
+                  <TouchableOpacity
+                    style={[styles.kpiBox, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}
+                    onPress={() => navigation.navigate('EmployeeCalendar')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.kpiValue, { color: '#334155' }]}>
+                      {monthSummary?.totalScheduledWorkingDays ?? 0}
+                    </Text>
+                    <Text style={styles.kpiLabel}>Scheduled</Text>
+                  </TouchableOpacity>
+
+                  {/* 3. Casual Leave (CL) Taken */}
+                  <TouchableOpacity
+                    style={[styles.kpiBox, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
+                    onPress={() => navigation.navigate('EmployeeCalendar')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.kpiValue, { color: '#DC2626' }]}>
+                      {monthSummary?.casualLeaveTaken ?? 0}
+                    </Text>
+                    <Text style={styles.kpiLabel}>CL Taken</Text>
+                  </TouchableOpacity>
+
+                  {/* 4. Comp-Off Taken */}
+                  <TouchableOpacity
+                    style={[styles.kpiBox, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+                    onPress={() => navigation.navigate('EmployeeCalendar')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.kpiValue, { color: '#2563EB' }]}>
+                      {monthSummary?.compOffLeaveTaken ?? 0}
+                    </Text>
+                    <Text style={styles.kpiLabel}>Comp-Off</Text>
+                  </TouchableOpacity>
+
+                  {/* 5. Sunday Work */}
+                  <TouchableOpacity
+                    style={[styles.kpiBox, { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}
+                    onPress={() => navigation.navigate('EmployeeCalendar')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.kpiValue, { color: '#EA580C' }]}>
+                      {monthSummary?.sundayWorkDays ?? 0}
+                    </Text>
+                    <Text style={styles.kpiLabel}>Sunday Work</Text>
+                  </TouchableOpacity>
+
+                  {/* 6. Holidays */}
+                  <TouchableOpacity
+                    style={[styles.kpiBox, { backgroundColor: '#FEFCE8', borderColor: '#FEF08A' }]}
+                    onPress={() => navigation.navigate('EmployeeCalendar')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.kpiValue, { color: '#CA8A04' }]}>
+                      {monthSummary?.totalHolidays ?? 0}
+                    </Text>
+                    <Text style={styles.kpiLabel}>Holidays</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.calendarPromptRow}
+                onPress={() => navigation.navigate('EmployeeCalendar')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="calendar-outline" size={14} color={COLORS.primary} />
                 <Text style={styles.calendarPromptText}>
-                  View Monthly Attendance Calendar & Comp-Offs
+                  Open Full Monthly Attendance Calendar & Comp-Off Details
                 </Text>
                 <Ionicons name="arrow-forward" size={12} color={COLORS.primary} />
-              </View>
+              </TouchableOpacity>
             </Card>
 
 
@@ -943,25 +1176,85 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                   </Text>
                 </View>
               ) : (
-                thisMonthHolidays.map((h) => (
-                  <Card key={h._id} style={styles.highlightHolidayCard}>
-                    <View style={styles.highlightHolidayRow}>
-                      <View style={styles.highlightHolidayIcon}>
-                        <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+                thisMonthHolidays.map((h) => {
+                  const isSunHoliday = h.startDate ? new Date(h.startDate).getDay() === 0 : false;
+                  return (
+                    <Card
+                      key={h._id}
+                      style={[
+                        styles.highlightHolidayCard,
+                        isSunHoliday && styles.highlightSundayHolidayCard,
+                      ]}
+                    >
+                      <View style={styles.highlightHolidayRow}>
+                        <View
+                          style={[
+                            styles.highlightHolidayIcon,
+                            isSunHoliday && { backgroundColor: '#FEF3C7' },
+                          ]}
+                        >
+                          <Ionicons
+                            name={isSunHoliday ? 'sunny' : 'calendar-outline'}
+                            size={20}
+                            color={isSunHoliday ? '#D97706' : COLORS.primary}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              flexWrap: 'wrap',
+                              gap: 4,
+                            }}
+                          >
+                            <Text style={styles.highlightHolidayName}>{h.holidayName}</Text>
+                            {isSunHoliday && (
+                              <View style={styles.sundayHolidayPill}>
+                                <Text style={styles.sundayHolidayPillText}>Sunday Holiday 🏖️</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.highlightHolidayDates}>
+                            {formatDate(h.startDate)}{' '}
+                            {h.startDate !== h.endDate && `to ${formatDate(h.endDate)}`}
+                            {isSunHoliday ? ' • (Falls on Sunday - Weekly Off & Holiday)' : ''}
+                          </Text>
+                          {h.description ? (
+                            <Text style={styles.highlightHolidayDesc}>{h.description}</Text>
+                          ) : null}
+                        </View>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.highlightHolidayName}>{h.holidayName}</Text>
-                        <Text style={styles.highlightHolidayDates}>
-                          {formatDate(h.startDate)} {h.startDate !== h.endDate && `to ${formatDate(h.endDate)}`}
-                        </Text>
-                        {h.description ? (
-                          <Text style={styles.highlightHolidayDesc}>{h.description}</Text>
-                        ) : null}
-                      </View>
-                    </View>
-                  </Card>
-                ))
+                    </Card>
+                  );
+                })
               )}
+
+              {/* SECTION 3: SUNDAYS - WEEKLY HOLIDAYS */}
+              <View style={[styles.highlightSectionHeader, { marginTop: SPACING.lg }]}>
+                <Ionicons name="sunny" size={16} color="#D97706" />
+                <Text style={styles.highlightSectionTitle}>Weekly Holidays (Sundays) 🏖️</Text>
+                <View style={[styles.monthPillBadge, { backgroundColor: '#FEF3C7' }]}>
+                  <Text style={[styles.monthPillText, { color: '#B45309' }]}>Weekly Off</Text>
+                </View>
+              </View>
+
+              <Card style={[styles.highlightHolidayCard, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                <View style={styles.highlightHolidayRow}>
+                  <View style={[styles.highlightHolidayIcon, { backgroundColor: '#FEF3C7' }]}>
+                    <Ionicons name="sunny-outline" size={20} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.highlightHolidayName, { color: '#92400E' }]}>
+                      Sunday Weekly Holidays
+                    </Text>
+                    <Text style={[styles.highlightHolidayDates, { color: '#B45309' }]}>
+                      Every Sunday is a paid weekly holiday for all technicians. If you work on Sunday, 1 Comp-Off credit will automatically be credited to your balance upon checkout!
+                    </Text>
+                  </View>
+                </View>
+              </Card>
 
               <TouchableOpacity
                 style={styles.viewFullHolidaysBtn}
@@ -1270,6 +1563,66 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  monthSummarySection: {
+    marginTop: 8,
+  },
+  monthSummaryDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginBottom: 8,
+  },
+  monthSummaryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  monthSummaryTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  fullCalActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.xs,
+  },
+  fullCalActionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  monthSummaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
+  },
+  kpiBox: {
+    flexBasis: '31.5%',
+    flexGrow: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kpiValue: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  kpiLabel: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    marginTop: 2,
+    textAlign: 'center',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -1669,6 +2022,136 @@ const styles = StyleSheet.create({
     color: '#15803D',
     marginTop: 2,
     fontWeight: '500',
+  },
+  sundayHighlightCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1.5,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    minHeight: 94,
+    justifyContent: 'center',
+    borderRadius: RADIUS.lg,
+  },
+  sundayAvatarWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  sundayBadgeMini: {
+    position: 'absolute',
+    bottom: -3,
+    right: -3,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 9,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    elevation: 2,
+  },
+  sundayHighlightTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  sundayHighlightSub: {
+    fontSize: 12.5,
+    color: '#B45309',
+    marginTop: 2,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  holidaySundayCombinedCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1.5,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    minHeight: 94,
+    justifyContent: 'center',
+    borderRadius: RADIUS.lg,
+  },
+  holidaySundayAvatarWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 2,
+    borderColor: '#D97706',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  holidaySundayTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  holidaySundaySub: {
+    fontSize: 12,
+    color: '#B45309',
+    marginTop: 2,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  thisMonthHolidayHighlightCard: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+    borderWidth: 1.5,
+    marginBottom: SPACING.md,
+    padding: SPACING.md,
+    minHeight: 94,
+    justifyContent: 'center',
+    borderRadius: RADIUS.lg,
+  },
+  thisMonthHolidayIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#DCFCE7',
+    borderWidth: 2,
+    borderColor: '#22C55E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  thisMonthHolidayHighlightTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  thisMonthHolidayHighlightText: {
+    fontSize: 12,
+    color: '#166534',
+    marginTop: 2,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  highlightSundayHolidayCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  sundayHolidayPill: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  sundayHolidayPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#92400E',
   },
   highlightsAction: {
     borderLeftWidth: 4,

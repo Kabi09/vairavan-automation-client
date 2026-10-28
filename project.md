@@ -160,6 +160,62 @@
 
 ## Change History
 
+### 2026-10-28
+#### Employee Dashboard Month Summary, Sunday Holiday Banner, Work Expense Lock, Signature Preview & Company Clients Directory
+- What was changed:
+  - **Employee Dashboard Current Month Summary (`EmployeeDashboardScreen.jsx`)**:
+    - Connected `calendarApi.getMonthlyCalendar(currentYear, currentMonth)` into dashboard parallel data fetching.
+    - Added a dedicated "Current Month Summary" section directly at the bottom of the "Your Leave Status" card.
+    - Features 6 interactive KPI summary boxes styled with clean pastel tones and icons:
+      1. Days Worked (`#059669`)
+      2. Scheduled Days (`#1E40AF`)
+      3. Casual Leave Taken (`#DC2626`)
+      4. Comp-Off Taken (`#2563EB`)
+      5. Sunday Work (`#EA580C`)
+      6. Holidays (`#D97706`)
+    - Added a direct "Full Calendar & Attendance Details" link that navigates to `EmployeeCalendar`.
+  - **Sunday Weekly Holiday & This Month's Holidays Highlights (`EmployeeDashboardScreen.jsx`)**:
+    - Removed upcoming Sunday preview card from weekdays: Sunday weekly holiday highlights are shown strictly when today is Sunday (`isSundayToday`).
+    - Added **Unified Non-Conflicting Sunday + Festival Holiday Card**: If today is both Sunday and a Company Festival Holiday (e.g. Diwali on Sunday), the dashboard shows a single unified banner `Today: Diwali (Sunday Holiday)! 🪔🏖️` combining the festival description and Sunday Comp-Off credit info, preventing duplicate or conflicting slides.
+    - Added **This Month's Holidays in Carousel**: Highlights carousel displays slides for this month's upcoming company holidays (`thisMonthHolidays`) with dates and an indicator if a holiday coincides with a Sunday.
+    - Highlights modal section updated to display a golden `Sunday Holiday 🏖️` pill badge on holidays that fall on a Sunday.
+  - **Work -> Add Expense Pre-Selection & Strict Duty Binding (`ExpenseFormScreen.jsx`)**:
+    - Fixed draft restoration so that any previously saved draft with empty `selectedDutyId` does not overwrite `routeDuty`.
+    - Merged `routeDuty` into the active duties list and added an automatic fallback in `selectedDutyObj` so the passed work is always found and displayed.
+    - Added a "Locked to Work" badge on the work duty picker and locked the trigger when `routeDuty` is present, with an alert explaining the expense is bound to that work order.
+    - Strictly bound payload fields (`duty`, `dutyId`, `relatedDuty`) to `selectedDutyObj?._id || routeDuty?._id` ensuring submitted expenses are locked to that duty.
+  - **Customer Signature Inline Preview Fix (`SignatureImage.jsx`, `DutyFormScreen.jsx`)**:
+    - Updated `SignatureImage.jsx` to accept `signature` prop in addition to `uri` and `url`.
+    - Added support for extracting string, `dataUri`, or nested `url` from objects, guaranteeing it renders across all formats.
+    - Updated `DutyFormScreen.jsx` to pass `uri`, `signature`, `height={120}`, and timestamp to `SignatureImage`.
+    - The signature preview now displays immediately in-line upon capture/signing.
+  - **Admin Company Details: Client Contacts Directory & Add Client Modal (`CompanyDetailsScreen.jsx`)**:
+    - Integrated `clientApi` (`getClientsByCompany`, `createClient`) into `CompanyDetailsScreen.jsx`.
+    - Added a 3rd stat box in the header summary for "Client Contacts" and a 2-segment switcher ("Client Contacts" vs "Work Duties").
+    - Implemented client contact cards with avatar initials, name, status pill, phone number, and 1-tap "Call Client" (`tel:`) and "WhatsApp / SMS" (`whatsapp://` / `sms:`) buttons.
+    - Added an "Add Client" button and modal allowing admins to link new contact persons to the company with 10-digit phone validation.
+    - Added **Edit Client Contact**: Admins can tap the "Edit" chip on any client contact card to modify their contact person name, 10-digit phone number, and toggle their status between "Active" and "Inactive", with real-time updates via `clientApi.updateClient(id, data)`.
+    - Fixed `ReferenceError: Property 'setLoadingClients' doesn't exist` by properly declaring `const [loadingClients, setLoadingClients] = useState(false);` and integrating `loadingClients` into `ListEmptyComponent` and `fetchClients`.
+  - **Duty Form Check-In Dispatch Fix (`DutyFormScreen.jsx`)**:
+    - Ensured `const res = await dutyApi.checkIn(checkInPayload);` is explicitly called inside `handleCheckIn` before reading `createdDuty`.
+  - **Safe Global Base64 Reference (`SignatureImage.jsx`)**:
+    - Replaced bare `atob` with `globalThis.atob` check for Hermes/React Native cross-environment safety.
+- Files changed:
+  - `duty-management-app/src/components/SignatureImage.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/ExpenseFormScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/CompanyDetailsScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Dashboard fetches monthly calendar summary to display 6 attendance & leave KPIs inside the leave card.
+  - Highlights carousel recognizes Sunday weekly holiday alongside birthdays and official holidays.
+  - Expense form locks and preserves passed work order from work screen without draft corruption.
+  - SignatureImage handles all signature prop formats and objects for immediate inline preview.
+  - Admin company screen provides full visibility into client contact persons and quick communication links.
+- Reason: User requested: "employee dashbord- add bottom ofyour leave status section current month summary; fix; sunday holiday add so sunday- show heighlights/ likebirthday one box show antha marri sunday leave varanum; fix;;; work- add expense - work select default show that particular work and ony adedd to expense in the work;;; also signature addede but not showthe preview but click the preview show the correct ; admin-company select c(lient company) - not showing to client fix iwant company select show also clients deails; fix".
+- Impact: Enhanced employee dashboard insights with live monthly metrics and weekly holiday highlights; guaranteed work expense link integrity; seamless signature preview UX; and complete client contact visibility and management in admin company details.
+
 ### 2026-10-27
 #### Admin Calendar Staff Selection Fix, Employee Duty Edit Removal, Clean Check-In Form & Real-Time Dashboard Timer
 - What was changed:
@@ -2868,6 +2924,11 @@
   - Work Details PDF & Excel exports updated to include complete expense breakdowns, totals, and attached photo proof arrays.
   - Admin Employee Details screen (`EmployeeDetailsScreen.jsx`) upgraded with a 3rd `Expenses` tab, KPI metrics, itemized claim cards, proof photos, and PDF/Excel export buttons.
   - Backend schema and controllers updated with `relatedDuty` two-way referencing and automatic expense population.
+  - **Employee Dashboard Current Month Summary**: Integrated monthly calendar summary at the bottom of the "Your Leave Status" card with 6 interactive KPI boxes (Days Worked, Scheduled, CL Taken, Comp-Off, Sunday Work, Holidays) and calendar quick-link.
+  - **Sunday Weekly Holiday Highlights**: Added carousel slide and modal notices for Sunday weekly holiday and upcoming Sunday countdown.
+  - **Work Expense Binding & Lock**: Locked work duty selector when navigating from a work order with "Locked to Work" tag and draft overwrite protection.
+  - **Customer Signature Preview**: Fixed `SignatureImage` to support `signature` prop and object extraction for immediate inline preview upon capture.
+  - **Admin Company Details Clients Directory**: Added client contacts tab, avatar list, active status badges, quick call/WhatsApp buttons, and Add Client Contact modal.
   - All test suites passing with 0 failures (49/49 tests pass).
 
 ## Known Issues
