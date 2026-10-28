@@ -32,6 +32,7 @@ const notificationSchema = new mongoose.Schema(
         'message',
         'expense_submitted',
         'expense_reviewed',
+        'document_uploaded',
       ],
       default: 'leave_request',
       index: true,

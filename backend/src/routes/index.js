@@ -13,6 +13,7 @@ import clientRoutes from './clientRoutes.js';
 import expenseRoutes from './expenseRoutes.js';
 import expenseCategoryRoutes from './expenseCategoryRoutes.js';
 import calendarRoutes from './calendarRoutes.js';
+import documentRoutes from './documentRoutes.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import { connectDB } from '../config/db.js';
 import { isR2Configured, getR2BucketName, getR2PublicUrl } from '../config/r2.js';
@@ -68,5 +69,6 @@ router.use('/clients', clientRoutes);
 router.use('/expenses', expenseRoutes);
 router.use('/expense-categories', expenseCategoryRoutes);
 router.use('/calendar', calendarRoutes);
+router.use('/documents', documentRoutes);
 
 export default router;

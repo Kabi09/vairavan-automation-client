@@ -9,12 +9,12 @@
 ## Project Structure
 - Important folders:
   - `backend/`: Root directory of the REST API backend.
-    - `backend/src/models/`: Mongoose models (`User.js`, `Company.js`, `Client.js`, `Duty.js`, `Leave.js`, `Holiday.js`, `Expense.js`, `ExpenseCategory.js`, `Notification.js`, `CompOffCredit.js`, `LeaveConfig.js`).
+    - `backend/src/models/`: Mongoose models (`User.js`, `Company.js`, `Client.js`, `Duty.js`, `Leave.js`, `Holiday.js`, `Expense.js`, `ExpenseCategory.js`, `Notification.js`, `CompOffCredit.js`, `LeaveConfig.js`, `SharedDocument.js`).
     - `backend/src/services/`: Shared business logic (`leaveService.js`, `notificationService.js`, `r2Service.js`).
-    - `backend/src/controllers/`: Route controllers (`authController.js`, `companyController.js`, `clientController.js`, `dutyController.js`, `leaveController.js`, `holidayController.js`, `expenseController.js`, `notificationController.js`, `calendarController.js`).
-    - `backend/src/routes/`: Express routers (`authRoutes.js`, `companyRoutes.js`, `clientRoutes.js`, `dutyRoutes.js`, `leaveRoutes.js`, `holidayRoutes.js`, `expenseRoutes.js`, `notificationRoutes.js`, `calendarRoutes.js`).
+    - `backend/src/controllers/`: Route controllers (`authController.js`, `companyController.js`, `clientController.js`, `dutyController.js`, `leaveController.js`, `holidayController.js`, `expenseController.js`, `notificationController.js`, `calendarController.js`, `documentController.js`).
+    - `backend/src/routes/`: Express routers (`authRoutes.js`, `companyRoutes.js`, `clientRoutes.js`, `dutyRoutes.js`, `leaveRoutes.js`, `holidayRoutes.js`, `expenseRoutes.js`, `notificationRoutes.js`, `calendarRoutes.js`, `documentRoutes.js`).
   - `duty-management-app/`: Root directory of the React Native Expo mobile application.
-    - `duty-management-app/src/api/`: Central Axios client and modular API endpoints (`apiClient.js`, `authApi.js`, `companyApi.js`, `employeeApi.js`, `dutyApi.js`, `leaveApi.js`, `holidayApi.js`, `dashboardApi.js`, `uploadApi.js`, `notificationApi.js`, `calendarApi.js`).
+    - `duty-management-app/src/api/`: Central Axios client and modular API endpoints (`apiClient.js`, `authApi.js`, `companyApi.js`, `employeeApi.js`, `dutyApi.js`, `leaveApi.js`, `holidayApi.js`, `dashboardApi.js`, `uploadApi.js`, `notificationApi.js`, `calendarApi.js`, `documentApi.js`).
     - `duty-management-app/src/components/`: Reusable UI primitives (`PrimaryButton.jsx`, `SecondaryButton.jsx`, `TextInputField.jsx`, `Card.jsx`, `StatusBadge.jsx`, `LoadingIndicator.jsx`, `ErrorMessage.jsx`, `EmptyState.jsx`, `ScreenHeader.jsx`, `ConfirmationDialog.jsx`, `SignaturePadModal.jsx`, `MonthlyCalendarView.jsx`, `ExpenseClaimDetailModal.jsx`).
     - `duty-management-app/src/constants/`: Configuration and design tokens (`config.js`, `theme.js`).
     - `duty-management-app/src/context/`: Authentication state provider (`AuthContext.jsx`, `NotificationContext.jsx`).
@@ -23,7 +23,7 @@
       - `auth/`: `LoginScreen.jsx`
       - `admin/`: `AdminDashboardScreen.jsx`, `CompanyListScreen.jsx`, `CompanyFormScreen.jsx`, `EmployeeListScreen.jsx`, `EmployeeFormScreen.jsx`, `AllDutiesScreen.jsx`, `LeaveRequestsScreen.jsx`, `HolidayManagementScreen.jsx`, `AdminExpensesScreen.jsx`.
       - `employee/`: `EmployeeDashboardScreen.jsx`, `DutyFormScreen.jsx`, `MyDutiesScreen.jsx`, `DutyDetailsScreen.jsx`, `LeaveRequestScreen.jsx`, `MyLeavesScreen.jsx`, `HolidayListScreen.jsx`, `MyExpensesScreen.jsx`, `ExpenseFormScreen.jsx`, `EmployeeCalendarScreen.jsx`.
-      - `common/`: `ProfileScreen.jsx`, `ChangePasswordScreen.jsx`.
+      - `common/`: `ProfileScreen.jsx`, `ChangePasswordScreen.jsx`, `SharedDocumentsScreen.jsx`.
     - `duty-management-app/src/utils/`: `validators.js`, `dateUtils.js`, `errorUtils.js`, `notificationService.js`, `draftStorage.js`, `exportUtils.js`.
 
 ## UI & Styling Rules
@@ -157,8 +157,74 @@
   - Access: Admin only.
   - Payload: `{ status: 'approved' | 'rejected', remarks, rejectionReason }`.
   - Behavior: Verifies available balance at approval time; deducts balance upon approval; does NOT deduct on rejection.
+- `POST /api/documents`:
+  - Access: Authenticated users (Admin & Employee).
+  - Middleware: `uploadDocumentsMiddleware` (up to 10 files, max 25MB each).
+  - Payload: FormData with `title` (required, 2-150 chars), `description` (optional), `files` (array of file buffers).
+  - Behavior: Uploads all files to Cloudflare R2 (`vairavan-automation/documents`), maps category (`pdf`, `doc`, `sheet`, `slides`, `image`, `archive`, `text`, `file`), creates `SharedDocument`, creates in-app notification with `type: 'document_uploaded'` and `recipientRole: 'all'` (with uploader in `readBy`), and dispatches push notifications to other active users' device tokens.
+- `GET /api/documents`:
+  - Access: Authenticated users (Admin & Employee).
+  - Query params: `search` (case-insensitive regex on title, description, uploader, file name), `role` (`admin` | `employee`), `page`, `limit`.
+  - Response: `{ success: true, data: { documents: [...], unreadCount, pagination: {...} } }`. Excludes soft-deleted documents.
+- `GET /api/documents/unread-count`:
+  - Access: Authenticated users.
+  - Response: `{ success: true, data: { unreadCount } }` representing unread `document_uploaded` notifications.
+- `PATCH /api/documents/mark-viewed`:
+  - Access: Authenticated users.
+  - Behavior: Marks all `document_uploaded` notifications as viewed by adding `req.user._id` to `readBy`.
+- `DELETE /api/documents/:id`:
+  - Access: Document owner (uploader) or Admin.
+  - Behavior: Verifies permission (`isAdmin || isOwner`), sets `isDeleted = true, deletedAt = new Date(), deletedBy = req.user._id`, and asynchronously deletes files from Cloudflare R2.
+
 
 ## Change History
+
+### 2026-10-28
+#### Shared Documents & Multi-File Upload Section for Admin and Employee Users
+- What was changed:
+  - **Shared Document Management Backend (`SharedDocument.js`, `documentController.js`, `documentValidator.js`, `documentRoutes.js`, `upload.js`, `Notification.js`)**:
+    - Created Mongoose model `SharedDocument` storing title, description, uploader, uploaderName, uploaderRole, uploaderEmployeeId, files array (originalName, fileName, url, key, mimeType, size, fileType), and soft-deletion tracking (`isDeleted`, `deletedAt`, `deletedBy`).
+    - Added `uploadDocumentsMiddleware` in `upload.js` supporting multi-file uploads (up to 10 files, up to 25MB each) across PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, Images, ZIP, RAR, 7Z, and archives.
+    - Implemented `POST /api/documents` handling R2 buffer uploads via `r2Service.uploadBufferToR2`, database record creation, in-app notification creation (`recipientRole: 'all'`, `type: 'document_uploaded'`, with uploader included in `readBy`), and push notification broadcast to active users.
+    - Implemented `GET /api/documents` with search (title/description/files/uploader), role filter (`admin` vs `employee`), pagination, and sorting by latest.
+    - Implemented `DELETE /api/documents/:id` with strict role permissions: Admins can delete any document, employees can delete only their own uploads; soft deletes document and asynchronously purges assets from Cloudflare R2.
+    - Implemented `GET /api/documents/unread-count` and `PATCH /api/documents/mark-viewed` to maintain real-time unread badges.
+  - **Shared Documents Screen & Mobile Client (`SharedDocumentsScreen.jsx`, `documentApi.js`)**:
+    - Created `SharedDocumentsScreen.jsx` providing a unified workspace for both Admin and Employee users.
+    - Document Feed: Displays Title, Uploader avatar initial pill, Uploader name, Role badge (Admin vs Staff), formatted Date/Time, description, and itemized attached file cards.
+    - File Cards: Shows extension icon and color-coded badge (PDF: Red, Excel: Green, Word: Blue, PPT: Orange, Image: Purple, Archive: Amber, Text: Slate), formatted file size (KB/MB), and 1-tap "Open" / Download action powered by `expo-file-system` and `expo-sharing` with fallback to `Linking.openURL`.
+    - Delete Action: Visible with trash icon only for document owner or admin, backed by confirmation dialog and instant local state removal.
+    - Upload Modal: Multi-file picker using `expo-document-picker`, file curation tray with individual remove pills, character counter, upload progress bar, and immediate prepend into document feed.
+    - Search & Filter: Instant search input with clear button, and role filter chips ("All Files", "From Admin", "From Staff").
+  - **Dashboard & Navigation Integration (`AdminNavigator.jsx`, `EmployeeNavigator.jsx`, `AdminDashboardScreen.jsx`, `EmployeeDashboardScreen.jsx`, `NotificationContext.jsx`)**:
+    - Registered `SharedDocuments` stack screen in both `AdminNavigator` and `EmployeeNavigator`.
+    - Added dedicated "Shared Documents & Upload" action banner on both Admin and Employee dashboards with live "NEW" / unread counter badge.
+    - Added direct Upload icon button with live notification badge in the top header action row of both dashboards.
+    - Extended `NotificationContext` to track `unreadDocumentCount` and route push notification tray taps directly to `SharedDocuments`.
+- Files changed:
+  - `backend/src/models/SharedDocument.js` (Created)
+  - `backend/src/models/Notification.js`
+  - `backend/src/middleware/upload.js`
+  - `backend/src/validators/documentValidator.js` (Created)
+  - `backend/src/controllers/documentController.js` (Created)
+  - `backend/src/routes/documentRoutes.js` (Created)
+  - `backend/src/routes/index.js`
+  - `backend/tests/document.test.js` (Created)
+  - `duty-management-app/src/api/documentApi.js` (Created)
+  - `duty-management-app/src/screens/common/SharedDocumentsScreen.jsx` (Created)
+  - `duty-management-app/src/context/NotificationContext.jsx`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/navigation/EmployeeNavigator.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Added shared document repository accessible to both Admin and Employee users.
+  - Multi-file uploads automatically encrypted and stored in Cloudflare R2 with friendly category resolution.
+  - Automated in-app and push notification broadcast for team document sharing without self-notifying the uploader.
+  - Role-based deletion permissions ensure staff can delete only their own files while admins maintain full management rights.
+- Reason: User requested: "Add a new "Upload" section to the app for both Admin and Employee users."
+- Impact: Seamless document and file collaboration between field engineers and management; real-time upload notifications; instant local state updates; persistent cloud storage across app restarts; and smooth file preview and downloading.
 
 ### 2026-10-28
 #### Employee Dashboard Month Summary, Sunday Holiday Banner, Work Expense Lock, Signature Preview & Company Clients Directory

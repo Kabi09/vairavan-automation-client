@@ -18,6 +18,7 @@ import ExpenseFormScreen from '../screens/employee/ExpenseFormScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 import ChangePasswordScreen from '../screens/common/ChangePasswordScreen';
 import CompanyFormScreen from '../screens/admin/CompanyFormScreen';
+import SharedDocumentsScreen from '../screens/common/SharedDocumentsScreen';
 import { COLORS } from '../constants/theme';
 
 const Tab = createBottomTabNavigator();
@@ -118,6 +119,7 @@ export const EmployeeNavigator = () => {
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+      <Stack.Screen name="SharedDocuments" component={SharedDocumentsScreen} />
     </Stack.Navigator>
   );
 };

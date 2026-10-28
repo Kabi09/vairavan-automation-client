@@ -54,8 +54,79 @@ export const uploadAvatarMiddleware = multer({
   fileFilter: imageFileFilter,
 }).single('avatar');
 
+// Allowed extensions for shared document uploads
+const ALLOWED_DOCUMENT_EXTS = new Set([
+  'pdf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'txt',
+  'csv',
+  'rtf',
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'gif',
+  'svg',
+  'zip',
+  'rar',
+  '7z',
+  'tar',
+  'gz',
+  'json',
+  'xml',
+]);
+
+const documentFileFilter = (req, file, cb) => {
+  const ext = (file.originalname || '').split('.').pop()?.toLowerCase();
+  if (ext && ALLOWED_DOCUMENT_EXTS.has(ext)) {
+    return cb(null, true);
+  }
+
+  // Also check general mime types
+  const mime = file.mimetype?.toLowerCase() || '';
+  if (
+    mime.startsWith('image/') ||
+    mime.startsWith('text/') ||
+    mime.includes('pdf') ||
+    mime.includes('word') ||
+    mime.includes('excel') ||
+    mime.includes('spreadsheet') ||
+    mime.includes('presentation') ||
+    mime.includes('powerpoint') ||
+    mime.includes('zip') ||
+    mime.includes('compressed') ||
+    mime === 'application/octet-stream'
+  ) {
+    return cb(null, true);
+  }
+
+  return cb(
+    ApiError.badRequest(
+      `File format for '${file.originalname}' is not supported. Supported: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, Images, ZIP.`
+    ),
+    false
+  );
+};
+
+// Max size for shared documents: 25MB per file, up to 10 files
+export const uploadDocumentsMiddleware = multer({
+  storage,
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25MB
+    files: 10,
+  },
+  fileFilter: documentFileFilter,
+}).array('files', 10);
+
 export default {
   uploadSignatureMiddleware,
   uploadProofPhotosMiddleware,
   uploadAvatarMiddleware,
+  uploadDocumentsMiddleware,
 };
+

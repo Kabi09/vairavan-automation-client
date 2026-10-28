@@ -55,6 +55,12 @@ export const NotificationProvider = ({ children, navigationRef }) => {
           if (navigationRef?.current) {
             const notifType = data.type || '';
             const expenseId = data.expenseId;
+            if (notifType === 'document_uploaded' || data.documentId) {
+              try {
+                navigationRef.current.navigate('SharedDocuments');
+                return;
+              } catch {}
+            }
             if (notifType.includes('expense') || expenseId) {
               try {
                 navigationRef.current.navigate('AdminExpenses', { expenseId });
@@ -82,9 +88,15 @@ export const NotificationProvider = ({ children, navigationRef }) => {
     }
   }, [isAuthenticated, fetchNotifications, navigationRef]);
 
+  // Compute unread count for shared documents
+  const unreadDocumentCount = notifications.filter(
+    (n) => n.type === 'document_uploaded' && !n.isRead
+  ).length;
+
   const value = {
     notifications,
     unreadCount,
+    unreadDocumentCount,
     loading,
     refreshNotifications: fetchNotifications,
   };

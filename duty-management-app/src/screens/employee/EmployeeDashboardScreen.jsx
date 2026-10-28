@@ -35,7 +35,7 @@ const SLIDE_WIDTH = SCREEN_WIDTH - SPACING.lg * 2;
 
 export const EmployeeDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const { unreadCount, refreshNotifications } = useNotifications();
+  const { unreadCount, unreadDocumentCount, refreshNotifications } = useNotifications();
   const [data, setData] = useState(null);
   const [monthSummary, setMonthSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -616,6 +616,22 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity
+              style={styles.uploadBadgeBtn}
+              onPress={() => navigation.navigate('SharedDocuments')}
+              activeOpacity={0.7}
+              accessibilityLabel="Shared Documents & Upload"
+            >
+              <Ionicons name="cloud-upload-outline" size={24} color={COLORS.text} />
+              {Boolean(unreadDocumentCount > 0) ? (
+                <View style={styles.unreadDocBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadDocumentCount > 9 ? '9+' : unreadDocumentCount}
+                  </Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.messageBadgeBtn}
               onPress={() => setMessagesModalVisible(true)}
               activeOpacity={0.7}
@@ -853,6 +869,41 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
                 <Text style={styles.quickActionSub}>Apply off</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Shared Documents & Upload Banner */}
+            <TouchableOpacity
+              style={styles.sharedDocsBanner}
+              onPress={() => navigation.navigate('SharedDocuments')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.sharedDocsLeft}>
+                <View style={styles.sharedDocsIconWrap}>
+                  <Ionicons name="folder-open" size={22} color="#FFFFFF" />
+                  {Boolean(unreadDocumentCount > 0) && (
+                    <View style={styles.bannerBadgeDot}>
+                      <Text style={styles.bannerBadgeText}>{unreadDocumentCount}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.sharedDocsTextWrap}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.sharedDocsTitle}>Shared Documents & Upload</Text>
+                    {Boolean(unreadDocumentCount > 0) && (
+                      <View style={styles.newFilesChip}>
+                        <Text style={styles.newFilesChipText}>NEW</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.sharedDocsSub}>
+                    Access manuals, blueprints & team files
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.sharedDocsBtnPill}>
+                <Ionicons name="cloud-upload" size={13} color="#FFFFFF" />
+                <Text style={styles.sharedDocsBtnText}>Upload</Text>
+              </View>
+            </TouchableOpacity>
 
             {/* Leave Balances Status */}
             <Card style={styles.leaveStatusCard} onPress={() => navigation.navigate('MyLeaves')}>
@@ -2352,6 +2403,109 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 3.5,
     backgroundColor: COLORS.primary,
+  },
+  uploadBadgeBtn: {
+    padding: SPACING.xs,
+    position: 'relative',
+    marginRight: 2,
+  },
+  unreadDocBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#059669',
+    borderRadius: 9,
+    minWidth: 17,
+    height: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: COLORS.card,
+  },
+  sharedDocsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0F172A',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  sharedDocsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  sharedDocsIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1E40AF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.md,
+    position: 'relative',
+  },
+  bannerBadgeDot: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    backgroundColor: '#059669',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    borderWidth: 1.5,
+    borderColor: '#0F172A',
+  },
+  bannerBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  sharedDocsTextWrap: {
+    flex: 1,
+  },
+  sharedDocsTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  newFilesChip: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  newFilesChipText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  sharedDocsSub: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  sharedDocsBtnPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E40AF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    gap: 4,
+  },
+  sharedDocsBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
   },
   brandingFooter: {
     marginTop: SPACING.lg,
