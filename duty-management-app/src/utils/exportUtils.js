@@ -87,6 +87,61 @@ const escapeCsv = (val) => {
 };
 
 /**
+ * Print / Save as PDF on Web using an isolated iframe
+ */
+export const printHtmlOnWeb = (htmlContent, title = 'Report') => {
+  if (typeof document === 'undefined') return;
+
+  try {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow || iframe.contentDocument;
+    const iframeDoc = doc.document || doc;
+    iframeDoc.open();
+    iframeDoc.write(htmlContent);
+    iframeDoc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.warn('Iframe print failed, falling back to window.open:', err);
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(htmlContent);
+          win.document.close();
+          win.focus();
+          win.print();
+        }
+      } finally {
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe);
+          }
+        }, 3000);
+      }
+    }, 400);
+  } catch (webErr) {
+    console.error('Web print error:', webErr);
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(htmlContent);
+      win.document.close();
+      win.focus();
+      win.print();
+    }
+  }
+};
+
+/**
  * Helper to write a base64 string to a local cache file across Expo SDK versions
  */
 export const writeBase64ToCacheFile = async (filename, base64) => {
@@ -162,21 +217,45 @@ export const promptDownloadOrShare = async ({
 }) => {
   const isSharingAvailable = await Sharing.isAvailableAsync().catch(() => false);
 
-  // Web Platform: Trigger direct file download
+  // Web Platform: Trigger direct file download using Blob URL
   if (Platform.OS === 'web') {
     try {
       const link = document.createElement('a');
+      let blobUrl = null;
+
       if (base64) {
-        link.href = `data:${mimeType || 'application/octet-stream'};base64,${base64}`;
+        try {
+          const binaryStr = atob(base64);
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], {
+            type: mimeType || 'application/octet-stream',
+          });
+          blobUrl = URL.createObjectURL(blob);
+          link.href = blobUrl;
+        } catch {
+          link.href = `data:${mimeType || 'application/octet-stream'};base64,${base64}`;
+        }
       } else if (fileUri) {
         link.href = fileUri;
       } else if (content) {
-        link.href = `data:${mimeType || 'text/plain'};charset=utf-8,` + encodeURIComponent(content);
+        const blob = new Blob([content], {
+          type: `${mimeType || 'text/plain'};charset=utf-8`,
+        });
+        blobUrl = URL.createObjectURL(blob);
+        link.href = blobUrl;
       }
+
       link.download = filename || 'download';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
+      if (blobUrl) {
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+      }
       return;
     } catch (webErr) {
       console.warn('Web export download failed:', webErr);
@@ -370,6 +449,19 @@ export const promptDownloadOrShare = async ({
  */
 const writeCsvFileAndShare = async (cleanFilename, csvContent, dialogTitle) => {
   const filenameWithExt = `${cleanFilename}_${Date.now()}.csv`;
+
+  // On Web: promptDownloadOrShare triggers direct browser download from `content`
+  if (Platform.OS === 'web') {
+    await promptDownloadOrShare({
+      fileUri: null,
+      filename: filenameWithExt,
+      mimeType: 'text/csv',
+      dialogTitle,
+      content: csvContent,
+    });
+    return;
+  }
+
   let fileUri = null;
 
   // 1. Try legacy expo-file-system (preferred for writeAsStringAsync without deprecation warnings)
@@ -429,12 +521,6 @@ export const exportDutiesToPDF = async ({
 }) => {
   if (!duties || duties.length === 0) {
     Alert.alert('No Records', 'There are no work records to export for the selected filter.');
-    return;
-  }
-
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (!isAvailable) {
-    Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
     return;
   }
 
@@ -861,6 +947,12 @@ export const exportDutiesToPDF = async ({
       </html>
     `;
 
+    // On Web: print via isolated iframe / window (triggers browser "Save as PDF" / Print)
+    if (Platform.OS === 'web') {
+      printHtmlOnWeb(htmlContent, title);
+      return;
+    }
+
     const { uri } = await Print.printToFileAsync({
       html: htmlContent,
       base64: false,
@@ -1107,12 +1199,6 @@ export const exportLeavesToPDF = async ({
     return;
   }
 
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (!isAvailable) {
-    Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
-    return;
-  }
-
   try {
     const generatedDate = new Date().toLocaleString('en-IN', {
       dateStyle: 'medium',
@@ -1281,6 +1367,12 @@ export const exportLeavesToPDF = async ({
       </html>
     `;
 
+    // On Web: print via isolated iframe / window (triggers browser "Save as PDF" / Print)
+    if (Platform.OS === 'web') {
+      printHtmlOnWeb(htmlContent, title);
+      return;
+    }
+
     const { uri } = await Print.printToFileAsync({
       html: htmlContent,
       base64: false,
@@ -1379,12 +1471,6 @@ export const exportEmployeesToPDF = async ({
 }) => {
   if (!employees || employees.length === 0) {
     Alert.alert('No Records', 'There are no employee records to export.');
-    return;
-  }
-
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (!isAvailable) {
-    Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
     return;
   }
 
@@ -1549,6 +1635,12 @@ export const exportEmployeesToPDF = async ({
       </html>
     `;
 
+    // On Web: print via isolated iframe / window (triggers browser "Save as PDF" / Print)
+    if (Platform.OS === 'web') {
+      printHtmlOnWeb(htmlContent, title);
+      return;
+    }
+
     const { uri } = await Print.printToFileAsync({
       html: htmlContent,
       base64: false,
@@ -1626,12 +1718,6 @@ export const exportCompaniesToPDF = async ({
 }) => {
   if (!companies || companies.length === 0) {
     Alert.alert('No Records', 'There are no company records to export.');
-    return;
-  }
-
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (!isAvailable) {
-    Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
     return;
   }
 
@@ -1795,6 +1881,12 @@ export const exportCompaniesToPDF = async ({
       </body>
       </html>
     `;
+
+    // On Web: print via isolated iframe / window (triggers browser "Save as PDF" / Print)
+    if (Platform.OS === 'web') {
+      printHtmlOnWeb(htmlContent, title);
+      return;
+    }
 
     const { uri } = await Print.printToFileAsync({
       html: htmlContent,
@@ -2195,6 +2287,12 @@ export const exportExpensesToPDF = async ({
       </html>
     `;
 
+    // On Web: print via isolated iframe / window (triggers browser "Save as PDF" / Print)
+    if (Platform.OS === 'web') {
+      printHtmlOnWeb(htmlContent, title);
+      return;
+    }
+
     const { uri } = await Print.printToFileAsync({
       html: htmlContent,
       base64: false,
@@ -2347,6 +2445,7 @@ export const exportExpensesToExcel = async ({
 };
 
 export default {
+  printHtmlOnWeb,
   exportDutiesToPDF,
   exportDutiesToExcel,
   exportLeavesToPDF,

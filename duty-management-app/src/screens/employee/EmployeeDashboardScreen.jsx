@@ -28,19 +28,26 @@ import BrandingFooter from '../../components/BrandingFooter';
 import { formatDate, formatTime, getGreeting, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
+import { useResponsive } from '../../hooks/useResponsive';
+import { useData, CACHE_TTL } from '../../context/DataContext';
+import WebHeader from '../../components/WebHeader';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SLIDE_WIDTH = SCREEN_WIDTH - SPACING.lg * 2;
 
 export const EmployeeDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { unreadCount, unreadDocumentCount, unreadMessageCount, refreshNotifications } = useNotifications();
+  const { isDesktop, isTablet, width } = useResponsive();
+  const { fetchWithCache } = useData();
   const [data, setData] = useState(null);
   const [monthSummary, setMonthSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+
+  // Dynamic slide width responding to screen size
+  const slideWidth = useMemo(() => {
+    return Math.min(width - SPACING.lg * 2, 1200);
+  }, [width]);
 
   // Highlights modal state
   const [highlightsModalVisible, setHighlightsModalVisible] = useState(false);
@@ -126,26 +133,40 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
     }
   }, [activeDuty, lastCompletedDuty]);
 
-  const fetchDashboard = useCallback(async () => {
+  const fetchDashboard = useCallback(async (forceRefresh = false) => {
     try {
       setError('');
-      const [dashRes, activeRes, calRes] = await Promise.all([
-        dashboardApi.getEmployeeDashboard().catch(() => null),
+      const [dashData, activeRes, calData] = await Promise.all([
+        fetchWithCache(
+          'employee_dashboard',
+          async () => {
+            const res = await dashboardApi.getEmployeeDashboard();
+            return res.data;
+          },
+          { ttl: CACHE_TTL.DASHBOARD, forceRefresh }
+        ).catch(() => null),
         dutyApi.getActiveCheckIn().catch(() => null),
-        calendarApi.getMonthlyCalendar().catch(() => null),
+        fetchWithCache(
+          'employee_calendar_summary',
+          async () => {
+            const res = await calendarApi.getMonthlyCalendar();
+            return res.data;
+          },
+          { ttl: CACHE_TTL.BALANCES, forceRefresh }
+        ).catch(() => null),
       ]);
-      if (dashRes?.data) {
-        setData(dashRes.data);
+      if (dashData) {
+        setData(dashData);
       }
-      if (calRes?.data?.summary) {
-        setMonthSummary(calRes.data.summary);
+      if (calData?.summary) {
+        setMonthSummary(calData.summary);
       }
       const activeObj = activeRes?.data?.activeDuty || activeRes?.activeDuty;
       if (activeObj) {
         setActiveDuty(activeObj);
       } else {
-        // Fallback: check if dashRes.data.todayDuties reports contain an active checked_in duty
-        const activeFromDash = dashRes?.data?.todayDuties?.reports?.find(
+        // Fallback: check if dashData.todayDuties reports contain an active checked_in duty
+        const activeFromDash = dashData?.todayDuties?.reports?.find(
           (d) => d.status === 'checked_in' && !d.checkOutTime && !d.outTime
         );
         setActiveDuty(activeFromDash || null);
@@ -156,7 +177,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [fetchWithCache]);
 
   useFocusEffect(
     useCallback(() => {
@@ -167,7 +188,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchDashboard();
+    fetchDashboard(true);
   };
 
   const recentDuties = data?.recentDuties || [];
@@ -585,18 +606,26 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
       activeHighlightIndexRef.current = nextIdx;
       setActiveHighlightIndex(nextIdx);
       carouselRef.current?.scrollTo({
-        x: nextIdx * SLIDE_WIDTH,
+        x: nextIdx * slideWidth,
         animated: true,
       });
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [highlightSlides.length]);
+  }, [highlightSlides.length, slideWidth]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <WebHeader
+        navigation={navigation}
+        onRefresh={onRefresh}
+        isRefreshing={refreshing}
+      />
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isDesktop && { maxWidth: 1240, width: '100%', alignSelf: 'center' },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -781,14 +810,14 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               ref={carouselRef}
               horizontal
               pagingEnabled
-              snapToInterval={SLIDE_WIDTH}
+              snapToInterval={slideWidth}
               snapToAlignment="center"
               decelerationRate="fast"
               bounces={false}
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={(e) => {
                 const offsetX = e.nativeEvent.contentOffset.x;
-                const idx = Math.round(offsetX / SLIDE_WIDTH);
+                const idx = Math.round(offsetX / slideWidth);
                 if (idx >= 0 && idx < highlightSlides.length) {
                   activeHighlightIndexRef.current = idx;
                   setActiveHighlightIndex(idx);
@@ -797,7 +826,7 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               scrollEventThrottle={16}
             >
               {highlightSlides.map((slide) => (
-                <View key={slide.id} style={{ width: SLIDE_WIDTH, paddingHorizontal: 4, justifyContent: 'center' }}>
+                <View key={slide.id} style={{ width: slideWidth, paddingHorizontal: 4, justifyContent: 'center' }}>
                   {slide.node}
                 </View>
               ))}

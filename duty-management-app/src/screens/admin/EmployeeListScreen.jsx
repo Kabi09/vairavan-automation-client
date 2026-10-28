@@ -27,10 +27,14 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportEmployeesToPDF, exportEmployeesToExcel } from '../../utils/exportUtils';
 import { isDeveloperAdmin } from '../../utils/validators';
 import { useAuth } from '../../context/AuthContext';
+import { useResponsive } from '../../hooks/useResponsive';
+import { useData, CACHE_TTL } from '../../context/DataContext';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const EmployeeListScreen = ({ navigation }) => {
   const { user: currentUser } = useAuth();
+  const { isDesktop } = useResponsive();
+  const { fetchWithCache, syncEmployee } = useData();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,21 +51,28 @@ export const EmployeeListScreen = ({ navigation }) => {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState('');
 
-  const fetchEmployees = useCallback(async (searchQuery = '') => {
+  const fetchEmployees = useCallback(async (searchQuery = '', force = false) => {
     try {
       setError('');
       const params = { limit: 100 };
       if (searchQuery.trim()) {
         params.search = searchQuery.trim();
       }
-      const res = await employeeApi.getEmployees(params);
-      if (res.data?.employees) {
+      const employeesData = await fetchWithCache(
+        `employees_list_${searchQuery.trim()}`,
+        async () => {
+          const res = await employeeApi.getEmployees(params);
+          return res.data?.employees || [];
+        },
+        { ttl: CACHE_TTL.LISTS, forceRefresh: force }
+      );
+      if (employeesData) {
         // Developer admin sees all employees and admins.
         // Normal admin sees all employees and admins EXCEPT developer admin.
         const isCurrentDev = isDeveloperAdmin(currentUser);
         const filtered = isCurrentDev
-          ? res.data.employees
-          : res.data.employees.filter((e) => !isDeveloperAdmin(e));
+          ? employeesData
+          : employeesData.filter((e) => !isDeveloperAdmin(e));
         setEmployees(filtered);
       }
     } catch (err) {
@@ -70,7 +81,7 @@ export const EmployeeListScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [currentUser, fetchWithCache]);
 
   useFocusEffect(
     useCallback(() => {
@@ -80,7 +91,7 @@ export const EmployeeListScreen = ({ navigation }) => {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchEmployees(search);
+    fetchEmployees(search, true);
   };
 
   const handleToggleStatus = async () => {

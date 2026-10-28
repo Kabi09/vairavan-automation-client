@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+    <title>%WEB_TITLE% - Duty Management System</title>
+
+    <!-- PWA Web App Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Theme and Brand Meta -->
+    <meta name="theme-color" content="#1E40AF" />
+    <meta name="msapplication-navbutton-color" content="#1E40AF" />
+    <meta name="description" content="VairaWorks - Employee Field Duty Management, Leave Approvals & Expense Tracking System for Vairavan Automation" />
+    <meta name="application-name" content="VairaWorks" />
+
+    <!-- iOS Safari PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VairaWorks" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
+
+    <!-- Favicon & Touch Icons -->
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+
+    <!-- The `react-native-web` recommended style reset -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+        background-color: #F8FAFC;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      /* Enable text selection on inputs and readable text */
+      input, textarea, [data-selectable="true"] {
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      /* Root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>
+      <div style="padding: 24px; text-align: center; font-family: sans-serif; color: #0F172A;">
+        <h2>JavaScript Required</h2>
+        <p>Please enable JavaScript in your browser settings to run VairaWorks Duty Management System.</p>
+      </div>
+    </noscript>
+
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+
+    <!-- Service Worker Registration for Installable PWA -->
+    <script>
+      if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').then(function(registration) {
+            console.log('[PWA] ServiceWorker registered with scope: ', registration.scope);
+          }).catch(function(error) {
+            console.warn('[PWA] ServiceWorker registration failed: ', error);
+          });
+        });
+      }
+    </script>
+  </body>
+</html>

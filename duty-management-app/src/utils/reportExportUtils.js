@@ -3,7 +3,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { Alert, Platform } from 'react-native';
 import reportApi from '../api/reportApi';
-import { promptDownloadOrShare, writeBase64ToCacheFile } from './exportUtils';
+import { promptDownloadOrShare, writeBase64ToCacheFile, printHtmlOnWeb } from './exportUtils';
 
 const LOGO_URL =
   'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
@@ -635,6 +635,13 @@ export const exportAllInOneToPDF = async ({ reportData, action = 'download' }) =
 
   try {
     const htmlContent = buildAllInOneReportHtml(reportData);
+
+    // On Web: print via isolated iframe / window (triggers browser "Save as PDF" / Print)
+    if (Platform.OS === 'web') {
+      printHtmlOnWeb(htmlContent, 'All-in-One Operations Report');
+      return;
+    }
+
     const pdf = await Print.printToFileAsync({
       html: htmlContent,
       base64: false,
@@ -688,9 +695,28 @@ export const exportAllInOneToExcel = async ({ filters = {}, action = 'download' 
 
     const safeName = filename || `Vairavan_All_In_One_Report_${Date.now()}.xlsx`;
 
-    // On Web: direct download
+    // On Web: direct download via Blob URL
     if (Platform.OS === 'web') {
       try {
+        const binaryStr = atob(base64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = safeName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+        return;
+      } catch (webErr) {
+        console.warn('Web Excel download error, fallback to data URI:', webErr);
         const link = document.createElement('a');
         link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`;
         link.download = safeName;
@@ -698,8 +724,6 @@ export const exportAllInOneToExcel = async ({ filters = {}, action = 'download' 
         link.click();
         document.body.removeChild(link);
         return;
-      } catch (webErr) {
-        console.warn('Web Excel download error:', webErr);
       }
     }
 

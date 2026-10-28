@@ -36,6 +36,8 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportLeavesToPDF, exportLeavesToExcel } from '../../utils/exportUtils';
 import { isDeveloperAdmin } from '../../utils/validators';
 import { useAuth } from '../../context/AuthContext';
+import { useResponsive } from '../../hooks/useResponsive';
+import { useData, CACHE_TTL } from '../../context/DataContext';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 const STATUS_FILTER_TABS = [
@@ -47,6 +49,8 @@ const STATUS_FILTER_TABS = [
 
 export const LeaveRequestsScreen = () => {
   const { user: currentUser } = useAuth();
+  const { isDesktop } = useResponsive();
+  const { fetchWithCache, syncLeave } = useData();
   const today = formatISODateOnly();
 
   // Top Section Mode: 'requests' | 'calendar' | 'balances'
@@ -123,13 +127,20 @@ export const LeaveRequestsScreen = () => {
   }, [employees, grantEmployeeSearch]);
 
 
-  // Load employee list for dropdown filter
-  const loadEmployees = useCallback(async () => {
+  // Load employee list for dropdown filter with SWR caching
+  const loadEmployees = useCallback(async (force = false) => {
     try {
-      const res = await employeeApi.getEmployees({ limit: 200 });
-      if (res.data?.employees) {
+      const empList = await fetchWithCache(
+        'employees_catalog',
+        async () => {
+          const res = await employeeApi.getEmployees({ limit: 200 });
+          return res.data?.employees || [];
+        },
+        { ttl: CACHE_TTL.CATALOGS, forceRefresh: force }
+      );
+      if (empList) {
         const isCurrentDev = isDeveloperAdmin(currentUser);
-        const filtered = res.data.employees.filter(
+        const filtered = empList.filter(
           (e) => e.role !== 'admin' && (isCurrentDev || !isDeveloperAdmin(e))
         );
         setEmployees(filtered);
@@ -140,9 +151,9 @@ export const LeaveRequestsScreen = () => {
     } catch (err) {
       console.warn('Failed to load employee list:', err);
     }
-  }, [currentUser, calendarEmployeeId]);
+  }, [currentUser, calendarEmployeeId, fetchWithCache]);
 
-  const fetchLeaves = useCallback(async () => {
+  const fetchLeaves = useCallback(async (force = false) => {
     try {
       setError('');
       const params = { limit: 200 };
@@ -151,9 +162,17 @@ export const LeaveRequestsScreen = () => {
       if (startDate.trim()) params.startDate = startDate.trim();
       if (endDate.trim()) params.endDate = endDate.trim();
 
-      const res = await leaveApi.getAllLeaves(params);
-      if (res.data?.leaves) {
-        setLeaves(res.data.leaves);
+      const cacheKey = `leave_requests_${activeStatusTab}_${selectedEmployeeId}_${startDate}_${endDate}`;
+      const leavesData = await fetchWithCache(
+        cacheKey,
+        async () => {
+          const res = await leaveApi.getAllLeaves(params);
+          return res.data?.leaves || [];
+        },
+        { ttl: CACHE_TTL.LISTS, forceRefresh: force }
+      );
+      if (leavesData) {
+        setLeaves(leavesData);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load leave requests'));
@@ -161,7 +180,7 @@ export const LeaveRequestsScreen = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeStatusTab, selectedEmployeeId, startDate, endDate]);
+  }, [activeStatusTab, selectedEmployeeId, startDate, endDate, fetchWithCache]);
 
   const fetchBalancesAndConfig = useCallback(async () => {
     if (!employees || employees.length === 0) return;
@@ -258,9 +277,10 @@ export const LeaveRequestsScreen = () => {
         adminRemarks: remarks.trim(),
         rejectionReason: rejectionReason.trim(),
       });
+      syncLeave({ _id: reviewTarget._id, status: decision });
       Alert.alert('Decision Saved', `Leave request has been ${decision} successfully.`);
       setReviewTarget(null);
-      fetchLeaves();
+      fetchLeaves(true);
     } catch (err) {
       Alert.alert('Review Failed', extractErrorMessage(err));
     } finally {

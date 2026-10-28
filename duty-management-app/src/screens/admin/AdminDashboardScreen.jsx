@@ -26,14 +26,16 @@ import BrandingFooter from '../../components/BrandingFooter';
 import { formatDate, getTodayDateString } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { formatWorkType } from '../../utils/dutyUtils';
+import { useResponsive } from '../../hooks/useResponsive';
+import { useData, CACHE_TTL } from '../../context/DataContext';
+import WebHeader from '../../components/WebHeader';
 import { COLORS, SPACING, RADIUS } from '../../constants/theme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SLIDE_WIDTH = SCREEN_WIDTH - SPACING.lg * 2;
 
 export const AdminDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { unreadCount, unreadDocumentCount, refreshNotifications } = useNotifications();
+  const { isDesktop, isTablet, width } = useResponsive();
+  const { fetchWithCache } = useData();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,13 +48,24 @@ export const AdminDashboardScreen = ({ navigation }) => {
   // Admin Send Message modal
   const [sendMessageModalVisible, setSendMessageModalVisible] = useState(false);
 
+  // Dynamic slide width responding to screen size
+  const slideWidth = useMemo(() => {
+    return Math.min(width - SPACING.lg * 2, 1200);
+  }, [width]);
 
-  const fetchDashboard = useCallback(async () => {
+  const fetchDashboard = useCallback(async (forceRefresh = false) => {
     try {
       setError('');
-      const dashRes = await dashboardApi.getAdminDashboard();
-      if (dashRes.data) {
-        setData(dashRes.data);
+      const dashData = await fetchWithCache(
+        'admin_dashboard',
+        async () => {
+          const res = await dashboardApi.getAdminDashboard();
+          return res.data;
+        },
+        { ttl: CACHE_TTL.DASHBOARD, forceRefresh }
+      );
+      if (dashData) {
+        setData(dashData);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load admin dashboard'));
@@ -60,7 +73,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [fetchWithCache]);
 
   useFocusEffect(
     useCallback(() => {
@@ -71,7 +84,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchDashboard();
+    fetchDashboard(true);
   };
 
   const metrics = data?.metrics || {};
@@ -336,18 +349,26 @@ export const AdminDashboardScreen = ({ navigation }) => {
       activeHighlightIndexRef.current = nextIdx;
       setActiveHighlightIndex(nextIdx);
       carouselRef.current?.scrollTo({
-        x: nextIdx * SLIDE_WIDTH,
+        x: nextIdx * slideWidth,
         animated: true,
       });
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [highlightSlides.length]);
+  }, [highlightSlides.length, slideWidth]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <WebHeader
+        navigation={navigation}
+        onRefresh={onRefresh}
+        isRefreshing={refreshing}
+      />
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isDesktop && { maxWidth: 1240, width: '100%', alignSelf: 'center' },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -441,14 +462,14 @@ export const AdminDashboardScreen = ({ navigation }) => {
                   ref={carouselRef}
                   horizontal
                   pagingEnabled
-                  snapToInterval={SLIDE_WIDTH}
+                  snapToInterval={slideWidth}
                   snapToAlignment="center"
                   decelerationRate="fast"
                   bounces={false}
                   showsHorizontalScrollIndicator={false}
                   onMomentumScrollEnd={(e) => {
                     const offsetX = e.nativeEvent.contentOffset.x;
-                    const idx = Math.round(offsetX / SLIDE_WIDTH);
+                    const idx = Math.round(offsetX / slideWidth);
                     if (idx >= 0 && idx < highlightSlides.length) {
                       activeHighlightIndexRef.current = idx;
                       setActiveHighlightIndex(idx);
@@ -457,7 +478,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
                   scrollEventThrottle={16}
                 >
                   {highlightSlides.map((slide) => (
-                    <View key={slide.id} style={{ width: SLIDE_WIDTH, paddingHorizontal: 4, justifyContent: 'center' }}>
+                    <View key={slide.id} style={{ width: slideWidth, paddingHorizontal: 4, justifyContent: 'center' }}>
                       {slide.node}
                     </View>
                   ))}
@@ -482,7 +503,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
             <Text style={styles.sectionTitle}>Overview Metrics</Text>
             <View style={styles.metricsGrid}>
               <Card
-                style={styles.metricCard}
+                style={[styles.metricCard, { width: isDesktop ? '23.5%' : isTablet ? '31%' : '47.5%' }]}
                 onPress={() => navigation.navigate('EmployeesTab')}
               >
                 <View style={[styles.metricIcon, { backgroundColor: '#EFF6FF' }]}>
@@ -495,7 +516,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </Card>
 
               <Card
-                style={styles.metricCard}
+                style={[styles.metricCard, { width: isDesktop ? '23.5%' : isTablet ? '31%' : '47.5%' }]}
                 onPress={() => navigation.navigate('CompaniesTab')}
               >
                 <View style={[styles.metricIcon, { backgroundColor: '#F0FDF4' }]}>
@@ -508,7 +529,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </Card>
 
               <Card
-                style={styles.metricCard}
+                style={[styles.metricCard, { width: isDesktop ? '23.5%' : isTablet ? '31%' : '47.5%' }]}
                 onPress={() => navigation.navigate('DutiesTab', { filterToday: true })}
               >
                 <View style={[styles.metricIcon, { backgroundColor: '#FFFBEB' }]}>
@@ -521,7 +542,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </Card>
 
               <Card
-                style={styles.metricCard}
+                style={[styles.metricCard, { width: isDesktop ? '23.5%' : isTablet ? '31%' : '47.5%' }]}
                 onPress={() => setCalendarModalVisible(true)}
               >
                 <View style={[styles.metricIcon, { backgroundColor: '#F5F3FF' }]}>
@@ -534,89 +555,96 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </Card>
             </View>
 
-            {/* Shared Documents & Upload Banner */}
-            <TouchableOpacity
-              style={styles.sharedDocsBanner}
-              onPress={() => navigation.navigate('SharedDocuments')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.sharedDocsLeft}>
-                <View style={styles.sharedDocsIconWrap}>
-                  <Ionicons name="folder-open" size={22} color="#FFFFFF" />
-                  {Boolean(unreadDocumentCount > 0) && (
-                    <View style={styles.bannerBadgeDot}>
-                      <Text style={styles.bannerBadgeText}>{unreadDocumentCount}</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.sharedDocsTextWrap}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.sharedDocsTitle}>Shared Documents & Upload</Text>
+            {/* Quick Action Banners (Responsive 3-col on desktop, stacked on mobile) */}
+            <View style={isDesktop ? { flexDirection: 'row', gap: SPACING.md, alignItems: 'stretch', marginBottom: SPACING.sm } : {}}>
+              {/* Shared Documents & Upload Banner */}
+              <TouchableOpacity
+                style={[styles.sharedDocsBanner, isDesktop && { flex: 1, marginTop: 0 }]}
+                onPress={() => navigation.navigate('SharedDocuments')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.sharedDocsLeft}>
+                  <View style={styles.sharedDocsIconWrap}>
+                    <Ionicons name="folder-open" size={22} color="#FFFFFF" />
                     {Boolean(unreadDocumentCount > 0) && (
-                      <View style={styles.newFilesChip}>
-                        <Text style={styles.newFilesChipText}>NEW</Text>
+                      <View style={styles.bannerBadgeDot}>
+                        <Text style={styles.bannerBadgeText}>{unreadDocumentCount}</Text>
                       </View>
                     )}
                   </View>
-                  <Text style={styles.sharedDocsSub}>
-                    Access manuals, blueprints & team files
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.sharedDocsBtnPill}>
-                <Ionicons name="cloud-upload" size={13} color="#FFFFFF" />
-                <Text style={styles.sharedDocsBtnText}>Upload</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* All-in-One Operations Report Banner */}
-            <TouchableOpacity
-              style={[styles.sharedDocsBanner, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', marginTop: 10 }]}
-              onPress={() => navigation.navigate('AllInOneReport')}
-              activeOpacity={0.8}
-            >
-              <View style={styles.sharedDocsLeft}>
-                <View style={[styles.sharedDocsIconWrap, { backgroundColor: '#1E40AF' }]}>
-                  <Ionicons name="pie-chart" size={22} color="#FFFFFF" />
-                </View>
-                <View style={styles.sharedDocsTextWrap}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.sharedDocsTitle}>All-in-One Report</Text>
-                    <View style={[styles.newFilesChip, { backgroundColor: '#DBEAFE' }]}>
-                      <Text style={[styles.newFilesChipText, { color: '#1E40AF' }]}>ANALYTICS</Text>
+                  <View style={styles.sharedDocsTextWrap}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.sharedDocsTitle}>Shared Documents</Text>
+                      {Boolean(unreadDocumentCount > 0) && (
+                        <View style={styles.newFilesChip}>
+                          <Text style={styles.newFilesChipText}>NEW</Text>
+                        </View>
+                      )}
                     </View>
+                    <Text style={styles.sharedDocsSub}>
+                      Access manuals & blueprints
+                    </Text>
                   </View>
-                  <Text style={styles.sharedDocsSub}>
-                    Company, client, work, staff, leaves, OT & expenses
-                  </Text>
                 </View>
-              </View>
-              <View style={[styles.sharedDocsBtnPill, { backgroundColor: '#1E40AF' }]}>
-                <Ionicons name="analytics" size={13} color="#FFFFFF" />
-                <Text style={styles.sharedDocsBtnText}>View</Text>
-              </View>
-            </TouchableOpacity>
+                <View style={styles.sharedDocsBtnPill}>
+                  <Ionicons name="cloud-upload" size={13} color="#FFFFFF" />
+                  <Text style={styles.sharedDocsBtnText}>Upload</Text>
+                </View>
+              </TouchableOpacity>
 
-            {/* Quick Staff Broadcast / Message Action */}
-            <TouchableOpacity
-              style={styles.sendMessageBanner}
-              onPress={() => setSendMessageModalVisible(true)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.sendMessageLeft}>
-                <View style={styles.sendMessageIconWrap}>
-                  <Ionicons name="chatbubbles" size={22} color="#FFFFFF" />
+              {/* All-in-One Operations Report Banner */}
+              <TouchableOpacity
+                style={[
+                  styles.sharedDocsBanner,
+                  { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' },
+                  isDesktop ? { flex: 1, marginTop: 0 } : { marginTop: 10 }
+                ]}
+                onPress={() => navigation.navigate('AllInOneReport')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.sharedDocsLeft}>
+                  <View style={[styles.sharedDocsIconWrap, { backgroundColor: '#1E40AF' }]}>
+                    <Ionicons name="pie-chart" size={22} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.sharedDocsTextWrap}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.sharedDocsTitle}>All-in-One Report</Text>
+                      <View style={[styles.newFilesChip, { backgroundColor: '#DBEAFE' }]}>
+                        <Text style={[styles.newFilesChipText, { color: '#1E40AF' }]}>ANALYTICS</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.sharedDocsSub}>
+                      Work, staff, leaves, OT & expenses
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.sendMessageTextWrap}>
-                  <Text style={styles.sendMessageTitle}>Send Message to Staff</Text>
-                  <Text style={styles.sendMessageSub}>Send notice or broadcast to employees</Text>
+                <View style={[styles.sharedDocsBtnPill, { backgroundColor: '#1E40AF' }]}>
+                  <Ionicons name="analytics" size={13} color="#FFFFFF" />
+                  <Text style={styles.sharedDocsBtnText}>View</Text>
                 </View>
-              </View>
-              <View style={styles.sendMessageBtnPill}>
-                <Ionicons name="paper-plane" size={13} color="#FFFFFF" />
-                <Text style={styles.sendMessageBtnText}>New Message</Text>
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
+
+              {/* Quick Staff Broadcast / Message Action */}
+              <TouchableOpacity
+                style={[styles.sendMessageBanner, isDesktop && { flex: 1, marginTop: 0 }]}
+                onPress={() => setSendMessageModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.sendMessageLeft}>
+                  <View style={styles.sendMessageIconWrap}>
+                    <Ionicons name="chatbubbles" size={22} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.sendMessageTextWrap}>
+                    <Text style={styles.sendMessageTitle}>Send Message</Text>
+                    <Text style={styles.sendMessageSub}>Broadcast notices to staff</Text>
+                  </View>
+                </View>
+                <View style={styles.sendMessageBtnPill}>
+                  <Ionicons name="paper-plane" size={13} color="#FFFFFF" />
+                  <Text style={styles.sendMessageBtnText}>New</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
 
             {/* Leave Summaries Banner */}
             <Card

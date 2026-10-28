@@ -13,6 +13,19 @@
       "icon": "./assets/notification-icon.png",
       "color": "#0F52BA"
     },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png",
+      "themeColor": "#1E40AF",
+      "backgroundColor": "#0F172A",
+      "name": "VairaWorks - Duty Management System",
+      "shortName": "VairaWorks",
+      "description": "Employee Field Duty Management, Leave Approvals & Expense Tracking System",
+      "display": "standalone",
+      "orientation": "any",
+      "startUrl": "/",
+      "scope": "/"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vairavan.dutymanagement",

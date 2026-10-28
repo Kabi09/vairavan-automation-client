@@ -61,23 +61,23 @@ export const SignaturePadModal = ({
   useEffect(() => {
     if (visible) {
       setCurrentTimestamp(formatSignatureTimestamp());
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch((err) => {
+      if (Platform.OS !== 'web') ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch((err) => {
         console.log('[SignaturePad] Orientation lock error:', err?.message || err);
       });
     } else {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch((err) => {
+      if (Platform.OS !== 'web') ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch((err) => {
         console.log('[SignaturePad] Orientation unlock error:', err?.message || err);
       });
     }
 
     return () => {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+      if (Platform.OS !== 'web') ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };
   }, [visible]);
 
   // Safe close handler ensuring orientation restores to portrait
   const handleClose = useCallback(() => {
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    if (Platform.OS !== 'web') ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     if (onClose) onClose();
   }, [onClose]);
 
@@ -156,7 +156,7 @@ export const SignaturePadModal = ({
     const dataUri = `data:image/svg+xml;utf8,${encodeURIComponent(svgString)}`;
 
     // Revert orientation back to normal portrait before closing
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    if (Platform.OS !== 'web') ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
 
     onSave({
       dataUri,

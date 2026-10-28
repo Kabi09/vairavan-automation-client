@@ -26,6 +26,7 @@ import MyLeavesScreen from '../screens/employee/MyLeavesScreen';
 import EmployeeCalendarScreen from '../screens/employee/EmployeeCalendarScreen';
 import SharedDocumentsScreen from '../screens/common/SharedDocumentsScreen';
 import AllInOneReportScreen from '../screens/admin/AllInOneReportScreen';
+import { useResponsive } from '../hooks/useResponsive';
 import { COLORS } from '../constants/theme';
 
 const Tab = createBottomTabNavigator();
@@ -33,9 +34,10 @@ const Stack = createNativeStackNavigator();
 
 const AdminTabs = () => {
   const insets = useSafeAreaInsets();
+  const { isDesktop } = useResponsive();
   // Safe responsive bottom spacing across all mobile devices
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 10);
-  const barHeight = 60 + bottomInset;
+  const barHeight = isDesktop ? 62 : 60 + bottomInset;
 
   return (
     <Tab.Navigator
@@ -48,13 +50,24 @@ const AdminTabs = () => {
           borderTopColor: COLORS.border,
           borderTopWidth: 1,
           height: barHeight,
-          paddingBottom: bottomInset + 4,
+          paddingBottom: isDesktop ? 8 : bottomInset + 4,
           paddingTop: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -3 },
           shadowOpacity: 0.08,
           shadowRadius: 6,
           elevation: 12,
+          ...(isDesktop
+            ? {
+                maxWidth: 880,
+                width: '100%',
+                alignSelf: 'center',
+                borderRadius: 16,
+                marginBottom: 12,
+                borderWidth: 1,
+                borderColor: COLORS.border,
+              }
+            : {}),
         },
         tabBarLabelStyle: {
           fontSize: 11,

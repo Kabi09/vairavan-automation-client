@@ -1,5 +1,5 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { appStorage } from '../utils/appStorage';
 import { API_BASE_URL, APP_CONFIG } from '../constants/config';
 
 // Create base Axios instance
@@ -24,12 +24,12 @@ export const setUnauthorizedHandler = (handler) => {
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      const token = await SecureStore.getItemAsync(APP_CONFIG.STORAGE_KEYS.ACCESS_TOKEN);
+      const token = await appStorage.getSecureItem(APP_CONFIG.STORAGE_KEYS.ACCESS_TOKEN);
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (err) {
-      console.warn('[ApiClient] Failed to read token from SecureStore:', err);
+      console.warn('[ApiClient] Failed to read token from appStorage:', err);
     }
     console.log(`\n➡️ [API REQ] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     if (config.data && typeof config.data === 'object') {

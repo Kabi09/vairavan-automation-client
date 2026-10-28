@@ -22,9 +22,13 @@ import EmptyState from '../../components/EmptyState';
 import ConfirmationDialog from '../../components/ConfirmationDialog';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportCompaniesToPDF, exportCompaniesToExcel } from '../../utils/exportUtils';
+import { useResponsive } from '../../hooks/useResponsive';
+import { useData, CACHE_TTL } from '../../context/DataContext';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const CompanyListScreen = ({ navigation }) => {
+  const { isDesktop } = useResponsive();
+  const { fetchWithCache, syncCompany } = useData();
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,16 +40,23 @@ export const CompanyListScreen = ({ navigation }) => {
   const [companyToDeactivate, setCompanyToDeactivate] = useState(null);
   const [deactivating, setDeactivating] = useState(false);
 
-  const fetchCompanies = useCallback(async (searchQuery = '') => {
+  const fetchCompanies = useCallback(async (searchQuery = '', force = false) => {
     try {
       setError('');
       const params = { limit: 100 };
       if (searchQuery.trim()) {
         params.search = searchQuery.trim();
       }
-      const res = await companyApi.getCompanies(params);
-      if (res.data?.companies) {
-        setCompanies(res.data.companies);
+      const companiesData = await fetchWithCache(
+        `companies_list_${searchQuery.trim()}`,
+        async () => {
+          const res = await companyApi.getCompanies(params);
+          return res.data?.companies || [];
+        },
+        { ttl: CACHE_TTL.LISTS, forceRefresh: force }
+      );
+      if (companiesData) {
+        setCompanies(companiesData);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load companies'));
@@ -53,7 +64,7 @@ export const CompanyListScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [fetchWithCache]);
 
   useFocusEffect(
     useCallback(() => {
@@ -63,7 +74,7 @@ export const CompanyListScreen = ({ navigation }) => {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchCompanies(search);
+    fetchCompanies(search, true);
   };
 
   const handleDeactivateConfirm = async () => {
@@ -72,8 +83,9 @@ export const CompanyListScreen = ({ navigation }) => {
 
     try {
       await companyApi.deleteCompany(companyToDeactivate._id);
+      syncCompany();
       setCompanyToDeactivate(null);
-      fetchCompanies(search);
+      fetchCompanies(search, true);
     } catch (err) {
       Alert.alert('Error', extractErrorMessage(err, 'Failed to deactivate company'));
     } finally {

@@ -32,9 +32,13 @@ import SecondaryButton from '../../components/SecondaryButton';
 import { formatDate, formatISODateOnly } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { exportExpensesToPDF, exportExpensesToExcel } from '../../utils/exportUtils';
+import { useResponsive } from '../../hooks/useResponsive';
+import { useData, CACHE_TTL } from '../../context/DataContext';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const AdminExpensesScreen = ({ navigation, route }) => {
+  const { isDesktop, isTablet } = useResponsive();
+  const { fetchWithCache, syncExpense } = useData();
   const [expenses, setExpenses] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -111,40 +115,70 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
     }
   }, [targetExpenseId, expenses]);
 
-  // Fetch all initial data
-  const fetchData = async () => {
+  // Fetch all initial data with SWR caching
+  const fetchData = async (force = false) => {
     try {
       setError('');
-      const [expRes, catsRes, empsRes, compsRes] = await Promise.all([
-        expenseApi.getAllExpenses({
-          startDate: startDate || undefined,
-          endDate: endDate || undefined,
-          employee: selectedEmployeeId || undefined,
-          employeeId: selectedEmployeeId || undefined,
-          company: selectedCompanyId || undefined,
-          companyId: selectedCompanyId || undefined,
-          category: selectedCategoryId || undefined,
-          categoryId: selectedCategoryId || undefined,
-          search: search ? search.trim() : undefined,
-          limit: 1000,
-        }),
-        expenseApi.getCategories(),
-        employeeApi.getEmployees(),
-        companyApi.getCompanies(),
+      const filterParams = {
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        employee: selectedEmployeeId || undefined,
+        employeeId: selectedEmployeeId || undefined,
+        company: selectedCompanyId || undefined,
+        companyId: selectedCompanyId || undefined,
+        category: selectedCategoryId || undefined,
+        categoryId: selectedCategoryId || undefined,
+        search: search ? search.trim() : undefined,
+        limit: 1000,
+      };
+
+      const [expData, catsData, empsData, compsData] = await Promise.all([
+        fetchWithCache(
+          `admin_expenses_${JSON.stringify(filterParams)}`,
+          async () => {
+            const res = await expenseApi.getAllExpenses(filterParams);
+            return res.data || {};
+          },
+          { ttl: CACHE_TTL.LISTS, forceRefresh: force }
+        ),
+        fetchWithCache(
+          'expense_categories',
+          async () => {
+            const res = await expenseApi.getCategories();
+            return res.data?.categories || [];
+          },
+          { ttl: CACHE_TTL.CATALOGS, forceRefresh: force }
+        ).catch(() => []),
+        fetchWithCache(
+          'employees_catalog',
+          async () => {
+            const res = await employeeApi.getEmployees({ limit: 200 });
+            return res.data?.employees || [];
+          },
+          { ttl: CACHE_TTL.CATALOGS, forceRefresh: force }
+        ).catch(() => []),
+        fetchWithCache(
+          'companies_catalog',
+          async () => {
+            const res = await companyApi.getCompanies({ limit: 200 });
+            return res.data?.companies || [];
+          },
+          { ttl: CACHE_TTL.CATALOGS, forceRefresh: force }
+        ).catch(() => []),
       ]);
 
-      if (expRes.data) {
-        setExpenses(expRes.data.expenses || []);
-        setMetrics(expRes.data.metrics || null);
+      if (expData) {
+        setExpenses(expData.expenses || []);
+        setMetrics(expData.metrics || null);
       }
-      if (catsRes.data) {
-        setCategories(catsRes.data.categories || []);
+      if (catsData) {
+        setCategories(catsData);
       }
-      if (empsRes.data) {
-        setEmployees(empsRes.data.employees || []);
+      if (empsData) {
+        setEmployees(empsData);
       }
-      if (compsRes.data) {
-        setCompanies(compsRes.data.companies || []);
+      if (compsData) {
+        setCompanies(compsData);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load expense records'));
@@ -162,7 +196,7 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchData();
+    fetchData(true);
   };
 
   const hasActiveFilters = Boolean(

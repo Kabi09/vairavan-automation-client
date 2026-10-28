@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { appStorage } from '../utils/appStorage';
 import authApi from '../api/authApi';
 import { setUnauthorizedHandler } from '../api/apiClient';
 import { APP_CONFIG } from '../constants/config';
@@ -19,9 +19,9 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        const storedToken = await SecureStore.getItemAsync(APP_CONFIG.STORAGE_KEYS.ACCESS_TOKEN);
-        const storedRefresh = await SecureStore.getItemAsync(APP_CONFIG.STORAGE_KEYS.REFRESH_TOKEN);
-        const storedUser = await SecureStore.getItemAsync(APP_CONFIG.STORAGE_KEYS.USER_DATA);
+        const storedToken = await appStorage.getSecureItem(APP_CONFIG.STORAGE_KEYS.ACCESS_TOKEN);
+        const storedRefresh = await appStorage.getSecureItem(APP_CONFIG.STORAGE_KEYS.REFRESH_TOKEN);
+        const storedUser = await appStorage.getSecureItem(APP_CONFIG.STORAGE_KEYS.USER_DATA);
 
         if (storedToken && storedUser) {
           setToken(storedToken);
@@ -36,7 +36,7 @@ export const AuthProvider = ({ children }) => {
             const meRes = await authApi.getMe();
             if (meRes.data && meRes.data.user) {
               setUser(meRes.data.user);
-              await SecureStore.setItemAsync(
+              await appStorage.setSecureItem(
                 APP_CONFIG.STORAGE_KEYS.USER_DATA,
                 JSON.stringify(meRes.data.user)
               );
@@ -69,15 +69,15 @@ export const AuthProvider = ({ children }) => {
       const response = await authApi.login(email, password);
       const { token: newAccessToken, refreshToken: newRefreshToken, user: userData } = response.data;
 
-      // Save credentials in SecureStore
+      // Save credentials in appStorage
       if (newAccessToken) {
-        await SecureStore.setItemAsync(APP_CONFIG.STORAGE_KEYS.ACCESS_TOKEN, newAccessToken);
+        await appStorage.setSecureItem(APP_CONFIG.STORAGE_KEYS.ACCESS_TOKEN, newAccessToken);
       }
       if (newRefreshToken) {
-        await SecureStore.setItemAsync(APP_CONFIG.STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);
+        await appStorage.setSecureItem(APP_CONFIG.STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);
       }
       if (userData) {
-        await SecureStore.setItemAsync(APP_CONFIG.STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
+        await appStorage.setSecureItem(APP_CONFIG.STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
       }
 
       setToken(newAccessToken);
@@ -106,9 +106,9 @@ export const AuthProvider = ({ children }) => {
       }
     } finally {
       // Clear all local auth credentials
-      await SecureStore.deleteItemAsync(APP_CONFIG.STORAGE_KEYS.ACCESS_TOKEN).catch(() => {});
-      await SecureStore.deleteItemAsync(APP_CONFIG.STORAGE_KEYS.REFRESH_TOKEN).catch(() => {});
-      await SecureStore.deleteItemAsync(APP_CONFIG.STORAGE_KEYS.USER_DATA).catch(() => {});
+      await appStorage.removeSecureItem(APP_CONFIG.STORAGE_KEYS.ACCESS_TOKEN);
+      await appStorage.removeSecureItem(APP_CONFIG.STORAGE_KEYS.REFRESH_TOKEN);
+      await appStorage.removeSecureItem(APP_CONFIG.STORAGE_KEYS.USER_DATA);
 
       setToken(null);
       setRefreshToken(null);
@@ -119,7 +119,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateProfile = (updatedUser) => {
     setUser(updatedUser);
-    SecureStore.setItemAsync(
+    appStorage.setSecureItem(
       APP_CONFIG.STORAGE_KEYS.USER_DATA,
       JSON.stringify(updatedUser)
     ).catch(() => {});

@@ -53,6 +53,7 @@ export const setupNotificationChannels = async () => {
  * Guaranteed to execute on login, app launch, and token refresh.
  */
 export const registerPushNotifications = async () => {
+  if (Platform.OS === 'web') return null;
   try {
     let token = null;
 

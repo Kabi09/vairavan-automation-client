@@ -39,10 +39,14 @@ import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils
 import { formatWorkType } from '../../utils/dutyUtils';
 import { isDeveloperAdmin } from '../../utils/validators';
 import { useAuth } from '../../context/AuthContext';
+import { useResponsive } from '../../hooks/useResponsive';
+import { useData, CACHE_TTL } from '../../context/DataContext';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const AllDutiesScreen = ({ route, navigation }) => {
   const { user: currentUser } = useAuth();
+  const { isDesktop, maxContentWidth } = useResponsive();
+  const { fetchWithCache, syncDuty } = useData();
   const today = formatISODateOnly();
   const yesterday = getYesterdayDateString();
   const initialFilterToday = Boolean(route?.params?.filterToday);
@@ -190,27 +194,41 @@ export const AllDutiesScreen = ({ route, navigation }) => {
     setPreviewModalVisible(true);
   };
 
-  // Load filter lists (employees and companies)
-  const loadFilterData = useCallback(async () => {
+  // Load filter lists (employees and companies) with caching
+  const loadFilterData = useCallback(async (force = false) => {
     try {
-      const [empRes, compRes] = await Promise.all([
-        employeeApi.getEmployees({ limit: 200 }).catch(() => ({ data: { employees: [] } })),
-        companyApi.getCompanies({ limit: 200 }).catch(() => ({ data: { companies: [] } })),
+      const [empList, compList] = await Promise.all([
+        fetchWithCache(
+          'employees_catalog',
+          async () => {
+            const res = await employeeApi.getEmployees({ limit: 200 });
+            return res.data?.employees || [];
+          },
+          { ttl: CACHE_TTL.CATALOGS, forceRefresh: force }
+        ).catch(() => []),
+        fetchWithCache(
+          'companies_catalog',
+          async () => {
+            const res = await companyApi.getCompanies({ limit: 200 });
+            return res.data?.companies || [];
+          },
+          { ttl: CACHE_TTL.CATALOGS, forceRefresh: force }
+        ).catch(() => []),
       ]);
-      if (empRes.data?.employees) {
+      if (empList) {
         const isCurrentDev = isDeveloperAdmin(currentUser);
         setEmployees(
-          empRes.data.employees.filter((e) => e.role !== 'admin' && (isCurrentDev || !isDeveloperAdmin(e)))
+          empList.filter((e) => e.role !== 'admin' && (isCurrentDev || !isDeveloperAdmin(e)))
         );
       }
-      if (compRes.data?.companies) setCompanies(compRes.data.companies);
+      if (compList) setCompanies(compList);
     } catch (err) {
       console.warn('Failed to load filter options:', err);
     }
-  }, [currentUser]);
+  }, [currentUser, fetchWithCache]);
 
-  // Fetch duties based on active filters
-  const fetchDuties = useCallback(async () => {
+  // Fetch duties based on active filters with SWR caching
+  const fetchDuties = useCallback(async (force = false) => {
     try {
       setError('');
       const params = { limit: 500 };
@@ -220,9 +238,17 @@ export const AllDutiesScreen = ({ route, navigation }) => {
       if (startDate.trim()) params.startDate = startDate.trim();
       if (endDate.trim()) params.endDate = endDate.trim();
 
-      const res = await dutyApi.getAllDuties(params);
-      if (res.data?.duties) {
-        setDuties(res.data.duties);
+      const cacheKey = `duties_${JSON.stringify(params)}`;
+      const dutiesData = await fetchWithCache(
+        cacheKey,
+        async () => {
+          const res = await dutyApi.getAllDuties(params);
+          return res.data?.duties || [];
+        },
+        { ttl: CACHE_TTL.LISTS, forceRefresh: force }
+      );
+      if (dutiesData) {
+        setDuties(dutiesData);
       }
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to load duty records'));
@@ -230,7 +256,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [search, selectedEmployeeId, selectedCompanyId, startDate, endDate]);
+  }, [search, selectedEmployeeId, selectedCompanyId, startDate, endDate, fetchWithCache]);
 
   useFocusEffect(
     useCallback(() => {
@@ -250,10 +276,11 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchDuties();
+    fetchDuties(true);
+    loadFilterData(true);
   };
 
-  // Delete duty handler (Admin only)
+  // Delete duty handler (Admin only) with multi-screen instant sync
   const handleDeleteDuty = (dutyId) => {
     Alert.alert(
       'Delete Duty Report',
@@ -266,6 +293,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               await dutyApi.deleteDuty(dutyId);
+              syncDuty({ _id: dutyId }, 'delete');
               setDuties((prev) => prev.filter((d) => d._id !== dutyId));
               if (selectedDuty?._id === dutyId) {
                 setSelectedDuty(null);
