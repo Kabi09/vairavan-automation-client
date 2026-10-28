@@ -14,12 +14,14 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   ScrollView,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import documentApi from '../../api/documentApi';
@@ -31,6 +33,7 @@ import ConfirmationDialog from '../../components/ConfirmationDialog';
 import LoadingIndicator from '../../components/LoadingIndicator';
 import ErrorMessage from '../../components/ErrorMessage';
 import EmptyState from '../../components/EmptyState';
+import ImageViewerModal from '../../components/ImageViewerModal';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 const formatFileSize = (bytes = 0) => {
@@ -104,8 +107,14 @@ export const SharedDocumentsScreen = ({ navigation }) => {
   const [deleteTargetDoc, setDeleteTargetDoc] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Download state
+  // File action states (Open, Download, Share)
+  const [openingKey, setOpeningKey] = useState(null);
   const [downloadingKey, setDownloadingKey] = useState(null);
+  const [sharingKey, setSharingKey] = useState(null);
+
+  // Lightbox image preview modal state
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
 
   // Upload modal state
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
@@ -284,10 +293,23 @@ export const SharedDocumentsScreen = ({ navigation }) => {
     }
   };
 
-  // File Download & Preview handler
-  const handleDownloadFile = async (file) => {
+  // 1. Open / Preview file: "open button click link show the file fix"
+  const handleOpenFile = async (file) => {
     if (!file?.url) {
-      Alert.alert('Error', 'File download URL is not available.');
+      Alert.alert('Error', 'File URL is not available.');
+      return;
+    }
+
+    const ext = (file.originalName || file.fileName || '').split('.').pop()?.toLowerCase() || '';
+    const isImage =
+      file.fileType === 'image' ||
+      ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext) ||
+      (file.mimeType && file.mimeType.startsWith('image/'));
+
+    // If it's an image, show in-app fullscreen lightbox preview!
+    if (isImage) {
+      setPreviewFile(file);
+      setPreviewModalVisible(true);
       return;
     }
 
@@ -297,16 +319,23 @@ export const SharedDocumentsScreen = ({ navigation }) => {
     }
 
     const fileIdentifier = file.key || file.url;
-    setDownloadingKey(fileIdentifier);
+    setOpeningKey(fileIdentifier);
 
     try {
+      // Try direct system browser / viewer launch
+      const canOpen = await Linking.canOpenURL(file.url).catch(() => false);
+      if (canOpen) {
+        await Linking.openURL(file.url);
+        return;
+      }
+
+      // Fallback: download to cache and launch with Sharing or system app chooser
       const safeName = (file.originalName || file.fileName || 'shared_document')
         .replace(/[^a-zA-Z0-9._-]/g, '_');
-      const localUri = `${FileSystem.cacheDirectory}${Date.now()}_${safeName}`;
+      const tempCacheUri = `${FileSystem.cacheDirectory || ''}view_${Date.now()}_${safeName}`;
+      const downloadResult = await FileSystem.downloadAsync(file.url, tempCacheUri);
 
-      const downloadResult = await FileSystem.downloadAsync(file.url, localUri);
-
-      const isShareAvailable = await Sharing.isAvailableAsync();
+      const isShareAvailable = await Sharing.isAvailableAsync().catch(() => false);
       if (isShareAvailable) {
         await Sharing.shareAsync(downloadResult.uri, {
           dialogTitle: `Open ${file.originalName || 'Document'}`,
@@ -317,14 +346,195 @@ export const SharedDocumentsScreen = ({ navigation }) => {
         await Linking.openURL(file.url);
       }
     } catch (err) {
-      console.error('Download/Open error:', err);
+      console.error('Open file error:', err);
       try {
         await Linking.openURL(file.url);
       } catch {
-        Alert.alert('Unable to Open File', err.message || 'Could not download or open this file.');
+        Alert.alert('Unable to Open File', err.message || 'Could not open this file.');
+      }
+    } finally {
+      setOpeningKey(null);
+    }
+  };
+
+  // 2. Download file to device storage: "add download button"
+  const handleDownloadFile = async (file) => {
+    if (!file?.url) {
+      Alert.alert('Error', 'File download URL is not available.');
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      try {
+        const link = document.createElement('a');
+        link.href = file.url;
+        link.download = file.originalName || file.fileName || 'shared_document';
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch {
+        window.open(file.url, '_blank');
+      }
+      return;
+    }
+
+    const fileIdentifier = file.key || file.url;
+    setDownloadingKey(fileIdentifier);
+
+    try {
+      let LegacyFS = null;
+      try {
+        LegacyFS = require('expo-file-system/legacy');
+      } catch {}
+      if (!LegacyFS) {
+        try {
+          LegacyFS = require('expo-file-system');
+        } catch {}
+      }
+
+      const safeName = (file.originalName || file.fileName || 'shared_document')
+        .replace(/[^a-zA-Z0-9._-]/g, '_');
+      const tempCacheUri = `${FileSystem.cacheDirectory || ''}dl_${Date.now()}_${safeName}`;
+
+      // 1. Download file to cache
+      const downloadResult = await FileSystem.downloadAsync(file.url, tempCacheUri);
+
+      // 2. Android: Save to device Downloads folder via StorageAccessFramework
+      if (Platform.OS === 'android' && LegacyFS?.StorageAccessFramework) {
+        const mimeType = file.mimeType || 'application/octet-stream';
+
+        const base64Data = await LegacyFS.readAsStringAsync(downloadResult.uri, {
+          encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+        });
+
+        let savedDirectoryUri = null;
+        try {
+          savedDirectoryUri = await SecureStore.getItemAsync('saved_download_directory_uri');
+        } catch {
+          savedDirectoryUri = null;
+        }
+
+        if (savedDirectoryUri) {
+          try {
+            const createdFileUri = await LegacyFS.StorageAccessFramework.createFileAsync(
+              savedDirectoryUri,
+              safeName,
+              mimeType
+            );
+
+            await LegacyFS.writeAsStringAsync(createdFileUri, base64Data, {
+              encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+            });
+
+            Alert.alert(
+              'Download Complete ✅',
+              `File downloaded to your device:\n\n${file.originalName || safeName}`
+            );
+            return;
+          } catch (autoErr) {
+            console.warn('Auto save failed, requesting folder permission:', autoErr);
+            await SecureStore.deleteItemAsync('saved_download_directory_uri').catch(() => {});
+          }
+        }
+
+        let permissions = null;
+        try {
+          permissions = await LegacyFS.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        } catch {
+          permissions = { granted: false };
+        }
+
+        if (permissions?.granted && permissions.directoryUri) {
+          try {
+            await SecureStore.setItemAsync('saved_download_directory_uri', permissions.directoryUri);
+          } catch {}
+
+          const createdFileUri = await LegacyFS.StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            safeName,
+            mimeType
+          );
+
+          await LegacyFS.writeAsStringAsync(createdFileUri, base64Data, {
+            encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+          });
+
+          Alert.alert(
+            'Download Complete ✅',
+            `File saved successfully:\n\n${file.originalName || safeName}`
+          );
+          return;
+        }
+      }
+
+      // 3. iOS or Fallback: Native save / files sheet
+      const isShareAvailable = await Sharing.isAvailableAsync().catch(() => false);
+      if (isShareAvailable) {
+        await Sharing.shareAsync(downloadResult.uri, {
+          dialogTitle: `Save ${file.originalName || 'Document'}`,
+          mimeType: file.mimeType || 'application/octet-stream',
+          UTI: 'public.item',
+        });
+      } else {
+        await Linking.openURL(file.url);
+      }
+    } catch (err) {
+      console.error('Download error:', err);
+      try {
+        await Linking.openURL(file.url);
+      } catch {
+        Alert.alert('Download Failed', err.message || 'Could not download this file.');
       }
     } finally {
       setDownloadingKey(null);
+    }
+  };
+
+  // 3. Share file via native share sheet: "share btton"
+  const handleShareFile = async (file) => {
+    if (!file?.url) {
+      Alert.alert('Error', 'File URL is not available.');
+      return;
+    }
+
+    const fileIdentifier = file.key || file.url;
+    setSharingKey(fileIdentifier);
+
+    try {
+      const safeName = (file.originalName || file.fileName || 'shared_document')
+        .replace(/[^a-zA-Z0-9._-]/g, '_');
+      const tempCacheUri = `${FileSystem.cacheDirectory || ''}share_${Date.now()}_${safeName}`;
+
+      const downloadResult = await FileSystem.downloadAsync(file.url, tempCacheUri);
+
+      const isShareAvailable = await Sharing.isAvailableAsync().catch(() => false);
+      if (isShareAvailable) {
+        await Sharing.shareAsync(downloadResult.uri, {
+          dialogTitle: `Share ${file.originalName || 'Document'}`,
+          mimeType: file.mimeType || 'application/octet-stream',
+          UTI: 'public.item',
+        });
+      } else {
+        await Share.share({
+          title: file.originalName || 'Shared Document',
+          message: `${file.originalName || 'Shared Document'}\n${file.url}`,
+          url: file.url,
+        });
+      }
+    } catch (err) {
+      console.error('Share error:', err);
+      try {
+        await Share.share({
+          title: file.originalName || 'Shared Document',
+          message: `${file.originalName || 'Shared Document'}\n${file.url}`,
+          url: file.url,
+        });
+      } catch (shareErr) {
+        Alert.alert('Share Failed', err.message || 'Unable to share this file.');
+      }
+    } finally {
+      setSharingKey(null);
     }
   };
 
@@ -458,43 +668,98 @@ export const SharedDocumentsScreen = ({ navigation }) => {
         {/* Itemized File Cards */}
         <View style={styles.fileListContainer}>
           {filesList.map((file, fIdx) => {
-            const isDownloading = downloadingKey === (file.key || file.url);
+            const fileIdentifier = file.key || file.url || fIdx;
+            const isOpening = openingKey === fileIdentifier;
+            const isDownloading = downloadingKey === fileIdentifier;
+            const isSharing = sharingKey === fileIdentifier;
             const iconConfig = getFileIconConfig(file.fileType, file.originalName || file.fileName);
 
             return (
-              <View key={file.key || file._id || fIdx} style={styles.fileCardRow}>
-                {/* File Format Icon */}
-                <View style={[styles.fileTypeBadge, { backgroundColor: iconConfig.bg }]}>
-                  <Ionicons name={iconConfig.name} size={18} color={iconConfig.color} />
-                  <Text style={[styles.fileTypeLabel, { color: iconConfig.color }]}>
-                    {iconConfig.label}
-                  </Text>
-                </View>
-
-                {/* File Details */}
-                <View style={styles.fileDetails}>
-                  <Text style={styles.fileName} numberOfLines={1}>
-                    {file.originalName || file.fileName || 'Attached Document'}
-                  </Text>
-                  <Text style={styles.fileMeta}>{formatFileSize(file.size)}</Text>
-                </View>
-
-                {/* Download / Open Action Button */}
+              <View key={file.key || file._id || fIdx} style={styles.fileCardBlock}>
+                {/* Clickable File Info Row: Clicking link/name immediately opens and shows file */}
                 <TouchableOpacity
-                  style={styles.fileActionBtn}
-                  onPress={() => handleDownloadFile(file)}
-                  disabled={isDownloading}
+                  style={styles.fileMainInfoRow}
+                  onPress={() => handleOpenFile(file)}
                   activeOpacity={0.7}
+                  accessibilityLabel={`Open ${file.originalName || 'file'}`}
                 >
-                  {isDownloading ? (
-                    <ActivityIndicator size="small" color={COLORS.primary} />
-                  ) : (
-                    <>
-                      <Ionicons name="arrow-down-circle" size={18} color={COLORS.primary} />
-                      <Text style={styles.fileActionBtnText}>Open</Text>
-                    </>
-                  )}
+                  {/* File Format Icon */}
+                  <View style={[styles.fileTypeBadge, { backgroundColor: iconConfig.bg }]}>
+                    <Ionicons name={iconConfig.name} size={18} color={iconConfig.color} />
+                    <Text style={[styles.fileTypeLabel, { color: iconConfig.color }]}>
+                      {iconConfig.label}
+                    </Text>
+                  </View>
+
+                  {/* File Details: Title + Open Link Icon + Size */}
+                  <View style={styles.fileDetails}>
+                    <View style={styles.fileNameRow}>
+                      <Text style={styles.fileNameLink} numberOfLines={1}>
+                        {file.originalName || file.fileName || 'Attached Document'}
+                      </Text>
+                      <Ionicons name="open-outline" size={13} color={COLORS.primary} style={styles.linkIcon} />
+                    </View>
+                    <View style={styles.fileMetaRow}>
+                      <Text style={styles.fileMeta}>{formatFileSize(file.size)}</Text>
+                      <Text style={styles.fileMetaDot}>•</Text>
+                      <Text style={styles.fileTapToOpenText}>Tap link to view</Text>
+                    </View>
+                  </View>
                 </TouchableOpacity>
+
+                {/* File Action Buttons Row: Open, Download, Share */}
+                <View style={styles.fileActionButtonsRow}>
+                  {/* 1. Open Button */}
+                  <TouchableOpacity
+                    style={[styles.actionBtnItem, styles.openBtnItem]}
+                    onPress={() => handleOpenFile(file)}
+                    disabled={isOpening}
+                    activeOpacity={0.75}
+                  >
+                    {isOpening ? (
+                      <ActivityIndicator size="small" color="#1D4ED8" />
+                    ) : (
+                      <>
+                        <Ionicons name="eye-outline" size={15} color="#1D4ED8" />
+                        <Text style={styles.openBtnText}>Open</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* 2. Download Button */}
+                  <TouchableOpacity
+                    style={[styles.actionBtnItem, styles.downloadBtnItem]}
+                    onPress={() => handleDownloadFile(file)}
+                    disabled={isDownloading}
+                    activeOpacity={0.75}
+                  >
+                    {isDownloading ? (
+                      <ActivityIndicator size="small" color="#047857" />
+                    ) : (
+                      <>
+                        <Ionicons name="download-outline" size={15} color="#047857" />
+                        <Text style={styles.downloadBtnText}>Download</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* 3. Share Button */}
+                  <TouchableOpacity
+                    style={[styles.actionBtnItem, styles.shareBtnItem]}
+                    onPress={() => handleShareFile(file)}
+                    disabled={isSharing}
+                    activeOpacity={0.75}
+                  >
+                    {isSharing ? (
+                      <ActivityIndicator size="small" color="#4338CA" />
+                    ) : (
+                      <>
+                        <Ionicons name="share-social-outline" size={15} color="#4338CA" />
+                        <Text style={styles.shareBtnText}>Share</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           })}
@@ -840,6 +1105,18 @@ export const SharedDocumentsScreen = ({ navigation }) => {
         }}
         onConfirm={handleConfirmDelete}
       />
+
+      {/* Lightbox Image Preview Modal */}
+      <ImageViewerModal
+        visible={previewModalVisible}
+        onClose={() => {
+          setPreviewModalVisible(false);
+          setPreviewFile(null);
+        }}
+        imageUri={previewFile?.url || ''}
+        title={previewFile?.originalName || previewFile?.fileName || 'Document Preview'}
+        subtitle={previewFile?.size ? `File Size: ${formatFileSize(previewFile.size)}` : ''}
+      />
     </SafeAreaView>
   );
 };
@@ -1051,14 +1328,18 @@ const styles = StyleSheet.create({
   fileListContainer: {
     gap: SPACING.xs,
   },
-  fileCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  fileCardBlock: {
     backgroundColor: '#F8FAFC',
     borderRadius: RADIUS.md,
-    padding: SPACING.xs + 2,
+    padding: SPACING.xs + 3,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    marginBottom: 6,
+  },
+  fileMainInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
   },
   fileTypeBadge: {
     width: 38,
@@ -1077,31 +1358,87 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  fileName: {
+  fileNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+    gap: 4,
+  },
+  fileNameLink: {
     fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
+    fontWeight: '700',
+    color: '#1E40AF',
+    textDecorationLine: 'underline',
+    textDecorationColor: '#93C5FD',
+    flexShrink: 1,
+  },
+  linkIcon: {
+    marginLeft: 2,
+  },
+  fileMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 6,
   },
   fileMeta: {
     fontSize: 11,
     color: COLORS.textMuted,
-    marginTop: 2,
   },
-  fileActionBtn: {
+  fileMetaDot: {
+    fontSize: 10,
+    color: '#CBD5E1',
+  },
+  fileTapToOpenText: {
+    fontSize: 10,
+    color: '#0284C7',
+    fontWeight: '600',
+  },
+  fileActionButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: SPACING.xs,
+    paddingTop: SPACING.xs - 2,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF2F6',
+  },
+  actionBtnItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
     borderRadius: RADIUS.sm,
     borderWidth: 1,
+  },
+  openBtnItem: {
+    backgroundColor: '#EFF6FF',
     borderColor: '#BFDBFE',
   },
-  fileActionBtnText: {
+  openBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: '#1D4ED8',
+  },
+  downloadBtnItem: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  downloadBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  shareBtnItem: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#C7D2FE',
+  },
+  shareBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4338CA',
   },
   fab: {
     position: 'absolute',

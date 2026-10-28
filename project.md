@@ -2998,6 +2998,20 @@
   - All test suites passing with 0 failures (49/49 tests pass).
 
 ### 2026-10-28
+#### Feature & UI: Upload Section Files - Open, Download, Share, and Click Link to View
+- What was changed: Added dedicated **Open**, **Download**, and **Share** buttons to every attached file in the Upload / Shared Documents section (`SharedDocumentsScreen.jsx`), and made clicking the file name/link immediately open and show the file with in-app fullscreen image preview or system viewer.
+- Files changed:
+  - `duty-management-app/src/screens/common/SharedDocumentsScreen.jsx`
+- Logic changed:
+  - **Click Link to View / Show File**: Wrapped file details in `<TouchableOpacity onPress={() => handleOpenFile(file)}>` with link underline styling, open-icon indicator, and "Tap link to view" hint so tapping anywhere on the file info opens the file directly.
+  - **In-App Lightbox Preview**: When an image file (JPG, PNG, WebP, GIF, SVG) is opened, it renders fullscreen inside `ImageViewerModal` with image dimensions, file size, and dismiss controls.
+  - **System App / Browser Viewer**: For PDFs, Excel spreadsheets, Word docs, PowerPoint presentations, and text files, `handleOpenFile` triggers `Linking.openURL(file.url)` or downloads to cache and launches with `Sharing.shareAsync` or system intent.
+  - **Dedicated Download Button**: Downloads the file using `expo-file-system`, saves on Android to the device Downloads folder via `StorageAccessFramework` (with saved directory URI in `expo-secure-store` for one-click automatic downloads), and on iOS via native file saving, with completion confirmation alert (`Download Complete ✅`).
+  - **Dedicated Share Button**: Downloads file binary to cache and launches native OS share sheet via `expo-sharing` (`Sharing.shareAsync`) or `Share.share` with title and URL for sharing into WhatsApp, Gmail, Slack, Drive, Bluetooth, etc.
+- Reason: User requested adding Download button, Share button, Open button, and clicking the file link to show/open the file.
+- Impact: Field technicians and Admins have full, flexible control to view, download to device, and share any shared document file seamlessly.
+
+### 2026-10-28
 #### Fix & Feature: Message Unread Count & Notification Badge Synchronization
 - What was changed: Fixed bug where when Admin sends a message to all employees or a particular employee, the notification is received but the unread count badge was not displayed on the Message icons, and ensured broadcast messages maintain independent read tracking per employee.
 - Files changed:
@@ -3020,8 +3034,11 @@
 
 ## Current Progress
 - Completed:
+  - Upload section file actions: Dedicated **Open**, **Download**, and **Share** buttons implemented on every file item.
+  - Clickable file title link with direct opening/previewing (`handleOpenFile`).
+  - Fullscreen in-app image preview modal (`ImageViewerModal`) for photos/graphics.
+  - Android StorageAccessFramework automatic downloads and iOS native save support.
   - Message unread count badge fixed on Employee Dashboard header, Quick Actions, and Notifications header.
-  - Independent user-level read tracking (`readBy`) for broadcast announcements and direct messages.
   - All 56 automated tests passing across 9 test suites (56/56 pass).
 - In Progress: None.
 - Pending: User review.
