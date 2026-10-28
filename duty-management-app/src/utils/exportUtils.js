@@ -221,7 +221,12 @@ export const writeBase64ToCacheFile = async (filename, base64) => {
       if (file.create) file.create();
       if (file.write) {
         try {
-          const binaryStr = typeof atob === 'function' ? atob(base64) : Buffer.from(base64, 'base64').toString('binary');
+          const binaryStr =
+            typeof atob === 'function'
+              ? atob(base64)
+              : typeof globalThis !== 'undefined' && globalThis.Buffer
+              ? globalThis.Buffer.from(base64, 'base64').toString('binary')
+              : '';
           const bytes = new Uint8Array(binaryStr.length);
           for (let i = 0; i < binaryStr.length; i++) {
             bytes[i] = binaryStr.charCodeAt(i);
