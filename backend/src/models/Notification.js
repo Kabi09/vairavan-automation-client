@@ -55,6 +55,7 @@ const notificationSchema = new mongoose.Schema(
         },
         employeeId: String,
         employeeName: String,
+        employeeAvatar: String,
         reason: String,
         startDate: Date,
         endDate: Date,

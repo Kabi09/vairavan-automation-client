@@ -49,8 +49,11 @@ export const getNotifications = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('sender', 'employeeName employeeId role email')
-      .populate('data.leaveId'),
+      .populate('sender', 'employeeName employeeId role email avatar')
+      .populate({
+        path: 'data.leaveId',
+        populate: { path: 'employee', select: 'employeeName employeeId avatar' },
+      }),
     Notification.countDocuments(query),
   ]);
 

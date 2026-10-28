@@ -33,6 +33,71 @@ import { formatDate } from '../../utils/dateUtils';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
+const resolveNotificationAvatar = (item) => {
+  if (!item) return null;
+
+  // 1. Direct avatar from notification data (saved upon leave submission, review, or grant)
+  const directAvatar = item.data?.employeeAvatar;
+  if (directAvatar && typeof directAvatar === 'string' && directAvatar.trim()) {
+    return directAvatar.trim();
+  }
+  if (directAvatar && typeof directAvatar === 'object' && directAvatar.url) {
+    return directAvatar.url.trim();
+  }
+
+  // 2. Avatar on populated sender (employee submitting leave request, duty, expense, message)
+  const senderAvatar = item.sender?.avatar;
+  if (senderAvatar) {
+    if (typeof senderAvatar === 'string' && senderAvatar.trim()) {
+      return senderAvatar.trim();
+    }
+    if (typeof senderAvatar === 'object' && senderAvatar.url) {
+      return senderAvatar.url.trim();
+    }
+  }
+
+  // 3. Avatar on populated leave employee (data.leaveId.employee for leave review notifications)
+  const leaveEmpAvatar = item.data?.leaveId?.employee?.avatar;
+  if (leaveEmpAvatar) {
+    if (typeof leaveEmpAvatar === 'string' && leaveEmpAvatar.trim()) {
+      return leaveEmpAvatar.trim();
+    }
+    if (typeof leaveEmpAvatar === 'object' && leaveEmpAvatar.url) {
+      return leaveEmpAvatar.url.trim();
+    }
+  }
+
+  return null;
+};
+
+const NotificationAvatar = ({ item }) => {
+  const [imageError, setImageError] = useState(false);
+  const avatarUrl = resolveNotificationAvatar(item);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [avatarUrl]);
+
+  if (avatarUrl && !imageError) {
+    return (
+      <Image
+        source={{ uri: avatarUrl }}
+        style={styles.notifAvatarImage}
+        resizeMode="cover"
+        onError={() => setImageError(true)}
+      />
+    );
+  }
+
+  return (
+    <Image
+      source={require('../../../assets/logo.png')}
+      style={styles.notifLogoImage}
+      resizeMode="cover"
+    />
+  );
+};
+
 export const NotificationsScreen = ({ navigation }) => {
   const { user, isAdmin } = useAuth();
   const { unreadMessageCount, refreshNotifications: refreshGlobalNotifications } = useNotifications();
@@ -245,11 +310,7 @@ export const NotificationsScreen = ({ navigation }) => {
         <View style={styles.cardHeader}>
           <View style={styles.headerLeft}>
             <View style={styles.logoBadgeContainer}>
-              <Image
-                source={require('../../../assets/logo.png')}
-                style={styles.notifLogoImage}
-                resizeMode="cover"
-              />
+              <NotificationAvatar item={item} />
               <View
                 style={[
                   styles.statusDot,
@@ -706,6 +767,15 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  notifAvatarImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    backgroundColor: '#E0F2FE',
   },
   statusDot: {
     position: 'absolute',

@@ -677,53 +677,29 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
         </Card>
 
         {/* Action Buttons: Admin has Edit + Delete, Employee has Edit */}
-        {(canEdit || canDelete) && (
-          <View style={styles.actionRow}>
-            {canEdit && (
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.editBtn]}
-                onPress={() => navigation.navigate('DutyForm', { dutyToEdit: duty })}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="create-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.actionBtnText}>Edit Work Report</Text>
-              </TouchableOpacity>
-            )}
+        <View style={styles.actionRow}>
+          {canEdit && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.editBtn]}
+              onPress={() => navigation.navigate('DutyForm', { dutyToEdit: duty })}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="create-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.actionBtnText}>Edit Work Details</Text>
+            </TouchableOpacity>
+          )}
 
-            {canDelete && (
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.deleteBtn]}
-                onPress={() => {
-                  Alert.alert(
-                    'Delete Work Report',
-                    'Are you sure you want to permanently delete this work record?',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: async () => {
-                          try {
-                            await dutyApi.deleteDuty(duty._id);
-                            Alert.alert('Deleted', 'Work report deleted successfully.', [
-                              { text: 'OK', onPress: () => navigation.goBack() },
-                            ]);
-                          } catch (delErr) {
-                            Alert.alert('Delete Failed', extractErrorMessage(delErr, 'Failed to delete work report'));
-                          }
-                        },
-                      },
-                    ]
-                  );
-                }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.actionBtnText}>Delete</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.expenseBtn]}
+            onPress={() => navigation.navigate('ExpenseForm', { duty })}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="receipt-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.actionBtnText}>
+              {dutyExpenses.length > 0 ? 'Manage Expenses' : '+ Add Expense'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
       </ScrollView>
 
@@ -1030,9 +1006,8 @@ const styles = StyleSheet.create({
   editBtn: {
     backgroundColor: COLORS.primary,
   },
-  deleteBtn: {
-    backgroundColor: COLORS.danger,
-    maxWidth: 110,
+  expenseBtn: {
+    backgroundColor: '#059669',
   },
   actionBtnText: {
     color: '#FFFFFF',

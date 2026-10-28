@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import * as Location from 'expo-location';
 import companyApi from '../../api/companyApi';
 import clientApi from '../../api/clientApi';
 import dutyApi from '../../api/dutyApi';
+import expenseApi from '../../api/expenseApi';
 import uploadApi from '../../api/uploadApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
@@ -29,10 +31,11 @@ import SignaturePadModal from '../../components/SignaturePadModal';
 import SignatureImage from '../../components/SignatureImage';
 import ImageViewerModal from '../../components/ImageViewerModal';
 import DatePickerModal from '../../components/DatePickerModal';
+import TimePickerModal from '../../components/TimePickerModal';
 import DropdownPickerModal from '../../components/DropdownPickerModal';
 import ErrorMessage from '../../components/ErrorMessage';
 import LoadingIndicator from '../../components/LoadingIndicator';
-import { getTodayDateString, formatISODateOnly, formatDate } from '../../utils/dateUtils';
+import { getTodayDateString, formatISODateOnly, formatDate, formatTime } from '../../utils/dateUtils';
 import { isValidPhone } from '../../utils/validators';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { reverseGeocodeCoords, openMapLocation } from '../../utils/locationUtils';
@@ -60,6 +63,48 @@ export const DutyFormScreen = ({ navigation, route }) => {
     }
     return getTodayDateString();
   });
+
+  // Initial check-in & check-out shift times for admin editing
+  const getInitialInTime = () => {
+    if (dutyToEdit?.inTime) return dutyToEdit.inTime;
+    if (dutyToEdit?.checkInTime) {
+      const d = new Date(dutyToEdit.checkInTime);
+      if (!isNaN(d.getTime())) {
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      }
+    }
+    return '09:00';
+  };
+
+  const getInitialOutTime = () => {
+    if (dutyToEdit?.outTime) return dutyToEdit.outTime;
+    if (dutyToEdit?.checkOutTime) {
+      const d = new Date(dutyToEdit.checkOutTime);
+      if (!isNaN(d.getTime())) {
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      }
+    }
+    return '18:00';
+  };
+
+  const [inTime, setInTime] = useState(getInitialInTime);
+  const [outTime, setOutTime] = useState(getInitialOutTime);
+  const [inTimePickerVisible, setInTimePickerVisible] = useState(false);
+  const [outTimePickerVisible, setOutTimePickerVisible] = useState(false);
+
+  // Address texts for admin manual editing
+  const [checkInAddress, setCheckInAddress] = useState(() => {
+    return dutyToEdit?.checkInLocation?.address || dutyToEdit?.location?.address || '';
+  });
+  const [checkOutAddress, setCheckOutAddress] = useState(() => {
+    return dutyToEdit?.checkOutLocation?.address || '';
+  });
+
+  // Linked Expenses for this work report
+  const [linkedExpenses, setLinkedExpenses] = useState(() => {
+    return Array.isArray(dutyToEdit?.expenses) ? dutyToEdit.expenses : [];
+  });
+  const [loadingLinkedExpenses, setLoadingLinkedExpenses] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [clients, setClients] = useState([]);
   const [companyCategory, setCompanyCategory] = useState(() => {
@@ -229,6 +274,80 @@ export const DutyFormScreen = ({ navigation, route }) => {
     }
   }, [isEditing, isAdmin, navigation]);
 
+  // Fetch linked expenses for editing report
+  const fetchLinkedExpenses = useCallback(async () => {
+    if (!dutyToEdit?._id) return;
+    setLoadingLinkedExpenses(true);
+    try {
+      const res = await expenseApi.getAllExpenses({ dutyId: dutyToEdit._id, limit: 100 });
+      const expList =
+        res?.data?.expenses ||
+        res?.expenses ||
+        res?.data?.data?.expenses ||
+        [];
+      setLinkedExpenses(expList);
+    } catch (err) {
+      console.warn('Failed to load linked expenses in duty form:', err);
+    } finally {
+      setLoadingLinkedExpenses(false);
+    }
+  }, [dutyToEdit?._id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isEditing && dutyToEdit?._id) {
+        fetchLinkedExpenses();
+      }
+    }, [isEditing, dutyToEdit?._id, fetchLinkedExpenses])
+  );
+
+  const totalExpenseAmount = useMemo(() => {
+    return linkedExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  }, [linkedExpenses]);
+
+  const handleOpenExpenseForm = () => {
+    navigation.navigate('ExpenseForm', {
+      duty: {
+        ...dutyToEdit,
+        company: selectedCompany || dutyToEdit?.company,
+        client: selectedClient || dutyToEdit?.client,
+        dutyDate,
+      },
+      dutyToEdit: {
+        ...dutyToEdit,
+        company: selectedCompany || dutyToEdit?.company,
+        client: selectedClient || dutyToEdit?.client,
+        dutyDate,
+      },
+    });
+  };
+
+  // Sync GPS addresses to text fields if newly captured
+  useEffect(() => {
+    if (checkInLocationCoords?.address && !checkInAddress) {
+      setCheckInAddress(checkInLocationCoords.address);
+    }
+  }, [checkInLocationCoords?.address]);
+
+  useEffect(() => {
+    if (checkOutLocationCoords?.address && !checkOutAddress) {
+      setCheckOutAddress(checkOutLocationCoords.address);
+    }
+  }, [checkOutLocationCoords?.address]);
+
+  // Helper to calculate shift duration
+  const calculateDurationText = (start24, end24) => {
+    if (!start24 || !end24 || !start24.includes(':') || !end24.includes(':')) return null;
+    const [inH, inM] = start24.split(':').map(Number);
+    const [outH, outM] = end24.split(':').map(Number);
+    if (isNaN(inH) || isNaN(inM) || isNaN(outH) || isNaN(outM)) return null;
+    let diff = (outH * 60 + outM) - (inH * 60 + inM);
+    if (diff < 0) diff += 24 * 60;
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    return `${h}h ${m > 0 ? `${m}m` : ''}`.trim();
+  };
+
   // Draft persistence state
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftLoadedOnce, setDraftLoadedOnce] = useState(false);
@@ -355,12 +474,18 @@ export const DutyFormScreen = ({ navigation, route }) => {
     checkInLocationCoords?.latitude
   );
 
-  const isWorkDetailsComplete = Boolean(
-    machineName.trim() &&
-    workDescription.trim() &&
-    (workType === 'Other' ? customWorkDetails.trim() : workType) &&
-    signatureData
-  );
+  const isWorkDetailsComplete = isEditing
+    ? Boolean(
+        machineName.trim() &&
+        workDescription.trim() &&
+        (workType === 'Other' ? customWorkDetails.trim() : workType)
+      )
+    : Boolean(
+        machineName.trim() &&
+        workDescription.trim() &&
+        (workType === 'Other' ? customWorkDetails.trim() : workType) &&
+        (companyCategory === 'office' ? true : signatureData)
+      );
 
   // Helper to determine if company is office
   const isOfficeCompany = (c) => {
@@ -1071,10 +1196,39 @@ export const DutyFormScreen = ({ navigation, route }) => {
       }
 
       if (isEditing) {
-        await dutyApi.updateDuty(dutyToEdit._id, checkoutPayload);
-        Alert.alert('Report Updated', 'Your work report has been updated successfully.', [
-          { text: 'OK', onPress: () => navigation.goBack() },
-        ]);
+        const updatePayload = {
+          ...checkoutPayload,
+          dutyDate,
+          inTime,
+          outTime,
+          companyId: selectedCompanyId,
+          clientId: selectedClientId || null,
+          dutyType: companyCategory || 'client',
+          customerName: companyCategory === 'office' ? 'Office' : (customerName.trim() || undefined),
+          customerPhoneNumber: companyCategory === 'office' ? '' : (customerPhone.trim() || undefined),
+        };
+
+        if (checkInLocationCoords || checkInAddress.trim()) {
+          updatePayload.checkInLocation = {
+            ...(checkInLocationCoords || {}),
+            address: checkInAddress.trim() || checkInLocationCoords?.address || '',
+          };
+        }
+
+        if (finalCheckOutLoc || checkOutAddress.trim()) {
+          updatePayload.checkOutLocation = {
+            ...(finalCheckOutLoc || {}),
+            address: checkOutAddress.trim() || finalCheckOutLoc?.address || '',
+          };
+        }
+
+        await dutyApi.updateDuty(dutyToEdit._id, updatePayload);
+        Alert.alert(
+          'Work Record Updated',
+          'Work details, shift attendance timings, and location records have been successfully saved.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+        return;
       } else {
         await dutyApi.checkOut(checkoutPayload);
         // Reset all states so subsequent "New Work" starts fresh
@@ -1446,47 +1600,336 @@ export const DutyFormScreen = ({ navigation, route }) => {
           ) : (
             /* STAGE 2: CHECKED-IN SESSION & WORK DETAILS FORM */
             <>
-              {/* Checked-In Active Status Card */}
-              <Card style={styles.activeCheckInCard}>
-                <View style={styles.activeCheckInRow}>
-                  <View style={styles.activeDot} />
-                  <View style={{ flex: 1, marginLeft: SPACING.sm }}>
-                    <Text style={styles.activeCheckInTitle}>
-                      {companyCategory === 'office' ? 'Office Duty Session' : 'Client Duty Session'}
-                    </Text>
-                    <Text style={styles.activeCheckInSub}>
-                      Checked in at {activeCheckInTime || 'Today'} • {selectedCompany?.companyName || 'Company'}
-                      {selectedClient ? ` • Client: ${selectedClient.clientName}` : customerName ? ` • ${customerName}` : ''}
-                    </Text>
+              {/* Checked-In Active Status Card or Admin Editor Banner */}
+              {isEditing ? (
+                <Card style={styles.adminEditCard}>
+                  <View style={styles.adminEditHeaderRow}>
+                    <View style={styles.adminShieldCircle}>
+                      <Ionicons name="shield-checkmark" size={20} color="#1E40AF" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={styles.adminEditCardTitle}>Admin Full Record Editor</Text>
+                        <View style={styles.adminBadge}>
+                          <Text style={styles.adminBadgeText}>ADMIN</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.adminEditCardSub}>
+                        Editing Report #{dutyToEdit?.dutyId || String(dutyToEdit?._id || '').slice(-6).toUpperCase()} • Full modification access enabled.
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              </Card>
+                </Card>
+              ) : (
+                <Card style={styles.activeCheckInCard}>
+                  <View style={styles.activeCheckInRow}>
+                    <View style={styles.activeDot} />
+                    <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                      <Text style={styles.activeCheckInTitle}>
+                        {companyCategory === 'office' ? 'Office Duty Session' : 'Client Duty Session'}
+                      </Text>
+                      <Text style={styles.activeCheckInSub}>
+                        Checked in at {activeCheckInTime || 'Today'} • {selectedCompany?.companyName || 'Company'}
+                        {selectedClient ? ` • Client: ${selectedClient.clientName}` : customerName ? ` • ${customerName}` : ''}
+                      </Text>
+                    </View>
+                  </View>
+                </Card>
+              )}
+
+              {/* If Admin Editing, provide comprehensive Date, Attendance Times, and Entity Controls */}
+              {isEditing && (
+                <Card style={styles.formCard}>
+                  <View style={styles.cardHeaderRow}>
+                    <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+                    <Text style={styles.sectionHeader}>Shift Date, Timings & Entity</Text>
+                  </View>
+
+                  {/* Duty Date Picker */}
+                  <Text style={styles.fieldLabel}>Duty Date *</Text>
+                  <TouchableOpacity
+                    style={styles.pickerSelectorBtn}
+                    onPress={() => setDatePickerVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.pickerSelectorLeft}>
+                      <Ionicons name="calendar" size={18} color={COLORS.primary} />
+                      <Text style={styles.pickerSelectorValueText}>{formatDate(dutyDate) || dutyDate}</Text>
+                    </View>
+                    <Ionicons name="pencil" size={15} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
+
+                  {/* In & Out Shift Timings */}
+                  <View style={styles.twoColumnRow}>
+                    <View style={{ flex: 1, marginRight: SPACING.xs }}>
+                      <Text style={styles.fieldLabel}>Check-In Time *</Text>
+                      <TouchableOpacity
+                        style={styles.pickerSelectorBtn}
+                        onPress={() => setInTimePickerVisible(true)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.pickerSelectorLeft}>
+                          <Ionicons name="time-outline" size={16} color="#059669" />
+                          <Text style={styles.pickerSelectorValueText}>{formatTime(inTime) || inTime}</Text>
+                        </View>
+                        <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={{ flex: 1, marginLeft: SPACING.xs }}>
+                      <Text style={styles.fieldLabel}>Check-Out Time *</Text>
+                      <TouchableOpacity
+                        style={styles.pickerSelectorBtn}
+                        onPress={() => setOutTimePickerVisible(true)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.pickerSelectorLeft}>
+                          <Ionicons name="time-outline" size={16} color="#DC2626" />
+                          <Text style={styles.pickerSelectorValueText}>{formatTime(outTime) || outTime}</Text>
+                        </View>
+                        <Ionicons name="chevron-down" size={14} color={COLORS.textSecondary} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {calculateDurationText(inTime, outTime) ? (
+                    <View style={styles.durationPill}>
+                      <Ionicons name="hourglass-outline" size={12} color={COLORS.textSecondary} />
+                      <Text style={styles.durationPillText}>
+                        Calculated Shift Duration: {calculateDurationText(inTime, outTime)}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {/* Entity / Company Category Toggle */}
+                  <Text style={[styles.fieldLabel, { marginTop: SPACING.sm }]}>Duty Type *</Text>
+                  <View style={styles.typeSelectorRow}>
+                    <TouchableOpacity
+                      style={[styles.typePill, companyCategory === 'office' && styles.typePillActive]}
+                      onPress={() => {
+                        setCompanyCategory('office');
+                        const officeComp = companies.find(isOfficeCompany);
+                        if (officeComp) {
+                          setSelectedCompanyId(officeComp._id);
+                        }
+                        setCustomerName('Office');
+                        setCustomerPhone('');
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="business"
+                        size={15}
+                        color={companyCategory === 'office' ? '#FFFFFF' : COLORS.primary}
+                      />
+                      <Text style={[styles.typePillText, companyCategory === 'office' && styles.typePillTextActive]}>
+                        Office Duty
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.typePill, companyCategory === 'client' && styles.typePillActive]}
+                      onPress={() => {
+                        setCompanyCategory('client');
+                        const currentComp = companies.find((c) => c._id === selectedCompanyId);
+                        if (!currentComp || isOfficeCompany(currentComp)) {
+                          setSelectedCompanyId('');
+                          setSelectedClientId('');
+                          setCustomerName('');
+                          setCustomerPhone('');
+                        }
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="storefront"
+                        size={15}
+                        color={companyCategory === 'client' ? '#FFFFFF' : COLORS.primary}
+                      />
+                      <Text style={[styles.typePillText, companyCategory === 'client' && styles.typePillTextActive]}>
+                        Client Company
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Company Selection Dropdown */}
+                  <View style={[styles.companyHeaderRow, { marginTop: SPACING.sm }]}>
+                    <Text style={styles.fieldLabel}>
+                      {companyCategory === 'office' ? 'Selected Office *' : 'Client Company *'}
+                    </Text>
+                    {companyCategory === 'client' && (
+                      <TouchableOpacity
+                        onPress={() => setAddCompanyModalVisible(true)}
+                        style={styles.addCompanyBtn}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="add-circle-outline" size={15} color={COLORS.primary} />
+                        <Text style={styles.addCompanyBtnText}>+ Add Company</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.companyDropdownBtn}
+                    onPress={() => setCompanyDropdownVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.companyDropdownLeft}>
+                      <Ionicons
+                        name={companyCategory === 'office' ? 'business' : 'storefront'}
+                        size={18}
+                        color={selectedCompanyId ? COLORS.primary : COLORS.textMuted}
+                      />
+                      <View style={styles.companyDropdownTextWrap}>
+                        <Text
+                          style={[
+                            styles.companyDropdownText,
+                            !selectedCompanyId && styles.companyDropdownPlaceholder,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {selectedCompany?.companyName ||
+                            (companyCategory === 'office' ? 'Select Office...' : 'Select Client Company...')}
+                        </Text>
+                        {selectedCompany?.location ? (
+                          <Text style={styles.companyDropdownSub} numberOfLines={1}>
+                            Site: {selectedCompany.location}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
+
+                  {/* Client Selection (For Client Company) */}
+                  {companyCategory === 'client' && (
+                    <View style={{ marginTop: SPACING.sm }}>
+                      <View style={styles.companyHeaderRow}>
+                        <Text style={styles.fieldLabel}>Client Contact Person</Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            if (!selectedCompanyId) {
+                              Alert.alert('Select Company', 'Please select a company before adding a client');
+                              return;
+                            }
+                            setAddClientModalVisible(true);
+                          }}
+                          style={styles.addCompanyBtn}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="person-add-outline" size={15} color={COLORS.primary} />
+                          <Text style={styles.addCompanyBtnText}>+ Add Client</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.companyDropdownBtn}
+                        onPress={() => {
+                          if (!selectedCompanyId) {
+                            Alert.alert('Company Required', 'Please select a client company first.');
+                            return;
+                          }
+                          setClientDropdownVisible(true);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.companyDropdownLeft}>
+                          <Ionicons
+                            name="person"
+                            size={18}
+                            color={selectedClientId || customerName ? COLORS.primary : COLORS.textMuted}
+                          />
+                          <View style={styles.companyDropdownTextWrap}>
+                            <Text
+                              style={[
+                                styles.companyDropdownText,
+                                !selectedClientId && !customerName && styles.companyDropdownPlaceholder,
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {selectedClient
+                                ? `${selectedClient.clientName}${selectedClient.clientPhoneNumber ? ` (${selectedClient.clientPhoneNumber})` : ''}`
+                                : customerName || 'Select Client Contact Person...'}
+                            </Text>
+                          </View>
+                        </View>
+                        <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Check-In & Check-Out Addresses */}
+                  <View style={{ marginTop: SPACING.md }}>
+                    <Text style={styles.fieldLabel}>Check-In Address / Location</Text>
+                    <TextInputField
+                      label=""
+                      placeholder="Enter check-in address"
+                      value={checkInAddress}
+                      onChangeText={setCheckInAddress}
+                      style={{ marginBottom: SPACING.xs }}
+                    />
+                    <TouchableOpacity
+                      style={styles.gpsInlineTriggerBtn}
+                      onPress={handleCaptureCheckInLocation}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="navigate-circle-outline" size={15} color={COLORS.primary} />
+                      <Text style={styles.gpsInlineTriggerText}>
+                        {locatingCheckIn ? 'Acquiring GPS...' : 'Re-Capture Check-In GPS'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={{ marginTop: SPACING.sm }}>
+                    <Text style={styles.fieldLabel}>Check-Out Address / Location</Text>
+                    <TextInputField
+                      label=""
+                      placeholder="Enter checkout address"
+                      value={checkOutAddress}
+                      onChangeText={setCheckOutAddress}
+                      style={{ marginBottom: SPACING.xs }}
+                    />
+                    <TouchableOpacity
+                      style={styles.gpsInlineTriggerBtn}
+                      onPress={handleCaptureCheckOutLocation}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="navigate-circle-outline" size={15} color={COLORS.primary} />
+                      <Text style={styles.gpsInlineTriggerText}>
+                        {locatingCheckOut ? 'Acquiring GPS...' : 'Re-Capture Check-Out GPS'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              )}
 
               {/* Work Details Form */}
               <Card style={styles.formCard}>
                 <Text style={styles.sectionHeader}>Work Details</Text>
 
-                {/* Auto-filled Date, Company & Client Badges */}
-                <View style={styles.autoFilledGrid}>
-                  <View style={styles.autoFilledBadge}>
-                    <Text style={styles.autoFilledLabel}>Date</Text>
-                    <Text style={styles.autoFilledVal}>{dutyDate}</Text>
-                  </View>
-                  <View style={styles.autoFilledBadge}>
-                    <Text style={styles.autoFilledLabel}>{companyCategory === 'office' ? 'Office' : 'Company'}</Text>
-                    <Text style={styles.autoFilledVal} numberOfLines={1}>
-                      {selectedCompany?.companyName || 'Office'}
-                    </Text>
-                  </View>
-                  {companyCategory === 'client' && (selectedClient || customerName) ? (
+                {/* Auto-filled Date, Company & Client Badges (Only in non-edit mode) */}
+                {!isEditing && (
+                  <View style={styles.autoFilledGrid}>
                     <View style={styles.autoFilledBadge}>
-                      <Text style={styles.autoFilledLabel}>Client</Text>
+                      <Text style={styles.autoFilledLabel}>Date</Text>
+                      <Text style={styles.autoFilledVal}>{dutyDate}</Text>
+                    </View>
+                    <View style={styles.autoFilledBadge}>
+                      <Text style={styles.autoFilledLabel}>{companyCategory === 'office' ? 'Office' : 'Company'}</Text>
                       <Text style={styles.autoFilledVal} numberOfLines={1}>
-                        {selectedClient?.clientName || customerName}
+                        {selectedCompany?.companyName || 'Office'}
                       </Text>
                     </View>
-                  ) : null}
-                </View>
+                    {companyCategory === 'client' && (selectedClient || customerName) ? (
+                      <View style={styles.autoFilledBadge}>
+                        <Text style={styles.autoFilledLabel}>Client</Text>
+                        <Text style={styles.autoFilledVal} numberOfLines={1}>
+                          {selectedClient?.clientName || customerName}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                )}
 
                 {/* Machine Name */}
                 <TextInputField
@@ -1933,22 +2376,139 @@ export const DutyFormScreen = ({ navigation, route }) => {
                   </View>
                 </View>
 
-                {/* Single Checkout Action Button */}
+                {/* Linked Expenses Section Card */}
+                <Card style={[styles.formCard, { marginTop: SPACING.md }]}>
+                  <View style={styles.expenseCardHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="wallet-outline" size={18} color="#059669" />
+                      <Text style={styles.sectionHeader}>Linked Expenses for this Work</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.addExpenseHeaderBtn}
+                      onPress={handleOpenExpenseForm}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add-circle" size={16} color="#059669" />
+                      <Text style={styles.addExpenseHeaderBtnText}>+ Expense</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Total Expenses Summary Pill */}
+                  <View style={styles.expenseSummaryPill}>
+                    <Text style={styles.expenseSummaryPillText}>
+                      {linkedExpenses.length} {linkedExpenses.length === 1 ? 'Expense' : 'Expenses'} Logged
+                    </Text>
+                    <Text style={styles.expenseSummaryPillAmount}>
+                      ₹{Number(totalExpenseAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Text>
+                  </View>
+
+                  {loadingLinkedExpenses ? (
+                    <View style={styles.expenseLoadingWrap}>
+                      <ActivityIndicator size="small" color={COLORS.primary} />
+                      <Text style={styles.expenseLoadingText}>Loading linked expenses...</Text>
+                    </View>
+                  ) : linkedExpenses.length === 0 ? (
+                    <View style={styles.noExpensesBox}>
+                      <Ionicons name="receipt-outline" size={28} color={COLORS.textMuted} />
+                      <Text style={styles.noExpensesTitle}>No Expenses Linked Yet</Text>
+                      <Text style={styles.noExpensesSub}>
+                        Log food, travel, accommodation, or spare part expenses associated with this work report.
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.addExpensePrimaryLink}
+                        onPress={handleOpenExpenseForm}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="add" size={16} color="#FFFFFF" />
+                        <Text style={styles.addExpensePrimaryLinkText}>Add Expense for this Work</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.expenseListWrap}>
+                      {linkedExpenses.map((exp, idx) => (
+                        <View key={exp._id || String(idx)} style={styles.expenseItemRow}>
+                          <View style={styles.expenseItemIconWrap}>
+                            <Ionicons name="receipt" size={16} color="#059669" />
+                          </View>
+                          <View style={{ flex: 1, marginHorizontal: SPACING.xs }}>
+                            <Text style={styles.expenseItemCategory} numberOfLines={1}>
+                              {exp.category?.name || exp.category || 'General Expense'}
+                            </Text>
+                            <Text style={styles.expenseItemDesc} numberOfLines={1}>
+                              {exp.description || (exp.expenseDate ? formatDate(exp.expenseDate) : 'Work expense')}
+                            </Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.expenseItemAmount}>
+                              ₹{Number(exp.amount || 0).toFixed(2)}
+                            </Text>
+                            <View
+                              style={[
+                                styles.expenseStatusBadge,
+                                exp.status === 'approved'
+                                  ? styles.expenseStatusBadgeApproved
+                                  : exp.status === 'rejected'
+                                  ? styles.expenseStatusBadgeRejected
+                                  : styles.expenseStatusBadgePending,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.expenseStatusBadgeText,
+                                  exp.status === 'approved'
+                                    ? styles.expenseStatusBadgeTextApproved
+                                    : exp.status === 'rejected'
+                                    ? styles.expenseStatusBadgeTextRejected
+                                    : styles.expenseStatusBadgeTextPending,
+                                ]}
+                              >
+                                {(exp.status || 'pending').toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+
+                      <TouchableOpacity
+                        style={styles.manageExpenseBottomBtn}
+                        onPress={handleOpenExpenseForm}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
+                        <Text style={styles.manageExpenseBottomBtnText}>+ Add Another Expense</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </Card>
+
+                {/* Single Checkout or Admin Update Action Button */}
                 <View style={styles.actionsWrap}>
                   <PrimaryButton
-                    title={isEditing ? 'Update Work Report' : 'Submit Work Details & Checkout'}
+                    title={isEditing ? 'Save All Changes (Admin Update)' : 'Submit Work Details & Checkout'}
                     onPress={handleCheckoutOrSubmit}
                     loading={loading}
                     disabled={!isWorkDetailsComplete || loading}
-                    icon="checkmark-done"
+                    icon={isEditing ? 'save-outline' : 'checkmark-done'}
                     style={!isWorkDetailsComplete && styles.submitBtnDisabled}
                   />
+
+                  {isEditing && (
+                    <SecondaryButton
+                      title="Discard Changes & Return"
+                      onPress={() => navigation.goBack()}
+                      icon="close-outline"
+                      style={{ marginTop: SPACING.sm }}
+                    />
+                  )}
 
                   {!isWorkDetailsComplete && (
                     <View style={styles.requiredFieldsHintBox}>
                       <Ionicons name="information-circle-outline" size={14} color="#D97706" />
                       <Text style={styles.requiredFieldsHintText}>
-                        Please complete all required fields (Machine Name, Work Description & Signature) to enable submission.
+                        {isEditing
+                          ? 'Please complete Machine Name & Work Description to save changes.'
+                          : 'Please complete all required fields (Machine Name, Work Description & Signature) to enable submission.'}
                       </Text>
                     </View>
                   )}
@@ -1968,6 +2528,30 @@ export const DutyFormScreen = ({ navigation, route }) => {
           setDatePickerVisible(false);
         }}
         initialDate={dutyDate}
+      />
+
+      {/* Time Picker Modal - Check-In */}
+      <TimePickerModal
+        visible={inTimePickerVisible}
+        value={inTime}
+        title="Select Check-In Time"
+        onSelect={(selected) => {
+          setInTime(selected);
+          setInTimePickerVisible(false);
+        }}
+        onClose={() => setInTimePickerVisible(false)}
+      />
+
+      {/* Time Picker Modal - Check-Out */}
+      <TimePickerModal
+        visible={outTimePickerVisible}
+        value={outTime}
+        title="Select Check-Out Time"
+        onSelect={(selected) => {
+          setOutTime(selected);
+          setOutTimePickerVisible(false);
+        }}
+        onClose={() => setOutTimePickerVisible(false)}
       />
 
       {/* Company Selection Modal */}
@@ -3140,6 +3724,281 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#DC2626',
     textDecorationLine: 'underline',
+  },
+  // Admin Edit Mode Styles
+  adminEditCard: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#BFDBFE',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
+  adminEditHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  adminShieldCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminEditCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E3A8A',
+  },
+  adminBadge: {
+    backgroundColor: '#1E40AF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+  },
+  adminBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  adminEditCardSub: {
+    fontSize: 12,
+    color: '#3B82F6',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  pickerSelectorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    marginBottom: SPACING.sm,
+  },
+  pickerSelectorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pickerSelectorValueText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  twoColumnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  gpsInlineTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.sm,
+    backgroundColor: '#EFF6FF',
+    marginBottom: SPACING.sm,
+  },
+  gpsInlineTriggerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  durationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    marginBottom: SPACING.xs,
+  },
+  durationPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  // Expenses Section Styles
+  expenseCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  addExpenseHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  addExpenseHeaderBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  expenseSummaryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    marginBottom: SPACING.sm,
+  },
+  expenseSummaryPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#166534',
+  },
+  expenseSummaryPillAmount: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  expenseLoadingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: SPACING.md,
+  },
+  expenseLoadingText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  noExpensesBox: {
+    alignItems: 'center',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  noExpensesTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginTop: SPACING.xs,
+  },
+  noExpensesSub: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 2,
+    marginBottom: SPACING.md,
+    lineHeight: 16,
+  },
+  addExpensePrimaryLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#059669',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+    borderRadius: RADIUS.md,
+  },
+  addExpensePrimaryLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  expenseListWrap: {
+    gap: SPACING.xs,
+  },
+  expenseItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+  },
+  expenseItemIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  expenseItemCategory: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  expenseItemDesc: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  expenseItemAmount: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  expenseStatusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: RADIUS.xs,
+    marginTop: 2,
+  },
+  expenseStatusBadgeApproved: {
+    backgroundColor: '#ECFDF5',
+  },
+  expenseStatusBadgeRejected: {
+    backgroundColor: '#FEF2F2',
+  },
+  expenseStatusBadgePending: {
+    backgroundColor: '#FEF3C7',
+  },
+  expenseStatusBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  expenseStatusBadgeTextApproved: {
+    color: '#059669',
+  },
+  expenseStatusBadgeTextRejected: {
+    color: '#DC2626',
+  },
+  expenseStatusBadgeTextPending: {
+    color: '#D97706',
+  },
+  manageExpenseBottomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    backgroundColor: '#F1F5F9',
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.xs,
+  },
+  manageExpenseBottomBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });
 

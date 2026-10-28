@@ -227,6 +227,45 @@
 - Impact: Seamless document and file collaboration between field engineers and management; real-time upload notifications; instant local state updates; persistent cloud storage across app restarts; and smooth file preview and downloading.
 
 ### 2026-10-28
+#### Admin Duty Deletion Protection, Comprehensive Work Details & Shift Times Editor, and Work-Linked Expense Management
+- What was changed:
+  - **Duty Deletion Removal in Admin UI (`AllDutiesScreen.jsx`, `DutyDetailsScreen.jsx`)**:
+    - Replaced the destructive delete button on duty cards with an **`[Expense]` quick action** (`₹... Expense` / `+ Expense`) alongside `[Edit Work Details]`.
+    - Removed delete buttons from the admin duty details modal footer and the full `DutyDetailsScreen` action bar.
+    - Added dedicated `[Edit Work Details]` and `[Add / Manage Expense]` buttons in both views.
+    - Duty records represent permanent field attendance, customer sign-offs, photo proofs, and Comp-Off credits. They cannot be deleted from the UI, protecting audit history.
+  - **Comprehensive Admin Edit Mode (`DutyFormScreen.jsx`)**:
+    - Enabled full editing capabilities for Administrators when modifying an existing work report (`isEditing && isAdmin`):
+      - **Admin Edit Mode Banner**: Shows prominent admin badge and notification indicating administrative edit access.
+      - **Duty Date**: Editable date picker button triggering `DatePickerModal`.
+      - **Shift Attendance Timings**: Check-In Time (`inTime`) and Check-Out Time (`outTime`) triggers powered by `TimePickerModal`, with live shift duration calculation badge (`calculateDurationText`).
+      - **Duty Type & Company / Client**: Admin can switch between Office Duty and Client Company, change company selection via dropdown or inline addition, and select/add client contact person.
+      - **Check-In & Check-Out Locations / Addresses**: Editable manual address text fields for check-in and check-out with GPS re-capture buttons.
+      - **Work Details**: Editable machine name, work type selection (with custom work details for "Other"), detailed work description, preset & custom feature chips, and full manpower members modal management.
+      - **Customer Signature & Proof Photos**: Re-sign and preview capability; attach up to 3 proof photos with lightbox viewer.
+  - **Work-Linked Expenses Section (`DutyFormScreen.jsx`)**:
+    - Added dedicated "Linked Expenses for this Work" card with live summary pill showing count of expenses and total amount in ₹.
+    - Added "+ Expense" header button and bottom "+ Add / Manage Expense" button that navigates directly to `ExpenseForm` with pre-filled work duty, company, client, and date.
+    - Dynamic re-fetching on focus ensures newly added or edited expenses immediately reflect in the duty editor.
+    - List of linked expenses shows category, amount, description, date, and status badge (`approved`, `rejected`, `pending`).
+  - **Backend Duty Update Enhancement (`dutyController.js`, `dutyValidator.js`)**:
+    - Extended `validateUpdateDuty` to optionally accept `clientId` (MongoId) and `dutyType` (`['client', 'office']`).
+    - Enhanced `dutyController.updateDuty` to save: `dutyDate`, `inTime`, `outTime`, `checkInTime`, `checkOutTime`, `checkInLocation`, `checkOutLocation`, `companyId`, `clientId`, `dutyType`, `customerName`, `customerPhoneNumber`, and automatic duration recalculation in `totalDurationMinutes`.
+    - Re-evaluates Sunday Comp-Off credit on duty date / attendance update.
+- Files changed:
+  - `backend/src/validators/dutyValidator.js`
+  - `backend/src/controllers/dutyController.js`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Duty records cannot be deleted from Admin UI; they can only be edited.
+  - Admin can update all duty parameters: shift date, in/out timings, entity/client, GPS addresses, machine details, and manage linked expenses.
+  - Backend properly persists all updated parameters and updates duration and Sunday Comp-Off status.
+- Reason: User requested: "add one feature - admin delete feature only can editable function; admin -work details,expense,checkin,checkout,date etc..; also add function like work details,expense ; fix the feature".
+- Impact: Enforced duty record integrity (no accidental deletions), provided complete administrative editing control over historical attendance and work reports, and unified work duty and expense management into a single seamless workflow.
+
 #### Employee Dashboard Month Summary, Sunday Holiday Banner, Work Expense Lock, Signature Preview & Company Clients Directory
 - What was changed:
   - **Employee Dashboard Current Month Summary (`EmployeeDashboardScreen.jsx`)**:
@@ -3032,8 +3071,28 @@
 - Reason: User requested that when Admin shares messages with all employees or particular employees, the message count is properly added and displayed on the message icons.
 - Impact: Accurate real-time unread message counts displayed across Employee Dashboard and Notifications screens with zero cross-employee read leaks.
 
+### 2026-10-28
+#### Feature & UI: Employee Avatar in Notifications with Company Logo Fallback
+- What was changed: Updated notification badges to display the applying employee's profile avatar on leave notifications (and other employee-generated notifications), and provided an automatic, resilient fallback to the default company logo (`logo.png`) when an employee has no avatar or if network image loading fails.
+- Files changed:
+  - `backend/src/models/Notification.js`
+  - `backend/src/controllers/notificationController.js`
+  - `backend/src/controllers/leaveController.js`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+- Logic changed:
+  - Backend schema: Added `employeeAvatar: String` to `data` sub-schema in `Notification.js`.
+  - Notification population: Updated `getNotifications` in `notificationController.js` to populate `avatar` on `sender` and deeply populate `data.leaveId.employee` with `avatar`, ensuring both direct sender and related leave records supply profile pictures even for historical notifications.
+  - Leave creation & review: In `submitLeave`, `reviewLeave`, and `adminGrantLeave`, attached `employeeAvatar: typeof req.user.avatar === 'string' ? req.user.avatar : (req.user.avatar?.url || '')` to the notification payload.
+  - Mobile UI avatar resolution: Added `resolveNotificationAvatar` in `NotificationsScreen.jsx` checking `item.data?.employeeAvatar`, `item.sender?.avatar`, and `item.data?.leaveId?.employee?.avatar` (supporting both string and object URL formats).
+  - Resilient `NotificationAvatar` component: Renders circular avatar with primary accent border (`styles.notifAvatarImage`) when valid URL exists; automatically falls back to company logo (`styles.notifLogoImage`) on empty image or `<Image onError />`.
+  - Status dot badge alignment: Anchored status badge dot (`styles.statusDot`) to the bottom-right corner of both circular employee avatars and company logo badges.
+- Reason: User requested that notification images show the applying employee's avatar, with fallback to company logo if the user does not have an image.
+- Impact: High-clarity, modern visual identification of which employee submitted leave or sent messages directly from the notification list, with zero broken image placeholders.
+
 ## Current Progress
 - Completed:
+  - Notification employee avatar: Display applying employee's avatar on leave and employee notifications.
+  - Graceful fallback: Automatic fallback to company logo (`logo.png`) when user has no avatar or on image load failure.
   - Upload section file actions: Dedicated **Open**, **Download**, and **Share** buttons implemented on every file item.
   - Clickable file title link with direct opening/previewing (`handleOpenFile`).
   - Fullscreen in-app image preview modal (`ImageViewerModal`) for photos/graphics.
@@ -3049,6 +3108,9 @@
 - Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
+- Decision: Resilient dual-layer avatar resolution with onError fallback in NotificationAvatar.
+  Reason: Employee avatars can be retrieved from notification snapshot data, populated sender records, or nested leave employee relations. When an employee has no avatar or the network image fails to load, catching the event with `onError` ensures the user seamlessly sees the crisp company logo badge without broken image placeholders.
+  Date: 2026-10-28
 - Decision: User-scoped read tracking with `readBy` array for broadcast notifications.
   Reason: In broadcast notifications where `recipientRole` is set to `employee` or `all`, storing individual reader IDs in `readBy` ensures each employee maintains an independent unread status without affecting other team members.
   Date: 2026-10-28

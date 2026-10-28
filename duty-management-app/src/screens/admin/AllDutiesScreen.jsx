@@ -473,7 +473,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
           ) : null}
         </View>
 
-        {/* Admin Quick Action Buttons */}
+        {/* Admin Quick Action Buttons: Only Editable & Expense functions */}
         <View style={styles.cardActionsRow}>
           <TouchableOpacity
             style={styles.cardActionEditBtn}
@@ -484,19 +484,28 @@ export const AllDutiesScreen = ({ route, navigation }) => {
             activeOpacity={0.7}
           >
             <Ionicons name="create-outline" size={14} color={COLORS.primary} />
-            <Text style={styles.cardActionEditText}>Edit</Text>
+            <Text style={styles.cardActionEditText}>Edit Work Details</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.cardActionDeleteBtn}
+            style={styles.cardActionExpenseBtn}
             onPress={(e) => {
               e?.stopPropagation?.();
-              handleDeleteDuty(item._id);
+              if (item.expenses && item.expenses.length > 0) {
+                setSelectedDuty(item);
+                setSelectedExpenseForModal(item.expenses[0]);
+              } else {
+                navigation.navigate('ExpenseForm', { duty: item });
+              }
             }}
             activeOpacity={0.7}
           >
-            <Ionicons name="trash-outline" size={14} color={COLORS.danger} />
-            <Text style={styles.cardActionDeleteText}>Delete</Text>
+            <Ionicons name="receipt-outline" size={14} color="#047857" />
+            <Text style={styles.cardActionExpenseText}>
+              {Number(item.totalExpenseAmount) > 0
+                ? `₹${Number(item.totalExpenseAmount).toLocaleString('en-IN')} Expense`
+                : '+ Expense'}
+            </Text>
           </TouchableOpacity>
         </View>
       </Card>
@@ -1040,7 +1049,7 @@ export const AllDutiesScreen = ({ route, navigation }) => {
 
             </ScrollView>
 
-            {/* Admin Action Buttons (Work cannot be deleted) */}
+            {/* Admin Action Buttons: Work Details & Expense */}
             <View style={styles.modalActionFooter}>
               <TouchableOpacity
                 style={[styles.modalActionBtn, styles.modalEditBtn]}
@@ -1048,7 +1057,22 @@ export const AllDutiesScreen = ({ route, navigation }) => {
                 activeOpacity={0.8}
               >
                 <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.modalActionBtnText}>Edit Duty Report</Text>
+                <Text style={styles.modalActionBtnText}>Edit Work Details</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalActionBtn, styles.modalExpenseBtn]}
+                onPress={() => {
+                  const dutyRef = selectedDuty;
+                  setSelectedDuty(null);
+                  navigation.navigate('ExpenseForm', { duty: dutyRef });
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="receipt-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.modalActionBtnText}>
+                  {selectedDuty?.expenses?.length > 0 ? 'Add / Manage Expense' : '+ Add Expense'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1983,7 +2007,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: COLORS.primarySubtle,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: RADIUS.md,
     borderWidth: 1,
@@ -1991,24 +2015,24 @@ const styles = StyleSheet.create({
   },
   cardActionEditText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.primary,
   },
-  cardActionDeleteBtn: {
+  cardActionExpenseBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 12,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: '#A7F3D0',
   },
-  cardActionDeleteText: {
+  cardActionExpenseText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.danger,
+    fontWeight: '700',
+    color: '#047857',
   },
   cardExpenseBadge: {
     flexDirection: 'row',
@@ -2132,9 +2156,8 @@ const styles = StyleSheet.create({
   modalEditBtn: {
     backgroundColor: COLORS.primary,
   },
-  modalDeleteBtn: {
-    backgroundColor: COLORS.danger,
-    maxWidth: 110,
+  modalExpenseBtn: {
+    backgroundColor: '#059669',
   },
   modalActionBtnText: {
     color: '#FFFFFF',

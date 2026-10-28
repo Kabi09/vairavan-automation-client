@@ -649,6 +649,12 @@ export const updateDuty = asyncHandler(async (req, res) => {
     longitude,
     accuracy,
     address,
+    clientId,
+    dutyType,
+    checkInTime,
+    checkOutTime,
+    checkInLocation,
+    checkOutLocation,
   } = req.body;
 
   const duty = await Duty.findById(id);
@@ -664,10 +670,47 @@ export const updateDuty = asyncHandler(async (req, res) => {
     throw ApiError.forbidden('Employees do not have permission to edit work reports. Only administrators can edit submitted work details.');
   }
 
-  // Time validation
+  // Date update
+  if (dutyDate) {
+    const dDate = new Date(dutyDate);
+    if (!isNaN(dDate.getTime())) {
+      duty.dutyDate = dDate;
+    }
+  }
+
+  // Time validation & updates
   const effectiveInTime = inTime || duty.inTime;
   const effectiveOutTime = outTime || duty.outTime;
   validateDutyTimes(effectiveInTime, effectiveOutTime);
+
+  if (inTime) duty.inTime = inTime;
+  if (outTime) duty.outTime = outTime;
+
+  if (checkInTime) {
+    const cIn = new Date(checkInTime);
+    if (!isNaN(cIn.getTime())) duty.checkInTime = cIn;
+  }
+  if (checkOutTime) {
+    const cOut = new Date(checkOutTime);
+    if (!isNaN(cOut.getTime())) duty.checkOutTime = cOut;
+  }
+
+  // Recalculate duration in minutes
+  if (duty.inTime && duty.outTime) {
+    const [inH, inM] = duty.inTime.split(':').map(Number);
+    const [outH, outM] = duty.outTime.split(':').map(Number);
+    if (!isNaN(inH) && !isNaN(outH)) {
+      const diff = (outH * 60 + outM) - (inH * 60 + inM);
+      if (diff > 0) {
+        duty.totalDurationMinutes = diff;
+      }
+    }
+  } else if (duty.checkInTime && duty.checkOutTime) {
+    const durationMs = new Date(duty.checkOutTime).getTime() - new Date(duty.checkInTime).getTime();
+    if (durationMs > 0) {
+      duty.totalDurationMinutes = Math.round(durationMs / (1000 * 60));
+    }
+  }
 
   // If company is being changed, verify it
   if (companyId && companyId !== duty.company.toString()) {
@@ -678,8 +721,17 @@ export const updateDuty = asyncHandler(async (req, res) => {
     duty.company = companyId;
   }
 
+  if (dutyType) {
+    duty.dutyType = dutyType;
+  }
+
+  if (clientId !== undefined || req.body.client !== undefined) {
+    const resolvedClientId = clientId || req.body.client;
+    duty.client = resolvedClientId ? resolvedClientId : null;
+  }
+
   const activeCompany = await Company.findById(duty.company);
-  const isOffice = activeCompany?.companyType === 'office';
+  const isOffice = duty.dutyType === 'office' || activeCompany?.companyType === 'office';
   if (isOffice) {
     duty.customerName = 'Office';
     if (activeCompany?.companyPhoneNumber) {
@@ -689,11 +741,10 @@ export const updateDuty = asyncHandler(async (req, res) => {
     if (customerName) duty.customerName = customerName;
     if (customerPhoneNumber) duty.customerPhoneNumber = customerPhoneNumber;
   }
+
   if (machineName) duty.machineName = machineName;
   if (workType) duty.workType = workType;
   if (customWorkType !== undefined) duty.customWorkType = customWorkType ? customWorkType.trim() : '';
-  if (inTime) duty.inTime = inTime;
-  if (outTime) duty.outTime = outTime;
   if (workDescription) duty.workDescription = workDescription;
   if (Array.isArray(features)) {
     duty.features = features.filter((f) => f && String(f).trim()).map((f) => String(f).trim());
@@ -720,10 +771,22 @@ export const updateDuty = asyncHandler(async (req, res) => {
       }));
   }
 
-  const updateOutLat = req.body.checkOutLocation?.latitude ?? latitude;
-  const updateOutLng = req.body.checkOutLocation?.longitude ?? longitude;
-  const updateOutAcc = req.body.checkOutLocation?.accuracy ?? accuracy;
-  const updateOutAddr = req.body.checkOutLocation?.address ?? address;
+  // Check-In Location update
+  if (checkInLocation) {
+    duty.checkInLocation = {
+      latitude: checkInLocation.latitude !== undefined && checkInLocation.latitude !== null ? Number(checkInLocation.latitude) : (duty.checkInLocation?.latitude ?? null),
+      longitude: checkInLocation.longitude !== undefined && checkInLocation.longitude !== null ? Number(checkInLocation.longitude) : (duty.checkInLocation?.longitude ?? null),
+      accuracy: checkInLocation.accuracy !== undefined && checkInLocation.accuracy !== null ? Number(checkInLocation.accuracy) : (duty.checkInLocation?.accuracy ?? null),
+      address: checkInLocation.address !== undefined ? String(checkInLocation.address).trim() : (duty.checkInLocation?.address || ''),
+      capturedAt: duty.checkInLocation?.capturedAt || new Date(),
+    };
+  }
+
+  // Check-Out Location update
+  const updateOutLat = checkOutLocation?.latitude ?? latitude;
+  const updateOutLng = checkOutLocation?.longitude ?? longitude;
+  const updateOutAcc = checkOutLocation?.accuracy ?? accuracy;
+  const updateOutAddr = checkOutLocation?.address ?? address;
 
   if (updateOutLat !== undefined && updateOutLng !== undefined && updateOutLat !== null && updateOutLng !== null) {
     const locObj = {
@@ -735,8 +798,10 @@ export const updateDuty = asyncHandler(async (req, res) => {
     };
     duty.checkOutLocation = locObj;
     duty.location = locObj;
-  } else if (address !== undefined && duty.location) {
-    duty.location.address = String(address).trim();
+  } else if (updateOutAddr !== undefined) {
+    if (!duty.checkOutLocation) duty.checkOutLocation = {};
+    duty.checkOutLocation.address = String(updateOutAddr).trim();
+    if (duty.location) duty.location.address = String(updateOutAddr).trim();
   }
 
   // Reset status to submitted if it was correction_requested
@@ -752,6 +817,12 @@ export const updateDuty = asyncHandler(async (req, res) => {
   });
 
   await duty.save();
+
+  try {
+    await awardSundayCompOffCredit({ employeeId: duty.employee, duty });
+  } catch (creditErr) {
+    console.warn('Sunday credit check error on update:', creditErr.message);
+  }
 
   const updatedDuty = await Duty.findById(id)
     .populate('company', 'companyName location companyPhoneNumber companyType')

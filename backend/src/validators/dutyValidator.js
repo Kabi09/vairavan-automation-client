@@ -101,6 +101,19 @@ export const validateUpdateDuty = [
     .optional()
     .isMongoId()
     .withMessage('Invalid company ID format'),
+  body('clientId')
+    .optional({ nullable: true })
+    .custom((val) => {
+      if (!val) return true;
+      if (!/^[0-9a-fA-F]{24}$/.test(val)) {
+        throw new Error('Invalid client ID format');
+      }
+      return true;
+    }),
+  body('dutyType')
+    .optional()
+    .isIn(['client', 'office'])
+    .withMessage('Duty type must be client or office'),
   body('customerName')
     .optional({ checkFalsy: true })
     .trim()

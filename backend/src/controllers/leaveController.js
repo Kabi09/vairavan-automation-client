@@ -101,6 +101,7 @@ export const createLeave = asyncHandler(async (req, res) => {
         daysCount: totalWorkingDays,
         employeeId: req.user.employeeId,
         employeeName: req.user.employeeName,
+        employeeAvatar: typeof req.user.avatar === 'string' ? req.user.avatar : (req.user.avatar?.url || ''),
         reason: reason.trim(),
         startDate: start,
         endDate: end,
@@ -298,7 +299,7 @@ export const reviewLeave = asyncHandler(async (req, res) => {
     throw ApiError.badRequest("Decision status must be either 'approved' or 'rejected'");
   }
 
-  const leave = await Leave.findById(id).populate('employee', 'employeeName employeeId email');
+  const leave = await Leave.findById(id).populate('employee', 'employeeName employeeId email avatar');
   if (!leave) {
     throw ApiError.notFound('Leave request not found');
   }
@@ -361,6 +362,7 @@ export const reviewLeave = asyncHandler(async (req, res) => {
           leaveId: leave._id,
           employeeId: leave.employee.employeeId,
           employeeName: leave.employee.employeeName,
+          employeeAvatar: typeof leave.employee.avatar === 'string' ? leave.employee.avatar : (leave.employee.avatar?.url || ''),
           reason: leave.reason,
           startDate: leave.startDate,
           endDate: leave.endDate,
@@ -599,6 +601,7 @@ export const adminGrantLeave = asyncHandler(async (req, res) => {
         daysCount: totalWorkingDays,
         employeeId: targetEmployee.employeeId,
         employeeName: targetEmployee.employeeName,
+        employeeAvatar: typeof targetEmployee.avatar === 'string' ? targetEmployee.avatar : (targetEmployee.avatar?.url || ''),
         reason: finalReason,
         startDate: start,
         endDate: end,
