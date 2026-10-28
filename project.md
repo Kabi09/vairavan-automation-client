@@ -193,6 +193,18 @@
 ## Change History
 
 ### 2026-10-28
+#### Fix: ReferenceError: isDeveloperAdmin is not defined in AllInOneReportScreen.jsx
+- What was changed:
+  - In `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`:
+    - Imported `isDeveloperAdmin` from `../../utils/validators`.
+- Files changed:
+  - `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`
+- Logic changed:
+  - When filtering staff dropdown options and report summary employees, `isDeveloperAdmin(e)` can now resolve properly without throwing a runtime ReferenceError.
+- Reason: User encountered `Web ERROR [ReferenceError: isDeveloperAdmin is not defined]` in `AllInOneReportScreen.jsx` on line 352 when `AdminNavigator` mounted the tab navigator.
+- Impact: Resolves the crash completely. All-in-One report screen renders smoothly and excludes developer admin accounts from employee lists and picker modals.
+
+### 2026-10-28
 #### Duty Check-In Completed Auto-Navigation to Dashboard
 - What was changed:
   - In `duty-management-app/src/screens/employee/DutyFormScreen.jsx`:
