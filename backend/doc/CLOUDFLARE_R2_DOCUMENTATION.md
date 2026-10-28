@@ -1,6 +1,7 @@
 # Cloudflare R2 Integration Documentation
 
 
+
 > **Project:** Cloudflare R2 Image Studio (MERN Stack)  
 > **Storage Provider:** Cloudflare R2 (AWS S3-Compatible API)  
 > **Last Verified:** October 2026  
