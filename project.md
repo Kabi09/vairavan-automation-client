@@ -193,6 +193,19 @@
 ## Change History
 
 ### 2026-10-28
+#### Fix: ReferenceError: formatDate is not defined in reportExportUtils.js
+- What was changed:
+  - Imported `formatDate` and `formatDateTime` from `./dateUtils.js` in `duty-management-app/src/utils/reportExportUtils.js`.
+  - Updated `sigTime` resolution in Section 2 of the All-in-One PDF report:
+    ```javascript
+    const sigTime = d.customerSignature?.signedAt
+      ? formatDateTime(d.customerSignature.signedAt)
+      : (d.dutyDateStr && d.outTime ? `${d.dutyDateStr} ${d.outTime}` : '');
+    ```
+- Reason: When generating the All-in-One PDF report on Web / PWA, `reportExportUtils.js` attempted to call `formatDate(d.customerSignature.signedAt)` without having `formatDate` imported, causing `ReferenceError: formatDate is not defined` on line 254.
+- Impact: Resolves PDF export crash completely. Digital signature timestamp formats cleanly to Indian Standard Time (IST) with date and time (e.g. `21 Oct 2026, 02:37 PM`), and All-in-One PDF export generates smoothly on Web, PWA, and Mobile.
+
+### 2026-10-28
 #### Admin Employee Joining Date Edit Feature (Admin Only)
 - What was changed:
   - **Employee Form & Joining Date Picker (`EmployeeFormScreen.jsx`)**:

@@ -4,6 +4,7 @@ import * as FileSystem from 'expo-file-system';
 import { Alert, Platform } from 'react-native';
 import reportApi from '../api/reportApi.js';
 import { promptDownloadOrShare, writeBase64ToCacheFile, printHtmlOnWeb, inlineRemoteMedia } from './exportUtils.js';
+import { formatDate, formatDateTime } from './dateUtils.js';
 
 const LOGO_URL =
   'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
@@ -251,7 +252,9 @@ export const buildAllInOneReportHtml = (reportData) => {
         }
       }
       const sigUrl = d.sigUrl || d.customerSignature?.url || (typeof d.customerSignature === 'string' ? d.customerSignature : '');
-      const sigTime = d.customerSignature?.signedAt ? formatDate(d.customerSignature.signedAt) : '';
+      const sigTime = d.customerSignature?.signedAt
+        ? formatDateTime(d.customerSignature.signedAt)
+        : (d.dutyDateStr && d.outTime ? `${d.dutyDateStr} ${d.outTime}` : '');
       const signatureHtml = effectiveSig
         ? `<div style="display: inline-block; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px; text-align: right;">
              ${signatureBodyHtml}
