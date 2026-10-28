@@ -177,4 +177,78 @@ describe('Expense Management Tests', () => {
     assert.equal(empRes.body.data.summary.totalAmount, 500);
     assert.equal(empRes.body.data.summary.monthAmount, 500);
   });
+
+  it('Admin can edit expense details and amounts are recalculated', async () => {
+    // 1. Employee creates an expense
+    const createRes = await request(app)
+      .post('/api/expenses')
+      .set('Authorization', `Bearer ${employee1.token}`)
+      .send({
+        expenseDate: '2026-10-25',
+        generalDescription: 'Initial travel claim',
+        items: [
+          {
+            categoryName: 'Food',
+            calculationMode: 'manual',
+            amount: 250,
+            description: 'Breakfast',
+          },
+        ],
+      });
+
+    assert.equal(createRes.status, 201);
+    const expenseId = createRes.body.data.expense._id;
+    assert.equal(createRes.body.data.expense.grandTotal, 250);
+
+    // 2. Employee tries to edit the expense -> should be forbidden (403)
+    const empEditRes = await request(app)
+      .put(`/api/expenses/${expenseId}`)
+      .set('Authorization', `Bearer ${employee1.token}`)
+      .send({
+        generalDescription: 'Attempted edit by employee',
+      });
+    assert.equal(empEditRes.status, 403);
+
+    // 3. Admin edits the expense details
+    const kmCat = await ExpenseCategory.findOne({ name: 'Travel – Kilometer' });
+    const adminEditRes = await request(app)
+      .put(`/api/expenses/${expenseId}`)
+      .set('Authorization', `Bearer ${adminUser.token}`)
+      .send({
+        expenseDate: '2026-10-26',
+        generalDescription: 'Updated by Admin with verified distance and dinner',
+        items: [
+          {
+            category: kmCat._id.toString(),
+            categoryName: 'Travel – Kilometer',
+            calculationMode: 'automatic',
+            outboundDistance: 15,
+            returnDistance: 15,
+            totalDistance: 30, // 30 km * 3 = 90
+            ratePerUnit: 3,
+            description: 'Client site round trip',
+          },
+          {
+            categoryName: 'Food',
+            calculationMode: 'manual',
+            amount: 400,
+            description: 'Lunch + Dinner',
+          },
+        ],
+      });
+
+    assert.equal(adminEditRes.status, 200);
+    assert.equal(adminEditRes.body.success, true);
+    // Grand Total: 90 + 400 = 490
+    assert.equal(adminEditRes.body.data.expense.grandTotal, 490);
+    assert.equal(adminEditRes.body.data.expense.generalDescription, 'Updated by Admin with verified distance and dinner');
+    assert.equal(adminEditRes.body.data.expense.items.length, 2);
+    assert.equal(adminEditRes.body.data.expense.items[0].amount, 90);
+    assert.equal(adminEditRes.body.data.expense.items[1].amount, 400);
+
+    // 4. Verify persisted in DB
+    const fetched = await Expense.findById(expenseId);
+    assert.equal(fetched.grandTotal, 490);
+    assert.equal(fetched.items.length, 2);
+  });
 });

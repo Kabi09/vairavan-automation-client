@@ -858,6 +858,20 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
             <Text style={styles.remarksText}>{item.generalDescription}</Text>
           </View>
         ) : null}
+
+        <View style={styles.expenseCardFooterRow}>
+          <Text style={styles.expenseFooterItemsCount}>
+            {rawItems.length} item{rawItems.length === 1 ? '' : 's'}
+          </Text>
+          <TouchableOpacity
+            style={styles.expenseCardEditBtn}
+            onPress={() => navigation.navigate('ExpenseForm', { expenseToEdit: item, isAdmin: true })}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="create-outline" size={13} color="#1E40AF" />
+            <Text style={styles.expenseCardEditBtnText}>Edit Expense</Text>
+          </TouchableOpacity>
+        </View>
       </Card>
     );
   };
@@ -1612,6 +1626,36 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.textSecondary,
+  },
+  expenseCardFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  expenseFooterItemsCount: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  expenseCardEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  expenseCardEditBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E40AF',
   },
 });
 

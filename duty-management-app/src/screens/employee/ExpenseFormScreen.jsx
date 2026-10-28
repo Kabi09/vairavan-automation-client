@@ -62,6 +62,9 @@ const extractArray = (res, key) => {
 
 export const ExpenseFormScreen = ({ navigation, route }) => {
   const routeDuty = route?.params?.duty || route?.params?.dutyToEdit;
+  const expenseToEdit = route?.params?.expenseToEdit || route?.params?.expense;
+  const isEditing = Boolean(expenseToEdit);
+  const isAdmin = Boolean(route?.params?.isAdmin);
 
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -74,41 +77,104 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   const [duties, setDuties] = useState([]);
 
   // Work & Entity Association
-  const [selectedDutyId, setSelectedDutyId] = useState(() => (routeDuty?._id ? String(routeDuty._id) : ''));
-  const [relatedDutyId, setRelatedDutyId] = useState(() => routeDuty?.dutyId || (routeDuty?._id ? String(routeDuty._id) : ''));
+  const [selectedDutyId, setSelectedDutyId] = useState(() => {
+    if (expenseToEdit) {
+      return expenseToEdit.duty?._id ? String(expenseToEdit.duty._id) : (expenseToEdit.duty ? String(expenseToEdit.duty) : '');
+    }
+    return routeDuty?._id ? String(routeDuty._id) : '';
+  });
+  const [relatedDutyId, setRelatedDutyId] = useState(() => {
+    if (expenseToEdit) {
+      return expenseToEdit.relatedDuty || expenseToEdit.duty?.dutyId || '';
+    }
+    return routeDuty?.dutyId || (routeDuty?._id ? String(routeDuty._id) : '');
+  });
   const [selectedCompanyId, setSelectedCompanyId] = useState(() => {
+    if (expenseToEdit) {
+      return expenseToEdit.company?._id ? String(expenseToEdit.company._id) : (expenseToEdit.company ? String(expenseToEdit.company) : '');
+    }
     return routeDuty?.company?._id ? String(routeDuty.company._id) : (routeDuty?.company ? String(routeDuty.company) : '');
   });
   const [selectedClientId, setSelectedClientId] = useState(() => {
+    if (expenseToEdit) {
+      return expenseToEdit.client?._id ? String(expenseToEdit.client._id) : (expenseToEdit.client ? String(expenseToEdit.client) : '');
+    }
     return routeDuty?.client?._id ? String(routeDuty.client._id) : (routeDuty?.client ? String(routeDuty.client) : '');
   });
   const [companyCategory, setCompanyCategory] = useState(() => {
+    if (expenseToEdit) {
+      return expenseToEdit.duty?.dutyType === 'office' || isOfficeCompany(expenseToEdit.company) ? 'office' : 'client';
+    }
     if (routeDuty) {
       return routeDuty.dutyType === 'office' ? 'office' : 'client';
     }
     return 'client';
   });
   const [expenseDate, setExpenseDate] = useState(() => {
+    if (expenseToEdit?.expenseDate) {
+      return formatISODateOnly(expenseToEdit.expenseDate);
+    }
     if (routeDuty?.dutyDate) {
       return formatISODateOnly(routeDuty.dutyDate);
     }
     return formatISODateOnly();
   });
-  const [generalDescription, setGeneralDescription] = useState('');
+  const [generalDescription, setGeneralDescription] = useState(() => {
+    return expenseToEdit?.generalDescription || '';
+  });
 
   // Previous expenses for this work
   const [previousExpenses, setPreviousExpenses] = useState([]);
   const [loadingPreviousExpenses, setLoadingPreviousExpenses] = useState(false);
 
-  // New Items list
-  const [items, setItems] = useState([]);
+  // Items list
+  const [items, setItems] = useState(() => {
+    if (expenseToEdit && Array.isArray(expenseToEdit.items) && expenseToEdit.items.length > 0) {
+      return expenseToEdit.items.map((it, idx) => ({
+        id: it._id ? String(it._id) : `edit_item_${idx}_${Date.now()}`,
+        categoryId: it.category?._id ? String(it.category._id) : (it.category ? String(it.category) : ''),
+        categoryName: it.categoryName || it.category?.name || '',
+        calculationMode: it.calculationMode || 'manual',
+        ratePerUnit: it.ratePerUnit || it.appliedRate || 0,
+        unit: it.unit || 'km',
+        customCategoryName: it.customTitle || it.customCategoryName || '',
+        customTitle: it.customTitle || it.customCategoryName || '',
+        outboundDistanceKm: it.outboundDistance !== undefined && it.outboundDistance !== null
+          ? String(it.outboundDistance)
+          : (it.outboundDistanceKm !== undefined && it.outboundDistanceKm !== null ? String(it.outboundDistanceKm) : ''),
+        returnDistanceKm: it.returnDistance !== undefined && it.returnDistance !== null
+          ? String(it.returnDistance)
+          : (it.returnDistanceKm !== undefined && it.returnDistanceKm !== null ? String(it.returnDistanceKm) : ''),
+        totalQuantity: it.totalDistance !== undefined && it.totalDistance !== null
+          ? String(it.totalDistance)
+          : (it.quantity !== undefined && it.quantity !== null ? String(it.quantity) : ''),
+        amount: String(it.amount || 0),
+        description: it.description || '',
+        localAttachments: [],
+        uploadedAttachments: Array.isArray(it.attachments)
+          ? it.attachments.map((att) => ({
+              url: typeof att === 'string' ? att : att.url,
+              key: att.key || att.publicId || '',
+              originalName: att.originalName || 'receipt.jpg',
+              size: att.size || 0,
+            }))
+          : [],
+      }));
+    }
+    return [];
+  });
 
   // Draft persistence state
   const [draftRestored, setDraftRestored] = useState(false);
   const [draftLoadedOnce, setDraftLoadedOnce] = useState(false);
 
-  // Load draft on mount (if no route duty is passed, or if draft matches route duty)
+  // Load draft on mount (only when creating a new expense, not when editing)
   useEffect(() => {
+    if (isEditing) {
+      setDraftLoadedOnce(true);
+      return;
+    }
+
     let isMounted = true;
     const loadDraft = async () => {
       try {
@@ -157,11 +223,11 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     return () => {
       isMounted = false;
     };
-  }, [routeDuty]);
+  }, [isEditing, routeDuty]);
 
-  // Auto-save draft on changes (debounced 800ms)
+  // Auto-save draft on changes (debounced 800ms, only when creating new expense)
   useEffect(() => {
-    if (!draftLoadedOnce) return;
+    if (isEditing || !draftLoadedOnce) return;
 
     const hasContent = Boolean(
       (items && items.length > 0) ||
@@ -187,6 +253,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
 
     return () => clearTimeout(timer);
   }, [
+    isEditing,
     draftLoadedOnce,
     expenseDate,
     companyCategory,
@@ -236,6 +303,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   const [modalAmount, setModalAmount] = useState('');
   const [modalDescription, setModalDescription] = useState('');
   const [modalLocalAttachments, setModalLocalAttachments] = useState([]);
+  const [modalUploadedAttachments, setModalUploadedAttachments] = useState([]);
 
   // Lightbox preview modal state
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
@@ -455,6 +523,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     setModalAmount('');
     setModalDescription('');
     setModalLocalAttachments([]);
+    setModalUploadedAttachments([]);
     setItemModalVisible(true);
   };
 
@@ -474,6 +543,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     setModalAmount(item.amount ? String(item.amount) : '');
     setModalDescription(item.description || '');
     setModalLocalAttachments(item.localAttachments || []);
+    setModalUploadedAttachments(item.uploadedAttachments || []);
     setItemModalVisible(true);
   };
 
@@ -566,6 +636,10 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
     setModalLocalAttachments((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const handleRemoveModalUploadedAttachment = (idx) => {
+    setModalUploadedAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   // Save item from modal
   const handleSaveModalItem = () => {
     if (!modalCategoryId) {
@@ -611,8 +685,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
       amount: String(Math.round(amtNum)),
       description: modalDescription.trim(),
       localAttachments: modalLocalAttachments,
-      uploadedAttachments:
-        editingItemIndex !== null ? items[editingItemIndex].uploadedAttachments || [] : [],
+      uploadedAttachments: modalUploadedAttachments,
     };
 
     if (editingItemIndex !== null) {
@@ -724,7 +797,7 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         }
       }
 
-      // Step 3: Submit Expense payload
+      // Step 3: Submit or Update Expense payload
       const payload = {
         expenseDate,
         company: targetCompId,
@@ -738,34 +811,59 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         items: preparedItems,
       };
 
-      const res = await expenseApi.createExpense(payload);
-      await clearExpenseDraft();
-      setDraftRestored(false);
-      const expenseObj = res.data?.expense || res.data?.data?.expense || res.expense;
-      const expenseCode = expenseObj?.expenseId || '';
+      if (isEditing) {
+        const res = await expenseApi.updateExpense(expenseToEdit._id, payload);
+        const expenseObj = res.data?.expense || res.data?.data?.expense || res.expense;
+        const expenseCode = expenseObj?.expenseId || expenseToEdit.expenseId || '';
 
-      Alert.alert(
-        'Expense Submitted',
-        `Your expense claim ${expenseCode ? `#${expenseCode} ` : ''}for ₹${grandTotal.toLocaleString(
-          'en-IN'
-        )} has been submitted successfully for ${selectedDutyObj?.dutyId || relatedDutyId || 'this work'}.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              if (navigation.canGoBack()) {
-                navigation.goBack();
-              } else {
-                navigation.navigate('MyExpenses');
-              }
+        Alert.alert(
+          'Expense Updated',
+          `Expense claim ${expenseCode ? `#${expenseCode} ` : ''}for ₹${grandTotal.toLocaleString(
+            'en-IN'
+          )} has been updated successfully.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
+                } else {
+                  navigation.navigate('AdminExpenses');
+                }
+              },
             },
-          },
-        ]
-      );
+          ]
+        );
+      } else {
+        const res = await expenseApi.createExpense(payload);
+        await clearExpenseDraft();
+        setDraftRestored(false);
+        const expenseObj = res.data?.expense || res.data?.data?.expense || res.expense;
+        const expenseCode = expenseObj?.expenseId || '';
+
+        Alert.alert(
+          'Expense Submitted',
+          `Your expense claim ${expenseCode ? `#${expenseCode} ` : ''}for ₹${grandTotal.toLocaleString(
+            'en-IN'
+          )} has been submitted successfully for ${selectedDutyObj?.dutyId || relatedDutyId || 'this work'}.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
+                } else {
+                  navigation.navigate('MyExpenses');
+                }
+              },
+            },
+          ]
+        );
+      }
     } catch (submitErr) {
-      const msg = extractErrorMessage(submitErr, 'Failed to submit expense claim');
+      const msg = extractErrorMessage(submitErr, isEditing ? 'Failed to update expense claim' : 'Failed to submit expense claim');
       setError(msg);
-      Alert.alert('Submission Error', msg);
+      Alert.alert(isEditing ? 'Update Error' : 'Submission Error', msg);
     } finally {
       setSubmitting(false);
     }
@@ -774,7 +872,10 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   if (loadingInitial) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <ScreenHeader title="Add Work Expense" onBack={() => navigation.goBack()} />
+        <ScreenHeader
+          title={isEditing ? `Edit Expense #${expenseToEdit?.expenseId || ''}` : 'Add Work Expense'}
+          onBack={() => navigation.goBack()}
+        />
         <LoadingIndicator message="Loading expense configuration..." fullScreen />
       </SafeAreaView>
     );
@@ -783,8 +884,12 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
-        title="Add Work Expense"
-        subtitle="Claim travel, food, and visit expenses"
+        title={isEditing ? `Edit Expense #${expenseToEdit?.expenseId || ''}` : 'Add Work Expense'}
+        subtitle={
+          isEditing
+            ? 'Modify expense items, amounts, distances, and details'
+            : 'Claim travel, food, and visit expenses'
+        }
         onBack={() => navigation.goBack()}
       />
 
@@ -794,6 +899,20 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         showsVerticalScrollIndicator={false}
       >
         <ErrorMessage message={error} />
+
+        {isEditing && (
+          <View style={styles.adminEditBanner}>
+            <View style={styles.adminEditIconPill}>
+              <Ionicons name="create" size={16} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.adminEditBannerTitle}>Admin Edit Mode</Text>
+              <Text style={styles.adminEditBannerText}>
+                You have administrative access to update this expense record ({expenseToEdit.expenseId || 'EXP'}). Changes will recalculate item totals and update the permanent record.
+              </Text>
+            </View>
+          </View>
+        )}
 
         {draftRestored && (
           <View style={styles.draftBanner}>
@@ -1208,11 +1327,17 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         {/* 6. Submit Button */}
         <View style={styles.submitContainer}>
           <PrimaryButton
-            title={submitting ? 'Submitting Expense...' : `Submit Expense Claim • ₹${grandTotal.toLocaleString('en-IN')}`}
+            title={
+              submitting
+                ? (isEditing ? 'Updating Expense Details...' : 'Submitting Expense...')
+                : (isEditing
+                    ? `Update Expense Details • ₹${grandTotal.toLocaleString('en-IN')}`
+                    : `Submit Expense Claim • ₹${grandTotal.toLocaleString('en-IN')}`)
+            }
             onPress={handleSubmit}
             loading={submitting}
             disabled={submitting || items.length === 0}
-            leftIcon="checkmark-circle-outline"
+            leftIcon={isEditing ? 'save-outline' : 'checkmark-circle-outline'}
           />
 
           <SecondaryButton
@@ -1424,31 +1549,73 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
                 </TouchableOpacity>
               </View>
 
-              {modalLocalAttachments.length > 0 ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalPhotoScroll}>
-                  {modalLocalAttachments.map((uri, aIdx) => (
-                    <View key={aIdx} style={styles.modalThumbWrap}>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setPreviewImageUri(uri);
-                          setPreviewTitle(`Receipt #${aIdx + 1}`);
-                          setPreviewModalVisible(true);
-                        }}
-                        activeOpacity={0.85}
-                      >
-                        <Image source={{ uri }} style={styles.modalThumbImg} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.modalRemovePhotoBtn}
-                        onPress={() => handleRemoveModalAttachment(aIdx)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Ionicons name="close" size={12} color="#FFFFFF" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </ScrollView>
-              ) : (
+              {/* Already uploaded attachments (when editing an existing item) */}
+              {modalUploadedAttachments.length > 0 && (
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={styles.modalSubSectionLabel}>Current Uploaded Receipts ({modalUploadedAttachments.length}):</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalPhotoScroll}>
+                    {modalUploadedAttachments.map((att, aIdx) => {
+                      const u = typeof att === 'string' ? att : att?.url;
+                      if (!u) return null;
+                      return (
+                        <View key={`uploaded-${aIdx}`} style={styles.modalThumbWrap}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setPreviewImageUri(u);
+                              setPreviewTitle(`Existing Receipt #${aIdx + 1}`);
+                              setPreviewModalVisible(true);
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Image source={{ uri: u }} style={styles.modalThumbImg} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.modalRemovePhotoBtn}
+                            onPress={() => handleRemoveModalUploadedAttachment(aIdx)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons name="close" size={12} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Newly added local attachments */}
+              {modalLocalAttachments.length > 0 && (
+                <View style={{ marginBottom: 10 }}>
+                  {modalUploadedAttachments.length > 0 && (
+                    <Text style={styles.modalSubSectionLabel}>New Photos to Upload ({modalLocalAttachments.length}):</Text>
+                  )}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalPhotoScroll}>
+                    {modalLocalAttachments.map((uri, aIdx) => (
+                      <View key={`local-${aIdx}`} style={styles.modalThumbWrap}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setPreviewImageUri(uri);
+                            setPreviewTitle(`New Receipt #${aIdx + 1}`);
+                            setPreviewModalVisible(true);
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <Image source={{ uri }} style={styles.modalThumbImg} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.modalRemovePhotoBtn}
+                          onPress={() => handleRemoveModalAttachment(aIdx)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="close" size={12} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {modalUploadedAttachments.length === 0 && modalLocalAttachments.length === 0 && (
                 <Text style={styles.modalNoPhotosNote}>No photos attached yet (camera or gallery).</Text>
               )}
 
@@ -2212,6 +2379,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#DC2626',
     textDecorationLine: 'underline',
+  },
+  adminEditBanner: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#3B82F6',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  adminEditIconPill: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#2563EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  adminEditBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  adminEditBannerText: {
+    fontSize: 12,
+    color: '#1D4ED8',
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  modalSubSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginBottom: 6,
   },
 });
 

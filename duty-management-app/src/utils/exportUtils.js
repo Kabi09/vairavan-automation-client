@@ -89,7 +89,7 @@ const escapeCsv = (val) => {
 /**
  * Prompt user to either save directly to device Downloads/documents or share via WhatsApp/other apps
  */
-const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle, content }) => {
+export const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle, content }) => {
   const isSharingAvailable = await Sharing.isAvailableAsync().catch(() => false);
 
   const doDownload = async () => {

@@ -619,6 +619,228 @@ export const getExpenseById = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @desc    Update an expense record
+ * @route   PUT /api/expenses/:id
+ * @access  Private/Admin
+ */
+export const updateExpense = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Edit permission check: only administrators can edit submitted expenses
+  if (req.user.role !== 'admin') {
+    throw ApiError.forbidden('Only administrators have permission to edit expense records.');
+  }
+
+  const expense = await Expense.findById(id);
+  if (!expense) {
+    throw ApiError.notFound('Expense record not found');
+  }
+
+  const {
+    expenseDate,
+    companyId,
+    company,
+    clientId,
+    client,
+    dutyId,
+    duty,
+    relatedDuty,
+    generalDescription,
+    employeeId,
+    employee,
+    items,
+  } = req.body;
+
+  let targetCompanyId = companyId !== undefined ? companyId : company;
+  let targetClientId = clientId !== undefined ? clientId : client;
+  const rawDutyId = dutyId !== undefined ? dutyId : duty;
+
+  let resolvedDutyId = expense.duty;
+  let resolvedRelatedDuty = expense.relatedDuty;
+
+  if (rawDutyId !== undefined || relatedDuty !== undefined) {
+    if (rawDutyId && mongoose.Types.ObjectId.isValid(rawDutyId)) {
+      resolvedDutyId = rawDutyId;
+      const d = await Duty.findById(rawDutyId).select('dutyId company client');
+      if (d) {
+        resolvedRelatedDuty = relatedDuty || d.dutyId || resolvedRelatedDuty;
+        if (targetCompanyId === undefined && d.company) targetCompanyId = d.company;
+        if (targetClientId === undefined && d.client) targetClientId = d.client;
+      }
+    } else if (rawDutyId || relatedDuty) {
+      const code = String(relatedDuty || rawDutyId).trim();
+      const d = await Duty.findOne({
+        $or: [
+          { dutyId: code },
+          ...(mongoose.Types.ObjectId.isValid(code) ? [{ _id: code }] : []),
+        ],
+      }).select('_id dutyId company client');
+      if (d) {
+        resolvedDutyId = d._id;
+        resolvedRelatedDuty = d.dutyId || code;
+        if (targetCompanyId === undefined && d.company) targetCompanyId = d.company;
+        if (targetClientId === undefined && d.client) targetClientId = d.client;
+      } else {
+        resolvedRelatedDuty = code;
+      }
+    } else if (rawDutyId === null || rawDutyId === '') {
+      resolvedDutyId = null;
+      resolvedRelatedDuty = '';
+    }
+  }
+
+  // 1. Verify company & client if provided
+  let validatedCompany = expense.company;
+  if (targetCompanyId !== undefined) {
+    if (targetCompanyId) {
+      const foundComp = await Company.findOne({ _id: targetCompanyId, isDeleted: false });
+      validatedCompany = foundComp ? foundComp._id : null;
+    } else {
+      validatedCompany = null;
+    }
+  }
+
+  let validatedClient = expense.client;
+  if (targetClientId !== undefined) {
+    if (targetClientId) {
+      const foundClient = await Client.findOne({ _id: targetClientId, isDeleted: false });
+      validatedClient = foundClient ? foundClient._id : null;
+    } else {
+      validatedClient = null;
+    }
+  }
+
+  // If employee reassignment is requested by admin
+  const targetEmployeeId = employeeId || employee;
+  if (targetEmployeeId && mongoose.Types.ObjectId.isValid(targetEmployeeId)) {
+    const foundEmp = await User.findById(targetEmployeeId);
+    if (foundEmp) {
+      expense.employee = foundEmp._id;
+    }
+  }
+
+  if (expenseDate) {
+    expense.expenseDate = new Date(expenseDate);
+  }
+  if (targetCompanyId !== undefined) {
+    expense.company = validatedCompany;
+  }
+  if (targetClientId !== undefined) {
+    expense.client = validatedClient;
+  }
+  expense.duty = resolvedDutyId;
+  expense.relatedDuty = resolvedRelatedDuty || '';
+  if (generalDescription !== undefined) {
+    expense.generalDescription = (generalDescription || '').trim();
+  }
+
+  // 2. Validate and process items if passed
+  if (items !== undefined) {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw ApiError.badRequest('Please include at least one expense item');
+    }
+
+    const activeCategories = await ExpenseCategory.find({ isDeleted: false });
+    const categoryMap = new Map();
+    activeCategories.forEach((cat) => {
+      categoryMap.set(cat.name.toLowerCase().trim(), cat);
+      categoryMap.set(cat._id.toString(), cat);
+    });
+
+    let grandTotal = 0;
+    const processedItems = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const categoryName = (item.categoryName || '').trim();
+
+      if (!categoryName) {
+        throw ApiError.badRequest(`Expense item #${i + 1} must have a category name`);
+      }
+
+      const matchedCat =
+        categoryMap.get(categoryName.toLowerCase()) ||
+        (item.category ? categoryMap.get(String(item.category)) : null);
+
+      const calculationMode = matchedCat ? matchedCat.calculationMode : (item.calculationMode || 'manual');
+      let itemAmount = 0;
+      let appliedRate = matchedCat ? matchedCat.ratePerUnit : (Number(item.ratePerUnit || item.appliedRate) || 0);
+      const unit = matchedCat ? matchedCat.unit : (item.unit || '');
+
+      let outboundDistance = Number(item.outboundDistance ?? item.outboundDistanceKm) || 0;
+      let returnDistance = Number(item.returnDistance ?? item.returnDistanceKm) || 0;
+      let totalDistance = Number(item.totalDistance) || 0;
+      let quantity = Number(item.quantity) || 0;
+
+      if (calculationMode === 'automatic') {
+        if (totalDistance <= 0 && (outboundDistance > 0 || returnDistance > 0)) {
+          totalDistance = outboundDistance + returnDistance;
+        }
+        const unitsToCharge = totalDistance > 0 ? totalDistance : (quantity > 0 ? quantity : 0);
+
+        if (unitsToCharge <= 0) {
+          throw ApiError.badRequest(
+            `Item #${i + 1} (${categoryName}) requires a distance or quantity greater than zero`
+          );
+        }
+
+        itemAmount = Math.round(unitsToCharge * appliedRate * 100) / 100;
+      } else {
+        itemAmount = Number(item.amount) || 0;
+        if (itemAmount <= 0) {
+          throw ApiError.badRequest(`Item #${i + 1} (${categoryName}) amount must be greater than zero`);
+        }
+      }
+
+      grandTotal += itemAmount;
+
+      const sanitizedAttachments = Array.isArray(item.attachments)
+        ? item.attachments
+            .filter((att) => att && (att.url || typeof att === 'string'))
+            .map((att) => ({
+              url: typeof att === 'string' ? att : att.url,
+              publicId: att.publicId || '',
+              key: att.key || '',
+            }))
+        : [];
+
+      const customTitle = (item.customTitle || item.customCategoryName || '').trim();
+
+      processedItems.push({
+        category: matchedCat ? matchedCat._id : (item.category || null),
+        categoryName: matchedCat ? matchedCat.name : categoryName,
+        calculationMode,
+        unit,
+        ratePerUnit: appliedRate,
+        outboundDistance,
+        returnDistance,
+        totalDistance,
+        quantity,
+        amount: itemAmount,
+        customTitle,
+        description: item.description ? item.description.trim() : '',
+        attachments: sanitizedAttachments,
+      });
+    }
+
+    expense.items = processedItems;
+    expense.grandTotal = Math.round(grandTotal * 100) / 100;
+  }
+
+  await expense.save();
+
+  const populatedExpense = await Expense.findById(expense._id)
+    .populate('employee', 'employeeName employeeId email designation avatar phoneNumber')
+    .populate('company', 'companyName location companyPhoneNumber companyType')
+    .populate('client', 'clientName clientPhoneNumber status')
+    .populate('duty', 'dutyId machineName workType dutyDate');
+
+  return ApiResponse.success(res, 200, 'Expense record updated successfully', {
+    expense: populatedExpense,
+  });
+});
+
+/**
  * @desc    Delete expense record
  * @route   DELETE /api/expenses/:id
  * @access  Private
@@ -647,5 +869,6 @@ export default {
   getMyExpenses,
   getAllExpenses,
   getExpenseById,
+  updateExpense,
   deleteExpense,
 };

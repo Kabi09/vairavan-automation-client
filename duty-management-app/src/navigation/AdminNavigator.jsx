@@ -25,6 +25,7 @@ import LeaveRequestScreen from '../screens/employee/LeaveRequestScreen';
 import MyLeavesScreen from '../screens/employee/MyLeavesScreen';
 import EmployeeCalendarScreen from '../screens/employee/EmployeeCalendarScreen';
 import SharedDocumentsScreen from '../screens/common/SharedDocumentsScreen';
+import AllInOneReportScreen from '../screens/admin/AllInOneReportScreen';
 import { COLORS } from '../constants/theme';
 
 const Tab = createBottomTabNavigator();
@@ -133,6 +134,7 @@ export const AdminNavigator = () => {
       <Stack.Screen name="MyLeaves" component={MyLeavesScreen} />
       <Stack.Screen name="EmployeeCalendar" component={EmployeeCalendarScreen} />
       <Stack.Screen name="SharedDocuments" component={SharedDocumentsScreen} />
+      <Stack.Screen name="AllInOneReport" component={AllInOneReportScreen} />
     </Stack.Navigator>
   );
 };

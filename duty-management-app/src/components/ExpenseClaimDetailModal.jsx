@@ -101,6 +101,7 @@ export const ExpenseClaimDetailModal = ({
   duty,
   onClose,
   onOpenPhoto,
+  onEdit,
 }) => {
   if (!expense) return null;
 
@@ -182,9 +183,24 @@ export const ExpenseClaimDetailModal = ({
                 {claimId} • {expDate || 'Logged Record'}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close-circle" size={28} color={COLORS.textMuted} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {Boolean(onEdit) && (
+                <TouchableOpacity
+                  style={styles.headerEditBtn}
+                  onPress={() => {
+                    onClose?.();
+                    onEdit(expense);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="create-outline" size={15} color="#1E40AF" />
+                  <Text style={styles.headerEditBtnText}>Edit</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close-circle" size={28} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ScrollView style={styles.scrollBody} showsVerticalScrollIndicator={false}>
@@ -378,7 +394,24 @@ export const ExpenseClaimDetailModal = ({
 
           {/* Action Footer */}
           <View style={styles.footer}>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.8}>
+            {Boolean(onEdit) && (
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => {
+                  onClose?.();
+                  onEdit(expense);
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="create-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.editBtnText}>Edit Expense Details</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.closeBtn, Boolean(onEdit) && { flex: 1 }]}
+              onPress={onClose}
+              activeOpacity={0.8}
+            >
               <Text style={styles.closeBtnText}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -389,6 +422,38 @@ export const ExpenseClaimDetailModal = ({
 };
 
 const styles = StyleSheet.create({
+  headerEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  headerEditBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  editBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#1E40AF',
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.sm,
+  },
+  editBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',

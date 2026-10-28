@@ -652,10 +652,25 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
                       })}
                     </View>
 
-                    {/* Tap to view full detail with proof img hint */}
+                    {/* Action row with Admin Edit button & Tap hint */}
                     <View style={styles.claimTapHintRow}>
-                      <Text style={styles.claimTapHintText}>Tap to view full detail with proof img</Text>
-                      <Ionicons name="chevron-forward" size={13} color={COLORS.primary} />
+                      {isAdmin ? (
+                        <TouchableOpacity
+                          style={styles.claimInlineEditBtn}
+                          onPress={(e) => {
+                            e?.stopPropagation?.();
+                            navigation.navigate('ExpenseForm', { expenseToEdit: exp, isAdmin: true });
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="create-outline" size={13} color="#1E40AF" />
+                          <Text style={styles.claimInlineEditBtnText}>Edit Expense</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+                        <Text style={styles.claimTapHintText}>Tap to view full detail</Text>
+                        <Ionicons name="chevron-forward" size={13} color={COLORS.primary} />
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -709,6 +724,10 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
         duty={duty}
         onClose={() => setSelectedExpenseForModal(null)}
         onOpenPhoto={(url, title) => handleOpenExpensePhotoPreview(url, title)}
+        onEdit={isAdmin ? (exp) => {
+          setSelectedExpenseForModal(null);
+          navigation.navigate('ExpenseForm', { expenseToEdit: exp, isAdmin: true });
+        } : undefined}
       />
 
       <ImageViewerModal
@@ -1266,7 +1285,7 @@ const styles = StyleSheet.create({
   claimTapHintRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     gap: 4,
     marginTop: 8,
     paddingTop: 6,
@@ -1277,6 +1296,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  claimInlineEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  claimInlineEditBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E40AF',
   },
 });
 

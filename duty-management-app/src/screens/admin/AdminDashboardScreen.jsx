@@ -365,6 +365,15 @@ export const AdminDashboardScreen = ({ navigation }) => {
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={styles.uploadBadgeBtn}
+              onPress={() => navigation.navigate('AllInOneReport')}
+              activeOpacity={0.7}
+              accessibilityLabel="All-in-One Operations Report"
+            >
+              <Ionicons name="bar-chart-outline" size={24} color={COLORS.text} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.uploadBadgeBtn}
               onPress={() => navigation.navigate('SharedDocuments')}
               activeOpacity={0.7}
               accessibilityLabel="Shared Documents & Upload"
@@ -557,6 +566,34 @@ export const AdminDashboardScreen = ({ navigation }) => {
               <View style={styles.sharedDocsBtnPill}>
                 <Ionicons name="cloud-upload" size={13} color="#FFFFFF" />
                 <Text style={styles.sharedDocsBtnText}>Upload</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* All-in-One Operations Report Banner */}
+            <TouchableOpacity
+              style={[styles.sharedDocsBanner, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', marginTop: 10 }]}
+              onPress={() => navigation.navigate('AllInOneReport')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.sharedDocsLeft}>
+                <View style={[styles.sharedDocsIconWrap, { backgroundColor: '#1E40AF' }]}>
+                  <Ionicons name="pie-chart" size={22} color="#FFFFFF" />
+                </View>
+                <View style={styles.sharedDocsTextWrap}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.sharedDocsTitle}>All-in-One Report</Text>
+                    <View style={[styles.newFilesChip, { backgroundColor: '#DBEAFE' }]}>
+                      <Text style={[styles.newFilesChipText, { color: '#1E40AF' }]}>ANALYTICS</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.sharedDocsSub}>
+                    Company, client, work, staff, leaves, OT & expenses
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.sharedDocsBtnPill, { backgroundColor: '#1E40AF' }]}>
+                <Ionicons name="analytics" size={13} color="#FFFFFF" />
+                <Text style={styles.sharedDocsBtnText}>View</Text>
               </View>
             </TouchableOpacity>
 

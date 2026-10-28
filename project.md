@@ -125,8 +125,17 @@
 - `LeaveRequestScreen`: Dual-type leave application screen (`duty-management-app/src/screens/employee/LeaveRequestScreen.jsx`) supporting Casual Leave (`casual_leave`) and Comp-Off (`comp_off`). Displays real-time balance cards, start/end date pickers, calculated working days count (excluding Sundays and company holidays), reason input, and client-side balance validation.
 - `MyLeavesScreen`: Employee leave overview screen (`duty-management-app/src/screens/employee/MyLeavesScreen.jsx`) with live balance summary cards (Annual CL Allowance, Used, Available; Comp-Off Earned, Used, Available), dual-mode toggle ("My Leaves" request list vs "Monthly Calendar"), and tap-to-inspect request details.
 - `LeaveRequestsScreen`: Admin leave management console (`duty-management-app/src/screens/admin/LeaveRequestsScreen.jsx`) with a 3-tab segment ("Applications", "Calendar", "Balances & Rules"). Allows admins to review pending leaves with approve and reject actions (optional rejection reason modal), directly assign/grant approved Casual Leave or Comp-Off to any staff member without prior employee request (`AdminGrantLeaveModal`), view individual employee monthly calendars with staff picker, configure global annual CL allowance and leave year, and edit individual employee CL allowances.
+- `AllInOneReportScreen`: Dedicated administrative reporting and operational intelligence screen (`duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`). Combines company directory, client contacts, field work service logs, staff lifecycle performance, daily attendance, leaves, Sunday Comp-Off credits, Overtime (OT > 8h), travel expense claims, and individual staff monthly attendance calendars into a single unified console. Features 9 live KPI summary cards, multi-parameter filter drawer, instant reactive list searches, multi-page branded PDF export (`expo-print`), and 9-worksheet Excel (.xlsx) export (`exceljs` + SAF / device share).
 
 ## API / Backend Integration
+- `GET /api/reports/all-in-one`:
+  - Access: Admin only.
+  - Query params: `dateRange` ('today' | 'yesterday' | 'this_week' | 'this_month' | 'previous_month' | 'custom'), `startDate`, `endDate`, `companyId`, `clientId`, `employeeId`, `workType`, `workStatus`, `leaveType`, `leaveStatus`, `expenseCategory`, `page`, `limit`, `exportAll`.
+  - Behavior: Aggregates complete operational intelligence dataset matching filters across Duties, Companies, Clients, Employees, Leaves, Comp-Off credits, and Expenses. Returns 9 KPI summary metrics, company directory with client contacts, enhanced duties with OT calculation, employee performance summaries, overtime log, itemized expenses, and optional day-by-day employee calendar.
+- `GET /api/reports/all-in-one/excel` (and `POST`):
+  - Access: Admin only.
+  - Query params: Same filters as `all-in-one`, plus `format=stream` or `download=true`.
+  - Behavior: Generates a professionally formatted multi-worksheet `.xlsx` workbook using `exceljs` across 9 distinct worksheets (Summary, Companies & Clients, Work Details, Employee Details, Attendance & Working Days, Leave & Comp-Off, Overtime (OT), Expenses, and Employee Calendar). Returns base64 payload for mobile download/share or binary stream for direct downloads.
 - `POST /api/leaves/admin-grant`:
   - Access: Admin only.
   - Payload: `{ employeeId, leaveType: 'casual_leave' | 'comp_off', startDate, endDate, reason, adminRemarks }`.
@@ -175,12 +184,119 @@
 - `DELETE /api/documents/:id`:
   - Access: Document owner (uploader) or Admin.
   - Behavior: Verifies permission (`isAdmin || isOwner`), sets `isDeleted = true, deletedAt = new Date(), deletedBy = req.user._id`, and asynchronously deletes files from Cloudflare R2.
+- `PUT /api/expenses/:id`:
+  - Access: Admin only.
+  - Payload: `{ expenseDate, companyId, clientId, dutyId, relatedDuty, generalDescription, items }`.
+  - Behavior: Verifies caller has role `admin`, fetches expense record, validates company/client/duty references, recalculates item totals (automatic distance × rate or validated manual amounts) and grandTotal, sanitizes attachments, updates document in MongoDB, and returns populated expense with employee, company, client, and duty details.
 
 
 ## Change History
 
 ### 2026-10-28
-#### Shared Documents & Multi-File Upload Section for Admin and Employee Users
+#### All-in-One Operations & Executive Report Section
+- What was changed:
+  - **Backend Report Engine & Multi-Worksheet Excel Generation (`reportService.js`, `reportController.js`, `reportRoutes.js`, `report.test.js`)**:
+    - Created `backend/src/services/reportService.js` with `resolveDateRange`, `generateAllInOneReportData`, and `generateAllInOneExcelBuffer`.
+    - Integrated `exceljs` library to construct professional multi-worksheet `.xlsx` spreadsheets formatted with corporate brand headers, styled column titles, alternating row fills, custom number formats, and thin borders.
+    - Aggregated data across 7 database collections: Companies, Clients, Duties, Staff (Users), Leaves, Comp-Off Credits, and Expenses.
+    - Accurately computes 9 summary KPI metrics: Total Companies, Total Clients, Total Staff, Total Work Records, Total Working Days, Total Leave Days, Total Comp-Off Credits Earned, Total Overtime (OT > 8h) Hours, and Total Expenses.
+    - Implemented server-side Overtime (OT) evaluation: automatically compares duty duration against the standard 8-hour shift (480 minutes) to identify excess hours (`otHours`).
+    - Mounted secured routes `GET /api/reports/all-in-one` and `GET/POST /api/reports/all-in-one/excel` in `backend/src/routes/reportRoutes.js` under `router.use(authenticate, authorize('admin'))`.
+    - Added comprehensive unit tests in `backend/tests/report.test.js` validating role restriction (403 for employees), complete dataset aggregation, employee filter isolation, and 8-worksheet Excel parsing via `exceljs`. All 61 backend tests pass.
+  - **Mobile API Client (`reportApi.js`)**:
+    - Added `reportApi.getAllInOneReport(params)` and `reportApi.exportExcel(params)`.
+  - **Export Utilities (`reportExportUtils.js`, `exportUtils.js`)**:
+    - Exported `promptDownloadOrShare` from `exportUtils.js` for unified storage access framework (Android SAF) and device share capabilities.
+    - Implemented `buildAllInOneReportHtml` in `reportExportUtils.js` creating a print-optimized, multi-page HTML document containing executive summaries, filter chips, 9 KPI cards, 7 detailed tables, and Ameyy Digital Services footer.
+    - Added `exportAllInOneToPDF` using `expo-print` and `promptDownloadOrShare`.
+    - Added `exportAllInOneToExcel` which fetches server-generated `.xlsx` base64 payload, writes to cache via `expo-file-system`, and triggers download or device sharing (`expo-sharing`).
+  - **All-in-One Report UI & Interactive Console (`AllInOneReportScreen.jsx`)**:
+    - Developed `AllInOneReportScreen.jsx` providing a full operational dashboard for administrators.
+    - Implemented top sticky action bar with date label, direct `[PDF]`, `[Excel]`, and `[Share]` export triggers with progress indicators and double-click prevention.
+    - Added horizontal date preset pills (`Today`, `Yesterday`, `This Week`, `This Month`, `Previous Month`, `Custom Range`).
+    - Created expandable/modal Advanced Filter Drawer combining Date Range, Custom Date Pickers (`DatePickerModal`), Company Dropdown (`DropdownPickerModal`), Dynamic Client Dropdown (dynamically filtered based on selected company), Staff Member Picker, Work Type, Work Status, Leave Type, and Expense Category.
+    - Implemented 9 responsive KPI Summary cards at the top of the report.
+    - Built a 7-segment navigation tab system (`Overview`, `Works`, `Staff`, `Leaves`, `Overtime`, `Expenses`, `Calendar`):
+      - **Works**: List of duty cards with timings, duration, OT pills, machine info, location, signature, proofs, and linked expenses.
+      - **Staff**: Staff directory cards with work counts, days worked, total hours, OT hours, leaves, and a 1-tap "View Monthly Attendance Calendar" jump.
+      - **Leaves & Comp-Off**: Itemized leaves alongside Sunday Comp-Off earned badges with days count, reason, and admin remarks.
+      - **Overtime (OT)**: Filtered log of shifts exceeding 8 hours with shift timings, standard shift comparison, and excess OT hours in orange.
+      - **Expenses**: Itemized expense claims with categories, kilometer rates, distances, and grand totals.
+      - **Calendar**: Day-by-day attendance feed for selected staff members displaying working/holiday status, duty details, leave records, and comp-off badges with color legend.
+  - **Admin Navigation & Portal Integration (`AdminNavigator.jsx`, `AdminDashboardScreen.jsx`)**:
+    - Registered `AllInOneReport` in `AdminNavigator.jsx` stack.
+    - Added direct header shortcut icon button (`bar-chart-outline`) on `AdminDashboardScreen`.
+    - Added a prominent `All-in-One Report` banner card on the admin dashboard with quick `[View]` navigation pill.
+- Files changed:
+  - `backend/package.json`
+  - `backend/src/services/reportService.js`
+  - `backend/src/controllers/reportController.js`
+  - `backend/src/routes/reportRoutes.js`
+  - `backend/src/routes/index.js`
+  - `backend/tests/report.test.js`
+  - `duty-management-app/src/api/reportApi.js`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/utils/reportExportUtils.js`
+  - `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`
+  - `duty-management-app/src/navigation/AdminNavigator.jsx`
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Overtime (OT) is dynamically calculated for work reports when `totalDurationMinutes > 480` (`otHours = (totalDurationMinutes - 480) / 60`).
+  - Admins can filter clients dynamically based on the chosen company.
+  - Multi-worksheet Excel files (.xlsx) are now generated natively on the server with 9 styled tabs.
+- Reason: User requested a comprehensive All-in-One Report section combining company, client, work, employee, attendance, leave, OT, expense, and calendar data with PDF/Excel export and sharing.
+- Impact: Provides administrators with a single, end-to-end operational intelligence tool with high data accuracy, rich filters, and export capabilities without modifying existing employee workflows.
+
+### 2026-10-28
+#### Admin Expense Details Editing and Management Across Admin Views
+- What was changed:
+  - **Backend Expense Update API (`PUT /api/expenses/:id`, `expenseController.js`, `expenseRoutes.js`)**:
+    - Created `updateExpense` controller in `backend/src/controllers/expenseController.js`.
+    - Restricted modification strictly to Administrators (`req.user.role === 'admin'`), returning 403 Forbidden for unauthorized users.
+    - Added support for updating `expenseDate`, `company`, `client`, `duty`, `relatedDuty`, `generalDescription`, and reassigning `employee`.
+    - Enforced strict recalculation of automatic items (`distance * ratePerUnit`) and validated manual amounts against active `ExpenseCategory` records.
+    - Sanitized and merged both existing and newly uploaded attachments.
+    - Mounted `router.put('/:id', authorize('admin'), updateExpense)` in `backend/src/routes/expenseRoutes.js`.
+    - Added automated test cases in `backend/tests/expense.test.js` validating successful admin edits, amount recalculations, and 403 rejection for employees. All 57 backend tests pass.
+  - **API Client Method (`expenseApi.js`)**:
+    - Added `updateExpense: async (id, expenseData) => apiClient.put('/expenses/' + id, expenseData)`.
+  - **Expense Form Admin Edit Mode (`ExpenseFormScreen.jsx`)**:
+    - Enabled full editing support when invoked with `route?.params?.expenseToEdit` (or `expense`):
+      - **Admin Edit Mode Banner**: Displays prominent blue alert banner indicating administrative editing mode.
+      - **Pre-Population**: Accurately loads existing `expenseDate`, `companyCategory`, `selectedCompanyId`, `selectedClientId`, `selectedDutyId`, `relatedDutyId`, `generalDescription`, and itemized breakdown (`items`).
+      - **Attachment Editing**: In `ItemModal`, renders both existing Cloudflare R2 uploaded attachments (with preview and delete controls) and newly added camera/gallery photos.
+      - **Dynamic Actions**: Submit button switches to `"Update Expense Details • ₹..."` and executes `expenseApi.updateExpense`, alerting success and seamlessly navigating back.
+      - **Draft Protection**: Bypasses local draft restoration and auto-saving when in `isEditing` mode to prevent overwriting active database records.
+  - **Admin Expenses Screen Quick Edit Actions (`AdminExpensesScreen.jsx`)**:
+    - Added an `[Edit]` button (`create-outline` icon) directly on each expense card in the list view (`renderExpenseItem`), navigating straight to `ExpenseForm` with `{ expenseToEdit: item, isAdmin: true }`.
+    - Added an `[Edit]` button in the top header of the `selectedExpense` details modal.
+    - Added a sticky `[Edit Expense Details]` button in the bottom action footer of the details modal.
+  - **Full Details Modal Edit Support (`ExpenseClaimDetailModal.jsx`)**:
+    - Added optional `onEdit` callback prop to `ExpenseClaimDetailModal`.
+    - When `onEdit` is supplied, renders an `[Edit]` pill in the header and an `[Edit Expense Details]` primary button in the footer.
+  - **Duty Inspection and Work Details Expense Editing Integration (`AllDutiesScreen.jsx`, `DutyDetailsScreen.jsx`, `EmployeeDetailsScreen.jsx`)**:
+    - In `AllDutiesScreen.jsx`: Passed `onEdit` to `ExpenseClaimDetailModal` and added an `[Edit Expense]` button on linked expense cards inside the work inspection sheet.
+    - In `DutyDetailsScreen.jsx`: Passed `onEdit` for admins to `ExpenseClaimDetailModal` and added an inline `[Edit Expense]` button on linked duty expenses.
+    - In `EmployeeDetailsScreen.jsx`: Added an `[Edit Expense]` action button to each expense card in the employee's `Expenses` tab.
+- Files changed:
+  - `backend/src/controllers/expenseController.js`
+  - `backend/src/routes/expenseRoutes.js`
+  - `backend/tests/expense.test.js`
+  - `duty-management-app/src/api/expenseApi.js`
+  - `duty-management-app/src/screens/employee/ExpenseFormScreen.jsx`
+  - `duty-management-app/src/screens/admin/AdminExpensesScreen.jsx`
+  - `duty-management-app/src/components/ExpenseClaimDetailModal.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/admin/EmployeeDetailsScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Previously, expenses could only be created, queried, or deleted; there was no endpoint or UI for editing existing expense claims.
+  - Now, Administrators can edit any expense claim across all administrative screens (`AdminExpensesScreen`, `ExpenseClaimDetailModal`, `AllDutiesScreen`, `EmployeeDetailsScreen`, and `DutyDetailsScreen`).
+  - Editing recalculates item totals, updates server records, updates photo proofs, and preserves audit integrity while employees remain forbidden from modifying submitted expenses.
+- Reason: User requested: `"one small modification- admin can editable to expense details also fix;;;;"`
+- Impact: Administrators have complete control to rectify distances, rates, descriptions, categories, and proof receipts across all expense records in the system.
 - What was changed:
   - **Shared Document Management Backend (`SharedDocument.js`, `documentController.js`, `documentValidator.js`, `documentRoutes.js`, `upload.js`, `Notification.js`)**:
     - Created Mongoose model `SharedDocument` storing title, description, uploader, uploaderName, uploaderRole, uploaderEmployeeId, files array (originalName, fileName, url, key, mimeType, size, fileType), and soft-deletion tracking (`isDeleted`, `deletedAt`, `deletedBy`).
@@ -3091,6 +3207,15 @@
 
 ## Current Progress
 - Completed:
+  - All-in-One Operations & Executive Report Section: Built complete reporting engine in `AllInOneReportScreen.jsx`, `reportService.js`, `reportController.js`, `reportRoutes.js`, and `reportExportUtils.js`.
+  - 9 KPI Summary Cards: Total Companies, Total Clients, Total Staff, Total Work Records, Total Working Days, Total Leave Days, Total Comp-Off Credits, Total OT Hours, and Total Expenses.
+  - Advanced Multi-Parameter Filters: Date presets (`Today`, `Yesterday`, `This Week`, `This Month`, `Previous Month`, `Custom`), Company, Dynamic Client, Staff, Work Type, Work Status, Leave Type, and Expense Category.
+  - Multi-Worksheet Excel Export (.xlsx): Native 9-worksheet Excel generation using `exceljs` with styled brand headers, column widths, number formats, and thin borders.
+  - Multi-Page Branded PDF Export: Vector PDF generation via `expo-print` with branding and Ameyy Digital Services footer.
+  - Native Device Download & Sharing: Supports Android StorageAccessFramework automatic Downloads, iOS filesystem save, and `expo-sharing` share sheet.
+  - Admin editable expense details: Implemented `PUT /api/expenses/:id` restricted to admin role with dynamic distance recalculation, manual amount category validation, and sanitization of attachments.
+  - Admin expense editing UI: Added `isEditing` mode to `ExpenseFormScreen`, admin edit banner, draft isolation, and existing data pre-population.
+  - Multi-surface edit access: Integrated `[Edit]` / `[Edit Expense]` buttons in `AdminExpensesScreen` (cards, modal header, action footer), `ExpenseClaimDetailModal`, `AllDutiesScreen`, `EmployeeDetailsScreen`, and `DutyDetailsScreen`.
   - Notification employee avatar: Display applying employee's avatar on leave and employee notifications.
   - Graceful fallback: Automatic fallback to company logo (`logo.png`) when user has no avatar or on image load failure.
   - Upload section file actions: Dedicated **Open**, **Download**, and **Share** buttons implemented on every file item.
@@ -3098,7 +3223,7 @@
   - Fullscreen in-app image preview modal (`ImageViewerModal`) for photos/graphics.
   - Android StorageAccessFramework automatic downloads and iOS native save support.
   - Message unread count badge fixed on Employee Dashboard header, Quick Actions, and Notifications header.
-  - All 56 automated tests passing across 9 test suites (56/56 pass).
+  - All 61 automated tests passing across 10 test suites (61/61 pass).
 - In Progress: None.
 - Pending: User review.
 
@@ -3108,6 +3233,15 @@
 - Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
+- Decision: Server-side multi-worksheet Excel (.xlsx) generation with `exceljs` instead of client-side CSV.
+  Reason: Requirement 6 mandates a structured `.xlsx` file with separate worksheets (Summary, Companies & Clients, Work Details, Employee Details, Attendance & Working Days, Leave & Comp-Off, Overtime, Expenses, and Employee Calendar). Generating on the server via `exceljs` prevents mobile memory bloat, avoids client-side workbook corruption, and ensures all filtered records are included regardless of pagination.
+  Date: 2026-10-28
+- Decision: Overtime (OT) evaluation based on duty durations exceeding standard 8-hour shift (480 minutes).
+  Reason: While Sunday work awards Comp-Off credits, daily shifts exceeding 8 hours represent overtime work. Computing `otMinutes = Math.max(0, totalDurationMinutes - 480)` and `otHours = (otMinutes / 60)` provides uniform, transparent OT auditing across field duties.
+  Date: 2026-10-28
+- Decision: Admin-only expense modification with automatic server-side recalculation.
+  Reason: While employees can submit expense claims alongside their field duties, allowing employees to modify submitted records introduces financial reconciliation risks. Restricting edit operations strictly to administrators (`PUT /api/expenses/:id`) and recalculating distance-based item amounts (`ratePerUnit * distance`) and grand totals on the server guarantees data integrity and tamper prevention.
+  Date: 2026-10-28
 - Decision: Resilient dual-layer avatar resolution with onError fallback in NotificationAvatar.
   Reason: Employee avatars can be retrieved from notification snapshot data, populated sender records, or nested leave employee relations. When an employee has no avatar or the network image fails to load, catching the event with `onError` ensures the user seamlessly sees the crisp company logo badge without broken image placeholders.
   Date: 2026-10-28

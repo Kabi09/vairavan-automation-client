@@ -355,9 +355,22 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
           <Text style={styles.itemsCountText}>
             {item.items?.length || 0} item{item.items?.length === 1 ? '' : 's'}
           </Text>
-          <View style={styles.viewDetailsRow}>
-            <Text style={styles.viewDetailsText}>View Full Details</Text>
-            <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+          <View style={styles.cardActionsRight}>
+            <TouchableOpacity
+              style={styles.cardEditBtn}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                navigation.navigate('ExpenseForm', { expenseToEdit: item, isAdmin: true });
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="create-outline" size={13} color="#1E40AF" />
+              <Text style={styles.cardEditBtnText}>Edit</Text>
+            </TouchableOpacity>
+            <View style={styles.viewDetailsRow}>
+              <Text style={styles.viewDetailsText}>View Details</Text>
+              <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+            </View>
           </View>
         </View>
       </Card>
@@ -596,12 +609,26 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
                   Submitted on {selectedExpense?.createdAt ? new Date(selectedExpense.createdAt).toLocaleString('en-IN') : ''}
                 </Text>
               </View>
-              <TouchableOpacity
-                onPress={() => setSelectedExpense(null)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close-circle" size={26} color={COLORS.textMuted} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <TouchableOpacity
+                  style={styles.modalHeaderEditBtn}
+                  onPress={() => {
+                    const exp = selectedExpense;
+                    setSelectedExpense(null);
+                    navigation.navigate('ExpenseForm', { expenseToEdit: exp, isAdmin: true });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="create-outline" size={15} color="#1E40AF" />
+                  <Text style={styles.modalHeaderEditBtnText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setSelectedExpense(null)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close-circle" size={26} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
@@ -719,6 +746,29 @@ export const AdminExpensesScreen = ({ navigation, route }) => {
                 </Text>
               </View>
             </ScrollView>
+
+            {/* Admin Action Footer */}
+            <View style={styles.modalActionFooter}>
+              <TouchableOpacity
+                style={styles.modalEditActionBtn}
+                onPress={() => {
+                  const exp = selectedExpense;
+                  setSelectedExpense(null);
+                  navigation.navigate('ExpenseForm', { expenseToEdit: exp, isAdmin: true });
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="create-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.modalEditActionBtnText}>Edit Expense Details</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCloseActionBtn}
+                onPress={() => setSelectedExpense(null)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseActionBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1653,6 +1703,81 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  cardActionsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  cardEditBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  modalHeaderEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  modalHeaderEditBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  modalActionFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    marginTop: 6,
+  },
+  modalEditActionBtn: {
+    flex: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#1E40AF',
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.sm,
+  },
+  modalEditActionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  modalCloseActionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+  },
+  modalCloseActionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
   },
 });
 

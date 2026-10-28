@@ -36,6 +36,11 @@ export const expenseApi = {
     return res.data;
   },
 
+  updateExpense: async (id, expenseData) => {
+    const res = await apiClient.put(`/expenses/${id}`, expenseData);
+    return res.data;
+  },
+
   getMyExpenses: async (params = {}) => {
     const res = await apiClient.get('/expenses/my', { params });
     return res.data;
