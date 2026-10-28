@@ -20,7 +20,6 @@ import * as Location from 'expo-location';
 import companyApi from '../../api/companyApi';
 import clientApi from '../../api/clientApi';
 import dutyApi from '../../api/dutyApi';
-import expenseApi from '../../api/expenseApi';
 import uploadApi from '../../api/uploadApi';
 import ScreenHeader from '../../components/ScreenHeader';
 import Card from '../../components/Card';
@@ -100,11 +99,6 @@ export const DutyFormScreen = ({ navigation, route }) => {
     return dutyToEdit?.checkOutLocation?.address || '';
   });
 
-  // Linked Expenses for this work report
-  const [linkedExpenses, setLinkedExpenses] = useState(() => {
-    return Array.isArray(dutyToEdit?.expenses) ? dutyToEdit.expenses : [];
-  });
-  const [loadingLinkedExpenses, setLoadingLinkedExpenses] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [clients, setClients] = useState([]);
   const [companyCategory, setCompanyCategory] = useState(() => {
@@ -274,53 +268,6 @@ export const DutyFormScreen = ({ navigation, route }) => {
     }
   }, [isEditing, isAdmin, navigation]);
 
-  // Fetch linked expenses for editing report
-  const fetchLinkedExpenses = useCallback(async () => {
-    if (!dutyToEdit?._id) return;
-    setLoadingLinkedExpenses(true);
-    try {
-      const res = await expenseApi.getAllExpenses({ dutyId: dutyToEdit._id, limit: 100 });
-      const expList =
-        res?.data?.expenses ||
-        res?.expenses ||
-        res?.data?.data?.expenses ||
-        [];
-      setLinkedExpenses(expList);
-    } catch (err) {
-      console.warn('Failed to load linked expenses in duty form:', err);
-    } finally {
-      setLoadingLinkedExpenses(false);
-    }
-  }, [dutyToEdit?._id]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (isEditing && dutyToEdit?._id) {
-        fetchLinkedExpenses();
-      }
-    }, [isEditing, dutyToEdit?._id, fetchLinkedExpenses])
-  );
-
-  const totalExpenseAmount = useMemo(() => {
-    return linkedExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-  }, [linkedExpenses]);
-
-  const handleOpenExpenseForm = () => {
-    navigation.navigate('ExpenseForm', {
-      duty: {
-        ...dutyToEdit,
-        company: selectedCompany || dutyToEdit?.company,
-        client: selectedClient || dutyToEdit?.client,
-        dutyDate,
-      },
-      dutyToEdit: {
-        ...dutyToEdit,
-        company: selectedCompany || dutyToEdit?.company,
-        client: selectedClient || dutyToEdit?.client,
-        dutyDate,
-      },
-    });
-  };
 
   // Sync GPS addresses to text fields if newly captured
   useEffect(() => {
@@ -2376,111 +2323,6 @@ export const DutyFormScreen = ({ navigation, route }) => {
                   </View>
                 </View>
 
-                {/* Linked Expenses Section Card */}
-                <Card style={[styles.formCard, { marginTop: SPACING.md }]}>
-                  <View style={styles.expenseCardHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Ionicons name="wallet-outline" size={18} color="#059669" />
-                      <Text style={styles.sectionHeader}>Linked Expenses for this Work</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.addExpenseHeaderBtn}
-                      onPress={handleOpenExpenseForm}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="add-circle" size={16} color="#059669" />
-                      <Text style={styles.addExpenseHeaderBtnText}>+ Expense</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Total Expenses Summary Pill */}
-                  <View style={styles.expenseSummaryPill}>
-                    <Text style={styles.expenseSummaryPillText}>
-                      {linkedExpenses.length} {linkedExpenses.length === 1 ? 'Expense' : 'Expenses'} Logged
-                    </Text>
-                    <Text style={styles.expenseSummaryPillAmount}>
-                      ₹{Number(totalExpenseAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </Text>
-                  </View>
-
-                  {loadingLinkedExpenses ? (
-                    <View style={styles.expenseLoadingWrap}>
-                      <ActivityIndicator size="small" color={COLORS.primary} />
-                      <Text style={styles.expenseLoadingText}>Loading linked expenses...</Text>
-                    </View>
-                  ) : linkedExpenses.length === 0 ? (
-                    <View style={styles.noExpensesBox}>
-                      <Ionicons name="receipt-outline" size={28} color={COLORS.textMuted} />
-                      <Text style={styles.noExpensesTitle}>No Expenses Linked Yet</Text>
-                      <Text style={styles.noExpensesSub}>
-                        Log food, travel, accommodation, or spare part expenses associated with this work report.
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.addExpensePrimaryLink}
-                        onPress={handleOpenExpenseForm}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="add" size={16} color="#FFFFFF" />
-                        <Text style={styles.addExpensePrimaryLinkText}>Add Expense for this Work</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={styles.expenseListWrap}>
-                      {linkedExpenses.map((exp, idx) => (
-                        <View key={exp._id || String(idx)} style={styles.expenseItemRow}>
-                          <View style={styles.expenseItemIconWrap}>
-                            <Ionicons name="receipt" size={16} color="#059669" />
-                          </View>
-                          <View style={{ flex: 1, marginHorizontal: SPACING.xs }}>
-                            <Text style={styles.expenseItemCategory} numberOfLines={1}>
-                              {exp.category?.name || exp.category || 'General Expense'}
-                            </Text>
-                            <Text style={styles.expenseItemDesc} numberOfLines={1}>
-                              {exp.description || (exp.expenseDate ? formatDate(exp.expenseDate) : 'Work expense')}
-                            </Text>
-                          </View>
-                          <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={styles.expenseItemAmount}>
-                              ₹{Number(exp.amount || 0).toFixed(2)}
-                            </Text>
-                            <View
-                              style={[
-                                styles.expenseStatusBadge,
-                                exp.status === 'approved'
-                                  ? styles.expenseStatusBadgeApproved
-                                  : exp.status === 'rejected'
-                                  ? styles.expenseStatusBadgeRejected
-                                  : styles.expenseStatusBadgePending,
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.expenseStatusBadgeText,
-                                  exp.status === 'approved'
-                                    ? styles.expenseStatusBadgeTextApproved
-                                    : exp.status === 'rejected'
-                                    ? styles.expenseStatusBadgeTextRejected
-                                    : styles.expenseStatusBadgeTextPending,
-                                ]}
-                              >
-                                {(exp.status || 'pending').toUpperCase()}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-                      ))}
-
-                      <TouchableOpacity
-                        style={styles.manageExpenseBottomBtn}
-                        onPress={handleOpenExpenseForm}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
-                        <Text style={styles.manageExpenseBottomBtnText}>+ Add Another Expense</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </Card>
 
                 {/* Single Checkout or Admin Update Action Button */}
                 <View style={styles.actionsWrap}>

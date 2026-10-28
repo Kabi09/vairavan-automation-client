@@ -85,8 +85,13 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
     recentDuties,
     { todayBirthdays, thisMonthBirthdays },
   ] = await Promise.all([
-    // Total active employees
-    User.countDocuments({ role: 'employee', accountStatus: 'active' }),
+    // Total active employees (excluding developer admin)
+    User.countDocuments({
+      role: 'employee',
+      accountStatus: 'active',
+      employeeId: { $ne: 'DEV001', $not: /^DEV/i },
+      email: { $nin: ['admin@gmail.com', 'mailtokabilan056@gmail.com'] },
+    }),
 
     // Total active companies
     Company.countDocuments({ status: 'active', isDeleted: false }),

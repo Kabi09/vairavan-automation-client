@@ -347,8 +347,14 @@ export const AllInOneReportScreen = ({ navigation }) => {
     });
   }, [reportData?.duties, searchQuery]);
 
+  const cleanEmployeesList = useMemo(() => {
+    return (reportData?.employees || []).filter(
+      (e) => !isDeveloperAdmin(e) && e.role !== 'admin'
+    );
+  }, [reportData?.employees]);
+
   const filteredEmployeesList = useMemo(() => {
-    const list = reportData?.employees || [];
+    const list = cleanEmployeesList;
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
     return list.filter((e) => {
@@ -573,7 +579,7 @@ export const AllInOneReportScreen = ({ navigation }) => {
               <View style={[styles.kpiIconWrap, { backgroundColor: '#FAF5FF' }]}>
                 <Ionicons name="people" size={18} color="#9333EA" />
               </View>
-              <Text style={styles.kpiValue}>{summary.totalEmployees || 0}</Text>
+              <Text style={styles.kpiValue}>{cleanEmployeesList.length}</Text>
               <Text style={styles.kpiTitle}>Staff Members</Text>
             </Card>
 
@@ -1836,7 +1842,7 @@ export const AllInOneReportScreen = ({ navigation }) => {
       <DropdownPickerModal
         visible={employeeModalVisible}
         title="Select Staff Member"
-        items={(Array.isArray(employees) ? employees : []).map((e) => ({
+        items={(Array.isArray(employees) ? employees : []).filter((e) => !isDeveloperAdmin(e) && e.role !== 'admin').map((e) => ({
           label: e?.employeeName || 'Staff',
           subtitle: `${e?.designation || 'Staff'} • ID: ${e?.employeeId || ''}`,
           value: e?._id,

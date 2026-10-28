@@ -557,11 +557,17 @@ export const AdminDashboardScreen = ({ navigation }) => {
               </Card>
             </View>
 
-            {/* Quick Action Banners (Responsive 3-col on desktop, stacked on mobile) */}
-            <View style={isDesktop ? { flexDirection: 'row', gap: SPACING.md, alignItems: 'stretch', marginBottom: SPACING.sm } : {}}>
+            {/* Quick Action Banners (Responsive 3-col on desktop, stacked on mobile with uniform gap) */}
+            <View
+              style={
+                isDesktop
+                  ? { flexDirection: 'row', gap: SPACING.md, alignItems: 'stretch', marginBottom: SPACING.md }
+                  : { gap: SPACING.md, marginTop: SPACING.sm, marginBottom: SPACING.md }
+              }
+            >
               {/* Shared Documents & Upload Banner */}
               <TouchableOpacity
-                style={[styles.sharedDocsBanner, isDesktop && { flex: 1, marginTop: 0 }]}
+                style={[styles.sharedDocsBanner, { marginTop: 0, marginBottom: 0 }, isDesktop && { flex: 1 }]}
                 onPress={() => navigation.navigate('SharedDocuments')}
                 activeOpacity={0.8}
               >
@@ -596,10 +602,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
 
               {/* All-in-One Operations & Executive Intelligence Banner */}
               <TouchableOpacity
-                style={[
-                  styles.reportBanner,
-                  isDesktop ? { flex: 1, marginTop: 0 } : { marginTop: 10 }
-                ]}
+                style={[styles.reportBanner, { marginTop: 0, marginBottom: 0 }, isDesktop && { flex: 1 }]}
                 onPress={() => navigation.navigate('AllInOneReport')}
                 activeOpacity={0.85}
               >
@@ -627,7 +630,7 @@ export const AdminDashboardScreen = ({ navigation }) => {
 
               {/* Quick Staff Broadcast / Message Action */}
               <TouchableOpacity
-                style={[styles.sendMessageBanner, isDesktop && { flex: 1, marginTop: 0 }]}
+                style={[styles.sendMessageBanner, { marginTop: 0, marginBottom: 0 }, isDesktop && { flex: 1 }]}
                 onPress={() => setSendMessageModalVisible(true)}
                 activeOpacity={0.8}
               >

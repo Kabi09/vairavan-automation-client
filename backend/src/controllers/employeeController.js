@@ -90,7 +90,10 @@ export const getEmployees = asyncHandler(async (req, res) => {
   const { search, status, role } = req.query;
 
   const filter = {
-    email: { $ne: 'admin@gmail.com' }, // Developer account is strictly hidden from employee/user management
+    email: { $nin: ['admin@gmail.com', 'mailtokabilan056@gmail.com'] },
+    employeeId: { $ne: 'DEV001', $not: /^DEV/i },
+    employeeName: { $ne: 'Developer Admin' },
+    role: { $ne: 'admin' },
   };
 
   if (status) {

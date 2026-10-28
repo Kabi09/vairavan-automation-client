@@ -2513,8 +2513,64 @@
 - Reason: User requested: 1) pull-up/pull-down refresh for Web/PWA, 2) Back button on All-in-One report page, 3) Redesign All-in-One report dashboard banner with proper text color, 4) Keep bottom navigation bar visible on All-in-One report page, 5) Add iOS easy install guide on login page, 6) Fix black outline box on input click on web login.
 - Impact: Seamless PWA experience with mobile gestures, persistent bottom tab bar on executive reports, legible dashboard cards, frictionless iOS PWA installation, and pristine web inputs.
 
+### 2026-10-29 (Admin Dashboard Banner Uniform Gap Fix & Duty Checkout Form Expense Section Removal)
+- What was changed:
+  1. Admin Dashboard Quick Action Banners Uniform Gap Fix:
+     - Fixed vertical spacing between the three quick action banners (`Shared Documents`, `All-in-One Report`, and `Send Message`) in `AdminDashboardScreen.jsx`.
+     - In previous styling, `reportBanner` and `sendMessageBanner` had zero vertical margin between them, causing them to touch directly with 0 gap on mobile viewports.
+     - Added unified `gap: SPACING.md` (`12px`) on the parent container on both mobile and desktop, setting `{ marginTop: 0, marginBottom: 0 }` on each child banner and adding `marginTop: SPACING.sm` and `marginBottom: SPACING.md` on the container. All 3 banners now render with identical, clean, professional spacing.
+  2. Streamlined Checkout Form — Removed Expense Section:
+     - In `DutyFormScreen.jsx`, removed the "Linked Expenses for this Work" section card and its associated background states (`linkedExpenses`, `loadingLinkedExpenses`), effects (`fetchLinkedExpenses`), and handlers.
+     - Employees and administrators already manage, view, and add expenses for any work visit by accessing work details (`DutyDetailsScreen.jsx`, `AllDutiesScreen.jsx`, `MyDutiesScreen.jsx`, or the dedicated Expenses tab).
+     - Removing the expense section from the check-out submission form removes friction and clutter, ensuring technicians can focus exclusively on work observations, machine asset, manpower, proof photos, customer signature, checkout GPS, and immediate checkout completion.
+- Files changed:
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Dashboard banner layout: Flex container now applies consistent `gap: SPACING.md` on all viewports.
+  - Duty checkout: Form now focuses purely on duty completion; expenses are decoupled and managed via work details.
+- Reason: User requested: 1) fix gap between banners ("cap not have fix"), 2) remove expense section from checkout form because expenses can be added from work details.
+- Impact: Clean visual hierarchy on admin dashboard; faster, distraction-free duty checkout for field employees.
+
+### 2026-10-29 (Developer Admin Hidden From Staff Metrics, Performance Tables & PDF/Excel Exports)
+- What was changed:
+  1. Backend Developer Admin and Admin Exclusion from Staff Performance & Reports:
+     - Created `backend/src/utils/userFilter.js` with central `isDeveloperAdmin` helper identifying developer admin accounts (`DEV001`, `mailtokabilan056@gmail.com`, `admin@gmail.com`, `8883280816`, `Developer Admin`).
+     - In `backend/src/services/reportService.js`: Updated `userQuery` to query only `role: { $in: ['employee', 'staff'] }` and explicitly exclude developer admin identifiers. Filtered `employees` with `!isDeveloperAdmin(emp) && emp.role !== 'admin'`.
+     - Updated `employeeMap`, duty employee accumulations, `distinctEmployeeIds`, and `summary.totalEmployees` to reflect only real field staff members.
+     - Automatically fixes Excel Sheet 4 ("Employee Details"), Sheet 1 ("Summary"), and API response `summary.totalEmployees`.
+     - In `backend/src/controllers/employeeController.js`: Updated `getEmployees` filter to exclude developer admin accounts (`$nin: ['admin@gmail.com', 'mailtokabilan056@gmail.com']`, `employeeId: { $ne: 'DEV001', $not: /^DEV/i }`, `role: { $ne: 'admin' }`).
+     - In `backend/src/controllers/dashboardController.js`: Updated active employee count to exclude developer admin accounts.
+  2. Frontend PDF Export Developer Admin Safeguard:
+     - In `duty-management-app/src/utils/reportExportUtils.js`: Defensively filtered `reportData.employees` using `isDevAdminAccount` to strip developer admin and admin accounts.
+     - Section 3 title dynamically displays `(${employees.length})` matching only valid field employees.
+     - Table rows render only genuine staff members, removing row # 1 `DEV001 Developer Admin`.
+     - KPI Card "Staff Members" displays `${employees.length}`.
+  3. Frontend AllInOneReportScreen UI Filter Safeguard:
+     - In `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`: Derived `cleanEmployeesList` excluding developer admin and admins.
+     - Card 3 ("Staff Members") displays `cleanEmployeesList.length`.
+     - Staff members table search and filter drawer dropdown picker use `cleanEmployeesList`.
+- Files changed:
+  - `backend/src/utils/userFilter.js`
+  - `backend/src/services/reportService.js`
+  - `backend/src/controllers/employeeController.js`
+  - `backend/src/controllers/dashboardController.js`
+  - `duty-management-app/src/utils/validators.js`
+  - `duty-management-app/src/utils/reportExportUtils.js`
+  - `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Previous behavior: `userQuery` in `reportService.js` fetched `role: { $in: ['employee', 'staff', 'admin'] }`, pulling Developer Admin into the staff list with 0 works, inflating the staff count to 3, and rendering `DEV001 Developer Admin` as the first row in PDF and Excel exports.
+  - New behavior: System admin and developer accounts are strictly segregated from field service employees. Staff count accurately displays only real technicians, and Developer Admin is completely omitted from performance summaries and exports.
+- Reason: User requested: "export and show the staff count added developer admin i want remove/hidden; dont show the developer admin details ; fix".
+- Impact: Pristine executive reports and export documents displaying strictly active field service employees without developer credentials or admin noise.
+
 ## Current Progress
 - Completed:
+  - Excluded Developer Admin and system admin accounts from staff metrics, performance summaries, and PDF/Excel exports across `reportService.js`, `reportExportUtils.js`, `AllInOneReportScreen.jsx`, `employeeController.js`, and `dashboardController.js`.
+  - Fixed banner gap spacing on Admin Dashboard (`AdminDashboardScreen.jsx`) with uniform `gap: SPACING.md` preventing banners from touching.
+  - Streamlined Duty Checkout form in `DutyFormScreen.jsx` by removing the linked expenses section card and unused expense queries.
   - Added Web & PWA Multi-Directional Pull Refresh (`WebPullToRefresh.jsx`) supporting pull-down at top and pull-up at bottom with animated status pills.
   - Added Back button in header of `AllInOneReportScreen.jsx` with safe fallback navigation to Dashboard.
   - Redesigned All-in-One Report banner in `AdminDashboardScreen.jsx` with executive dark slate styling and high-contrast text.
@@ -3573,6 +3629,10 @@
 - Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
+- Decision: Decouple expense claim submission from duty checkout form.
+  Reason: Field technicians frequently need to checkout quickly on site, whereas expense receipts, accommodation bills, and fuel calculations are often gathered after the shift. Since expenses can already be submitted and managed from work details (`DutyDetailsScreen.jsx`) and the dedicated Expenses tab, removing the expense card from the checkout form reduces form complexity and checkout friction.
+  Date: 2026-10-29
+
 - Decision: Register AllInOneReport inside AdminTabs with hidden tab item.
   Reason: Placing AllInOneReport in the root StackNavigator completely hides child TabNavigators in React Navigation. Registering it as a tab with `tabBarButton: () => null` allows seamless navigation from AdminDashboard while retaining the 6 bottom navigation tabs visible and accessible.
   Date: 2026-10-28

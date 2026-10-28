@@ -1,3 +1,4 @@
+import { isDeveloperAdmin } from '../utils/userFilter.js';
 import ExcelJS from 'exceljs';
 import Duty from '../models/Duty.js';
 import Company from '../models/Company.js';
@@ -186,7 +187,11 @@ export const generateAllInOneReportData = async (filters = {}) => {
   if (companyId) clientQuery.company = companyId;
   if (clientId) clientQuery._id = clientId;
 
-  const userQuery = { role: { $in: ['employee', 'staff', 'admin'] } };
+  const userQuery = {
+    role: { $in: ['employee', 'staff'] },
+    employeeId: { $ne: 'DEV001', $not: /^DEV/i },
+    email: { $nin: ['admin@gmail.com', 'mailtokabilan056@gmail.com'] },
+  };
   if (employeeId) userQuery._id = employeeId;
 
   // Execute Parallel Fetch
@@ -238,6 +243,11 @@ export const generateAllInOneReportData = async (filters = {}) => {
       endDate: { $gte: startQuery },
     }).sort({ startDate: 1 }),
   ]);
+
+  // Exclude Developer Admin and Admin accounts from employee/staff summaries
+  const validEmployees = employees.filter(
+    (emp) => !isDeveloperAdmin(emp) && emp.role !== 'admin'
+  );
 
   // Index Expenses by Duty ID to link them
   const expensesByDutyId = {};
@@ -348,7 +358,7 @@ export const generateAllInOneReportData = async (filters = {}) => {
 
   // Employee-wise aggregation
   const employeeMap = {};
-  employees.forEach((emp) => {
+  validEmployees.forEach((emp) => {
     const eId = emp._id.toString();
     employeeMap[eId] = {
       _id: emp._id,
@@ -377,7 +387,7 @@ export const generateAllInOneReportData = async (filters = {}) => {
 
   // Accumulate duties into employee summary
   enhancedDuties.forEach((d) => {
-    if (d.employee?._id) {
+    if (d.employee?._id && !isDeveloperAdmin(d.employee) && d.employee.role !== 'admin') {
       const eId = d.employee._id.toString();
       if (!employeeMap[eId]) {
         employeeMap[eId] = {
@@ -517,7 +527,9 @@ export const generateAllInOneReportData = async (filters = {}) => {
   enhancedDuties.forEach((d) => {
     if (d.company?._id) distinctCompanyIds.add(d.company._id.toString());
     if (d.client?._id) distinctClientIds.add(d.client._id.toString());
-    if (d.employee?._id) distinctEmployeeIds.add(d.employee._id.toString());
+    if (d.employee?._id && !isDeveloperAdmin(d.employee) && d.employee.role !== 'admin') {
+      distinctEmployeeIds.add(d.employee._id.toString());
+    }
     if (d.dutyDateStr) distinctWorkingDates.add(d.dutyDateStr);
   });
 
@@ -540,7 +552,7 @@ export const generateAllInOneReportData = async (filters = {}) => {
   const summary = {
     totalCompanies: distinctCompanyIds.size || companies.length,
     totalClients: distinctClientIds.size || clients.length,
-    totalEmployees: distinctEmployeeIds.size || employees.length,
+    totalEmployees: distinctEmployeeIds.size || validEmployees.length,
     totalWorkRecords: enhancedDuties.length,
     totalWorkingDays: distinctWorkingDates.size,
     totalLeaveDays,
@@ -553,7 +565,7 @@ export const generateAllInOneReportData = async (filters = {}) => {
   // Build Optional Employee Calendar if an employee is filtered or requested
   let employeeCalendar = null;
   if (employeeId) {
-    const targetEmployee = employees.find((e) => e._id.toString() === employeeId.toString()) || null;
+    const targetEmployee = validEmployees.find((e) => e._id.toString() === employeeId.toString()) || null;
     const dutyByDate = {};
     enhancedDuties.forEach((d) => {
       if (d.dutyDateStr) dutyByDate[d.dutyDateStr] = d;

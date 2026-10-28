@@ -44,7 +44,24 @@ export const buildAllInOneReportHtml = (reportData) => {
   const summary = reportData.summary || {};
   const companies = reportData.companies || [];
   const duties = reportData.duties || [];
-  const employees = reportData.employees || [];
+  // Exclude Developer Admin and Admins from employee performance summary & staff count
+  const isDevAdminAccount = (e) => {
+    if (!e) return false;
+    const empId = String(e.employeeId || '').toUpperCase();
+    const name = String(e.employeeName || '').toLowerCase();
+    const email = String(e.email || '').toLowerCase();
+    const role = String(e.role || '').toLowerCase();
+    return (
+      empId === 'DEV001' ||
+      empId.startsWith('DEV') ||
+      name.includes('developer admin') ||
+      name === 'developer' ||
+      email === 'admin@gmail.com' ||
+      email === 'mailtokabilan056@gmail.com' ||
+      role === 'admin'
+    );
+  };
+  const employees = (reportData.employees || []).filter((e) => !isDevAdminAccount(e));
   const leaves = reportData.leaves || [];
   const compOffCredits = reportData.compOffCredits || [];
   const overtimeRecords = reportData.overtimeRecords || [];
@@ -71,7 +88,7 @@ export const buildAllInOneReportHtml = (reportData) => {
       </div>
       <div class="kpi-card">
         <div class="kpi-title">Staff Members</div>
-        <div class="kpi-value">${summary.totalEmployees || 0}</div>
+        <div class="kpi-value">${employees.length}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-title">Work Records</div>
