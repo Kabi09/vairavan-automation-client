@@ -87,10 +87,107 @@ const escapeCsv = (val) => {
 };
 
 /**
+ * Helper to write a base64 string to a local cache file across Expo SDK versions
+ */
+export const writeBase64ToCacheFile = async (filename, base64) => {
+  const safeName = (filename || `export_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+  let fileUri = null;
+
+  // 1. Try legacy expo-file-system (preferred for writeAsStringAsync)
+  try {
+    let LegacyFS = null;
+    try {
+      LegacyFS = require('expo-file-system/legacy');
+    } catch {}
+    if (!LegacyFS) {
+      try {
+        LegacyFS = require('expo-file-system');
+      } catch {}
+    }
+
+    if (LegacyFS && LegacyFS.writeAsStringAsync && LegacyFS.cacheDirectory) {
+      fileUri = `${LegacyFS.cacheDirectory}${safeName}`;
+      await LegacyFS.writeAsStringAsync(fileUri, base64, {
+        encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+      });
+      return fileUri;
+    }
+  } catch (legacyErr) {
+    console.warn('LegacyFS writeBase64 error:', legacyErr);
+  }
+
+  // 2. Try modern File API from expo-file-system
+  try {
+    const ModernFS = require('expo-file-system');
+    if (ModernFS.File && ModernFS.Paths) {
+      const file = new ModernFS.File(ModernFS.Paths.cache, safeName);
+      if (file.create) file.create();
+      if (file.write) {
+        try {
+          const binaryStr = typeof atob === 'function' ? atob(base64) : Buffer.from(base64, 'base64').toString('binary');
+          const bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+          await file.write(bytes);
+        } catch {
+          await file.write(base64);
+        }
+      }
+      return file.uri;
+    } else if (ModernFS.writeAsStringAsync && ModernFS.cacheDirectory) {
+      fileUri = `${ModernFS.cacheDirectory}${safeName}`;
+      await ModernFS.writeAsStringAsync(fileUri, base64, {
+        encoding: 'base64',
+      });
+      return fileUri;
+    }
+  } catch (modernErr) {
+    console.warn('ModernFS writeBase64 error:', modernErr);
+  }
+
+  return fileUri;
+};
+
+/**
  * Prompt user to either save directly to device Downloads/documents or share via WhatsApp/other apps
  */
-export const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialogTitle, content }) => {
+export const promptDownloadOrShare = async ({
+  fileUri,
+  filename,
+  mimeType,
+  dialogTitle,
+  content,
+  base64,
+}) => {
   const isSharingAvailable = await Sharing.isAvailableAsync().catch(() => false);
+
+  // Web Platform: Trigger direct file download
+  if (Platform.OS === 'web') {
+    try {
+      const link = document.createElement('a');
+      if (base64) {
+        link.href = `data:${mimeType || 'application/octet-stream'};base64,${base64}`;
+      } else if (fileUri) {
+        link.href = fileUri;
+      } else if (content) {
+        link.href = `data:${mimeType || 'text/plain'};charset=utf-8,` + encodeURIComponent(content);
+      }
+      link.download = filename || 'download';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    } catch (webErr) {
+      console.warn('Web export download failed:', webErr);
+    }
+  }
+
+  // Ensure fileUri exists if base64 is provided and fileUri is null
+  let effectiveFileUri = fileUri;
+  if (!effectiveFileUri && base64) {
+    effectiveFileUri = await writeBase64ToCacheFile(filename, base64);
+  }
 
   const doDownload = async () => {
     try {
@@ -108,12 +205,12 @@ export const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialo
       // Android: Save automatically to user's saved directory (e.g. Downloads) or request once initially
       if (Platform.OS === 'android' && LegacyFS && LegacyFS.StorageAccessFramework) {
         // Prepare base64 data first
-        let base64Data = '';
-        if (fileUri) {
-          base64Data = await LegacyFS.readAsStringAsync(fileUri, {
+        let base64Data = base64 || '';
+        if (!base64Data && effectiveFileUri) {
+          base64Data = await LegacyFS.readAsStringAsync(effectiveFileUri, {
             encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
           });
-        } else if (content) {
+        } else if (!base64Data && content) {
           try {
             const tempCachePath = `${LegacyFS.cacheDirectory || ''}temp_export_${Date.now()}`;
             await LegacyFS.writeAsStringAsync(tempCachePath, content, {
@@ -193,7 +290,7 @@ export const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialo
           return;
         } else {
           // User backed out of folder selection -> directly open share sheet so user can save or send
-          if (isSharingAvailable && fileUri) {
+          if (isSharingAvailable && effectiveFileUri) {
             await doShare();
             return;
           }
@@ -201,9 +298,9 @@ export const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialo
       }
 
       // iOS or fallback: save to documents directory
-      if (LegacyFS && LegacyFS.documentDirectory && fileUri) {
+      if (LegacyFS && LegacyFS.documentDirectory && effectiveFileUri) {
         const dest = `${LegacyFS.documentDirectory}${filename}`;
-        await LegacyFS.copyAsync({ from: fileUri, to: dest }).catch(() => {});
+        await LegacyFS.copyAsync({ from: effectiveFileUri, to: dest }).catch(() => {});
         Alert.alert('Download Complete', `File saved to device documents:\n\n${filename}`);
         return;
       }
@@ -211,7 +308,7 @@ export const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialo
       Alert.alert('Download Complete', `File is ready on your device:\n\n${filename}`);
     } catch (err) {
       console.warn('Download error:', err);
-      if (isSharingAvailable && fileUri) {
+      if (isSharingAvailable && effectiveFileUri) {
         Alert.alert(
           'Download Notice',
           'Direct save encountered an issue. You can use the Share sheet to save to your files.',
@@ -231,10 +328,19 @@ export const promptDownloadOrShare = async ({ fileUri, filename, mimeType, dialo
       Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
       return;
     }
-    await Sharing.shareAsync(fileUri, {
+    if (!effectiveFileUri) {
+      Alert.alert('File Error', 'Local file is not ready for sharing.');
+      return;
+    }
+    await Sharing.shareAsync(effectiveFileUri, {
       mimeType,
       dialogTitle: dialogTitle || `Share ${filename}`,
-      UTI: mimeType === 'application/pdf' ? '.pdf' : 'public.comma-separated-values-text',
+      UTI:
+        mimeType === 'application/pdf'
+          ? '.pdf'
+          : mimeType.includes('openxmlformats')
+          ? 'org.openxmlformats.spreadsheetml.sheet'
+          : 'public.comma-separated-values-text',
     });
   };
 

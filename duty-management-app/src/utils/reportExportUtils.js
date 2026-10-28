@@ -1,9 +1,9 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import reportApi from '../api/reportApi';
-import { promptDownloadOrShare } from './exportUtils';
+import { promptDownloadOrShare, writeBase64ToCacheFile } from './exportUtils';
 
 const LOGO_URL =
   'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
@@ -678,24 +678,39 @@ export const exportAllInOneToExcel = async ({ filters = {}, action = 'download' 
 
   try {
     const response = await reportApi.exportExcel(filters);
-    if (!response || !response.data || !response.data.base64) {
+    const payload = response?.data || response;
+    const base64 = payload?.base64;
+    const filename = payload?.filename;
+
+    if (!base64) {
       throw new Error('Server did not return Excel file data.');
     }
 
-    const { filename, base64 } = response.data;
     const safeName = filename || `Vairavan_All_In_One_Report_${Date.now()}.xlsx`;
-    const tempCachePath = `${FileSystem.cacheDirectory || ''}${safeName}`;
 
-    await FileSystem.writeAsStringAsync(tempCachePath, base64, {
-      encoding: FileSystem.EncodingType ? FileSystem.EncodingType.Base64 : 'base64',
-    });
+    // On Web: direct download
+    if (Platform.OS === 'web') {
+      try {
+        const link = document.createElement('a');
+        link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`;
+        link.download = safeName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      } catch (webErr) {
+        console.warn('Web Excel download error:', webErr);
+      }
+    }
+
+    const fileUri = await writeBase64ToCacheFile(safeName, base64);
 
     if (action === 'share') {
-      if (!isSharingAvailable) {
+      if (!isSharingAvailable || !fileUri) {
         Alert.alert('Sharing Unavailable', 'File sharing is not available on this device.');
         return;
       }
-      await Sharing.shareAsync(tempCachePath, {
+      await Sharing.shareAsync(fileUri, {
         mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         dialogTitle: 'Share All-in-One Report (Excel)',
         UTI: 'org.openxmlformats.spreadsheetml.sheet',
@@ -705,10 +720,11 @@ export const exportAllInOneToExcel = async ({ filters = {}, action = 'download' 
 
     // Default download action
     await promptDownloadOrShare({
-      fileUri: tempCachePath,
+      fileUri,
       filename: safeName,
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       dialogTitle: 'Download All-in-One Report (Excel)',
+      base64,
     });
   } catch (err) {
     console.error('Excel export error:', err);

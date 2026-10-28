@@ -28,9 +28,9 @@ export const DropdownPickerModal = ({
   const [search, setSearch] = useState('');
 
   const dataList = useMemo(() => {
-    if (Array.isArray(items) && items.length > 0) return items;
-    if (Array.isArray(options) && options.length > 0) return options;
-    return items || options || [];
+    if (Array.isArray(items)) return items;
+    if (Array.isArray(options)) return options;
+    return [];
   }, [items, options]);
 
   const filteredItems = useMemo(() => {

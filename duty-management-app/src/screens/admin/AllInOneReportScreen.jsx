@@ -123,14 +123,28 @@ export const AllInOneReportScreen = ({ navigation }) => {
   const loadCatalogs = async () => {
     try {
       const [compRes, empRes, catRes] = await Promise.all([
-        companyApi.getCompanies().catch(() => ({ data: [] })),
-        employeeApi.getEmployees().catch(() => ({ data: [] })),
-        expenseApi.getCategories().catch(() => ({ data: { categories: [] } })),
+        companyApi.getCompanies({ limit: 500 }).catch(() => null),
+        employeeApi.getEmployees({ limit: 500 }).catch(() => null),
+        expenseApi.getCategories().catch(() => null),
       ]);
 
-      setCompanies(compRes.data?.companies || compRes.data || []);
-      setEmployees(empRes.data?.employees || empRes.data || []);
-      setExpenseCategories(catRes.data?.categories || catRes.data || []);
+      const compList =
+        compRes?.data?.companies ||
+        compRes?.companies ||
+        (Array.isArray(compRes?.data) ? compRes.data : []);
+      setCompanies(Array.isArray(compList) ? compList : []);
+
+      const empList =
+        empRes?.data?.employees ||
+        empRes?.employees ||
+        (Array.isArray(empRes?.data) ? empRes.data : []);
+      setEmployees(Array.isArray(empList) ? empList : []);
+
+      const catList =
+        catRes?.data?.categories ||
+        catRes?.categories ||
+        (Array.isArray(catRes?.data) ? catRes.data : []);
+      setExpenseCategories(Array.isArray(catList) ? catList : []);
     } catch (err) {
       console.warn('Error loading filter catalogs:', err);
     }
@@ -138,17 +152,25 @@ export const AllInOneReportScreen = ({ navigation }) => {
 
   // Dynamically load clients when selected company changes
   useEffect(() => {
-    if (selectedCompanyId) {
-      clientApi
-        .getClients({ company: selectedCompanyId })
-        .then((res) => setClients(res.data?.clients || res.data || []))
-        .catch(() => setClients([]));
-    } else {
-      clientApi
-        .getClients()
-        .then((res) => setClients(res.data?.clients || res.data || []))
-        .catch(() => setClients([]));
-    }
+    const fetchClients = async () => {
+      try {
+        const params = { limit: 500 };
+        if (selectedCompanyId) {
+          params.companyId = selectedCompanyId;
+        }
+        const res = await clientApi.getClients(params).catch(() => null);
+        const clientList =
+          res?.data?.data?.clients ||
+          res?.data?.clients ||
+          res?.clients ||
+          (Array.isArray(res?.data) ? res.data : []);
+        setClients(Array.isArray(clientList) ? clientList : []);
+      } catch (err) {
+        console.warn('Error loading clients:', err);
+        setClients([]);
+      }
+    };
+    fetchClients();
   }, [selectedCompanyId]);
 
   // Construct query params from active filters
@@ -278,19 +300,22 @@ export const AllInOneReportScreen = ({ navigation }) => {
   // Helper names
   const selectedCompanyName = useMemo(() => {
     if (!selectedCompanyId) return 'All Companies';
-    const c = companies.find((x) => x._id === selectedCompanyId);
+    const list = Array.isArray(companies) ? companies : [];
+    const c = list.find((x) => x?._id === selectedCompanyId);
     return c ? c.companyName : 'Selected Company';
   }, [selectedCompanyId, companies]);
 
   const selectedClientName = useMemo(() => {
     if (!selectedClientId) return 'All Clients';
-    const cl = clients.find((x) => x._id === selectedClientId);
+    const list = Array.isArray(clients) ? clients : [];
+    const cl = list.find((x) => x?._id === selectedClientId);
     return cl ? cl.clientName : 'Selected Client';
   }, [selectedClientId, clients]);
 
   const selectedEmployeeName = useMemo(() => {
     if (!selectedEmployeeId) return 'All Staff';
-    const e = employees.find((x) => x._id === selectedEmployeeId);
+    const list = Array.isArray(employees) ? employees : [];
+    const e = list.find((x) => x?._id === selectedEmployeeId);
     return e ? `${e.employeeName} (${e.employeeId || ''})` : 'Selected Staff';
   }, [selectedEmployeeId, employees]);
 
@@ -1159,7 +1184,7 @@ export const AllInOneReportScreen = ({ navigation }) => {
                     <View style={styles.cardHeaderRow}>
                       <View style={styles.expIdBadge}>
                         <Text style={styles.expIdText}>
-                          {exp.expenseId || `EXP-${exp._id.slice(-4).toUpperCase()}`}
+                          {exp.expenseId || ('EXP-' + String(exp._id || '').slice(-4).toUpperCase())}
                         </Text>
                       </View>
                       <Text style={styles.dutyDateText}>
@@ -1245,8 +1270,8 @@ export const AllInOneReportScreen = ({ navigation }) => {
                     <Card key={day.dateStr} style={styles.calDayCard}>
                       <View style={styles.cardHeaderRow}>
                         <View style={styles.calDateBadge}>
-                          <Text style={styles.calDateBadgeDay}>{day.dateStr.slice(-2)}</Text>
-                          <Text style={styles.calDateBadgeName}>{day.dayName.slice(0, 3)}</Text>
+                          <Text style={styles.calDateBadgeDay}>{String(day.dateStr || '').slice(-2)}</Text>
+                          <Text style={styles.calDateBadgeName}>{String(day.dayName || '').slice(0, 3)}</Text>
                         </View>
 
                         <View style={{ flex: 1, marginLeft: 10 }}>
@@ -1322,259 +1347,273 @@ export const AllInOneReportScreen = ({ navigation }) => {
         </ScrollView>
       )}
 
-      {/* Advanced Filters Drawer / Modal */}
-      <Modal
-        visible={filterDrawerVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setFilterDrawerVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Report Filters</Text>
-                <Text style={styles.modalSubtitle}>
-                  Combine operational filters across companies, staff & dates
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setFilterDrawerVisible(false)}
-                style={styles.modalCloseBtn}
-              >
-                <Ionicons name="close" size={20} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Date Presets */}
-              <Text style={styles.filterGroupLabel}>Date Range</Text>
-              <View style={styles.filterPillsRow}>
-                {DATE_RANGE_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={[
-                      styles.filterSelectPill,
-                      dateRange === opt.key && styles.filterSelectPillActive,
-                    ]}
-                    onPress={() => setDateRange(opt.key)}
-                  >
-                    <Text
-                      style={[
-                        styles.filterSelectPillText,
-                        dateRange === opt.key && styles.filterSelectPillTextActive,
-                      ]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Custom Date Pickers */}
-              {dateRange === 'custom' && (
-                <View style={styles.customDatePickersRow}>
-                  <TouchableOpacity
-                    style={styles.datePickerTrigger}
-                    onPress={() => setStartDateModalVisible(true)}
-                  >
-                    <Text style={styles.pickerFieldLabel}>From Date</Text>
-                    <Text style={styles.pickerFieldValue}>
-                      {startDate || 'Select Start Date'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.datePickerTrigger}
-                    onPress={() => setEndDateModalVisible(true)}
-                  >
-                    <Text style={styles.pickerFieldLabel}>To Date</Text>
-                    <Text style={styles.pickerFieldValue}>
-                      {endDate || 'Select End Date'}
-                    </Text>
-                  </TouchableOpacity>
+      {/* Advanced Filters Drawer Overlay */}
+      {filterDrawerVisible && (
+        <View style={styles.filterDrawerRootOverlay}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setFilterDrawerVisible(false)}
+          >
+            <View
+              style={[styles.modalContent, { paddingBottom: insets.bottom + 16 }]}
+              onStartShouldSetResponder={() => true}
+            >
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>Report Filters</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Combine operational filters across companies, staff & dates
+                  </Text>
                 </View>
-              )}
+                <TouchableOpacity
+                  onPress={() => setFilterDrawerVisible(false)}
+                  style={styles.modalCloseBtn}
+                >
+                  <Ionicons name="close" size={20} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
 
-              {/* Company Picker */}
-              <Text style={styles.filterGroupLabel}>Company</Text>
+              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                {/* Date Presets */}
+                <Text style={styles.filterGroupLabel}>Date Range</Text>
+                <View style={styles.filterPillsRow}>
+                  {DATE_RANGE_OPTIONS.map((opt) => (
+                    <TouchableOpacity
+                      key={opt.key}
+                      style={[
+                        styles.filterSelectPill,
+                        dateRange === opt.key && styles.filterSelectPillActive,
+                      ]}
+                      onPress={() => setDateRange(opt.key)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterSelectPillText,
+                          dateRange === opt.key && styles.filterSelectPillTextActive,
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Custom Date Pickers */}
+                {dateRange === 'custom' && (
+                  <View style={styles.customDatePickersRow}>
+                    <TouchableOpacity
+                      style={styles.datePickerTrigger}
+                      onPress={() => setStartDateModalVisible(true)}
+                    >
+                      <Text style={styles.pickerFieldLabel}>From Date</Text>
+                      <Text style={styles.pickerFieldValue}>
+                        {startDate || 'Select Start Date'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.datePickerTrigger}
+                      onPress={() => setEndDateModalVisible(true)}
+                    >
+                      <Text style={styles.pickerFieldLabel}>To Date</Text>
+                      <Text style={styles.pickerFieldValue}>
+                        {endDate || 'Select End Date'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Company Picker */}
+                <Text style={styles.filterGroupLabel}>Company</Text>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => setCompanyModalVisible(true)}
+                >
+                  <Text style={styles.dropdownTriggerText}>{selectedCompanyName}</Text>
+                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+
+                {/* Client Picker */}
+                <Text style={styles.filterGroupLabel}>Client (Filtered by Company)</Text>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => setClientModalVisible(true)}
+                >
+                  <Text style={styles.dropdownTriggerText}>{selectedClientName}</Text>
+                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+
+                {/* Employee Picker */}
+                <Text style={styles.filterGroupLabel}>Staff Member</Text>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => setEmployeeModalVisible(true)}
+                >
+                  <Text style={styles.dropdownTriggerText}>{selectedEmployeeName}</Text>
+                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+
+                {/* Work Type */}
+                <Text style={styles.filterGroupLabel}>Work Type</Text>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => setWorkTypeModalVisible(true)}
+                >
+                  <Text style={styles.dropdownTriggerText}>
+                    {selectedWorkType || 'All Work Types'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+
+                {/* Work Status */}
+                <Text style={styles.filterGroupLabel}>Work Status</Text>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => setWorkStatusModalVisible(true)}
+                >
+                  <Text style={styles.dropdownTriggerText}>
+                    {selectedWorkStatus
+                      ? WORK_STATUSES.find((s) => s.value === selectedWorkStatus)?.label ||
+                        selectedWorkStatus
+                      : 'All Statuses'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+
+                {/* Leave Type */}
+                <Text style={styles.filterGroupLabel}>Leave Type</Text>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => setLeaveTypeModalVisible(true)}
+                >
+                  <Text style={styles.dropdownTriggerText}>
+                    {selectedLeaveType === 'casual_leave'
+                      ? 'Casual Leave'
+                      : selectedLeaveType === 'comp_off'
+                      ? 'Comp-Off'
+                      : 'All Leave Types'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+
+                {/* Expense Category */}
+                <Text style={styles.filterGroupLabel}>Expense Category</Text>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => setCategoryModalVisible(true)}
+                >
+                  <Text style={styles.dropdownTriggerText}>
+                    {selectedExpenseCategory || 'All Expense Categories'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+              </ScrollView>
+
+              {/* Modal Action Buttons */}
+              <View style={styles.modalActionButtonsRow}>
+                <TouchableOpacity
+                  style={styles.resetFiltersBtn}
+                  onPress={handleResetFilters}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.resetFiltersBtnText}>Clear All</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.applyFiltersBtn}
+                  onPress={() => {
+                    setFilterDrawerVisible(false);
+                    fetchReport();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.applyFiltersBtnText}>Apply Filters</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Share Options Dialog Overlay */}
+      {shareDialogVisible && (
+        <View style={styles.filterDrawerRootOverlay}>
+          <TouchableOpacity
+            style={[
+              styles.modalOverlay,
+              { justifyContent: 'center', alignItems: 'center', padding: SPACING.md },
+            ]}
+            activeOpacity={1}
+            onPress={() => setShareDialogVisible(false)}
+          >
+            <View
+              style={styles.shareDialogBox}
+              onStartShouldSetResponder={() => true}
+            >
+              <Text style={styles.shareDialogTitle}>Share All-in-One Report</Text>
+              <Text style={styles.shareDialogSubtitle}>
+                Select the file format to share via WhatsApp, Email, or other apps:
+              </Text>
+
               <TouchableOpacity
-                style={styles.dropdownTrigger}
-                onPress={() => setCompanyModalVisible(true)}
+                style={styles.shareOptionRow}
+                onPress={() => {
+                  setShareDialogVisible(false);
+                  handleExportPDF('share');
+                }}
               >
-                <Text style={styles.dropdownTriggerText}>{selectedCompanyName}</Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+                <View style={[styles.shareIconWrap, { backgroundColor: '#FEE2E2' }]}>
+                  <Ionicons name="document-text" size={20} color="#DC2626" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.shareOptionTitle}>PDF Document (.pdf)</Text>
+                  <Text style={styles.shareOptionSub}>
+                    Formatted multi-page visual report with branding
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
 
-              {/* Client Picker */}
-              <Text style={styles.filterGroupLabel}>Client (Filtered by Company)</Text>
               <TouchableOpacity
-                style={styles.dropdownTrigger}
-                onPress={() => setClientModalVisible(true)}
+                style={styles.shareOptionRow}
+                onPress={() => {
+                  setShareDialogVisible(false);
+                  handleExportExcel('share');
+                }}
               >
-                <Text style={styles.dropdownTriggerText}>{selectedClientName}</Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-
-              {/* Employee Picker */}
-              <Text style={styles.filterGroupLabel}>Staff Member</Text>
-              <TouchableOpacity
-                style={styles.dropdownTrigger}
-                onPress={() => setEmployeeModalVisible(true)}
-              >
-                <Text style={styles.dropdownTriggerText}>{selectedEmployeeName}</Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-
-              {/* Work Type */}
-              <Text style={styles.filterGroupLabel}>Work Type</Text>
-              <TouchableOpacity
-                style={styles.dropdownTrigger}
-                onPress={() => setWorkTypeModalVisible(true)}
-              >
-                <Text style={styles.dropdownTriggerText}>
-                  {selectedWorkType || 'All Work Types'}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-
-              {/* Work Status */}
-              <Text style={styles.filterGroupLabel}>Work Status</Text>
-              <TouchableOpacity
-                style={styles.dropdownTrigger}
-                onPress={() => setWorkStatusModalVisible(true)}
-              >
-                <Text style={styles.dropdownTriggerText}>
-                  {selectedWorkStatus
-                    ? WORK_STATUSES.find((s) => s.value === selectedWorkStatus)?.label ||
-                      selectedWorkStatus
-                    : 'All Statuses'}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-
-              {/* Leave Type */}
-              <Text style={styles.filterGroupLabel}>Leave Type</Text>
-              <TouchableOpacity
-                style={styles.dropdownTrigger}
-                onPress={() => setLeaveTypeModalVisible(true)}
-              >
-                <Text style={styles.dropdownTriggerText}>
-                  {selectedLeaveType === 'casual_leave'
-                    ? 'Casual Leave'
-                    : selectedLeaveType === 'comp_off'
-                    ? 'Comp-Off'
-                    : 'All Leave Types'}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-
-              {/* Expense Category */}
-              <Text style={styles.filterGroupLabel}>Expense Category</Text>
-              <TouchableOpacity
-                style={styles.dropdownTrigger}
-                onPress={() => setCategoryModalVisible(true)}
-              >
-                <Text style={styles.dropdownTriggerText}>
-                  {selectedExpenseCategory || 'All Expense Categories'}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            </ScrollView>
-
-            {/* Modal Action Buttons */}
-            <View style={styles.modalActionButtonsRow}>
-              <TouchableOpacity
-                style={styles.resetFiltersBtn}
-                onPress={handleResetFilters}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.resetFiltersBtnText}>Clear All</Text>
+                <View style={[styles.shareIconWrap, { backgroundColor: '#DCFCE7' }]}>
+                  <Ionicons name="grid" size={20} color="#15803D" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.shareOptionTitle}>Excel Spreadsheet (.xlsx)</Text>
+                  <Text style={styles.shareOptionSub}>
+                    9 individual styled worksheets with auto-filters
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.applyFiltersBtn}
-                onPress={() => setFilterDrawerVisible(false)}
-                activeOpacity={0.8}
+                style={styles.shareCancelBtn}
+                onPress={() => setShareDialogVisible(false)}
               >
-                <Text style={styles.applyFiltersBtnText}>Apply Filters</Text>
+                <Text style={styles.shareCancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
-      </Modal>
-
-      {/* Share Options Dialog */}
-      <Modal
-        visible={shareDialogVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShareDialogVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.shareDialogBox}>
-            <Text style={styles.shareDialogTitle}>Share All-in-One Report</Text>
-            <Text style={styles.shareDialogSubtitle}>
-              Select the file format to share via WhatsApp, Email, or other apps:
-            </Text>
-
-            <TouchableOpacity
-              style={styles.shareOptionRow}
-              onPress={() => {
-                setShareDialogVisible(false);
-                handleExportPDF('share');
-              }}
-            >
-              <View style={[styles.shareIconWrap, { backgroundColor: '#FEE2E2' }]}>
-                <Ionicons name="document-text" size={20} color="#DC2626" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.shareOptionTitle}>PDF Document (.pdf)</Text>
-                <Text style={styles.shareOptionSub}>
-                  Formatted multi-page visual report with branding
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.shareOptionRow}
-              onPress={() => {
-                setShareDialogVisible(false);
-                handleExportExcel('share');
-              }}
-            >
-              <View style={[styles.shareIconWrap, { backgroundColor: '#DCFCE7' }]}>
-                <Ionicons name="grid" size={20} color="#15803D" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.shareOptionTitle}>Excel Spreadsheet (.xlsx)</Text>
-                <Text style={styles.shareOptionSub}>
-                  9 individual styled worksheets with auto-filters
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.shareCancelBtn}
-              onPress={() => setShareDialogVisible(false)}
-            >
-              <Text style={styles.shareCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      )}
 
       {/* Dropdown Pickers */}
       {/* 1. Company Picker */}
       <DropdownPickerModal
         visible={companyModalVisible}
         title="Select Company"
-        items={companies.map((c) => ({
-          label: c.companyName,
-          subtitle: `${c.companyType === 'office' ? 'Office' : 'Client Site'} • ${c.location || ''}`,
-          value: c._id,
+        items={(Array.isArray(companies) ? companies : []).map((c) => ({
+          label: c?.companyName || 'Company',
+          subtitle: `${c?.companyType === 'office' ? 'Office' : 'Client Site'} • ${c?.location || ''}`,
+          value: c?._id,
         }))}
         selectedValue={selectedCompanyId}
         onSelect={(val) => {
@@ -1591,10 +1630,10 @@ export const AllInOneReportScreen = ({ navigation }) => {
       <DropdownPickerModal
         visible={clientModalVisible}
         title="Select Client Contact"
-        items={clients.map((cl) => ({
-          label: cl.clientName,
-          subtitle: cl.clientPhoneNumber || 'No phone',
-          value: cl._id,
+        items={(Array.isArray(clients) ? clients : []).map((cl) => ({
+          label: cl?.clientName || 'Client',
+          subtitle: cl?.clientPhoneNumber || 'No phone',
+          value: cl?._id,
         }))}
         selectedValue={selectedClientId}
         onSelect={(val) => {
@@ -1610,10 +1649,10 @@ export const AllInOneReportScreen = ({ navigation }) => {
       <DropdownPickerModal
         visible={employeeModalVisible}
         title="Select Staff Member"
-        items={employees.map((e) => ({
-          label: e.employeeName,
-          subtitle: `${e.designation || 'Staff'} • ID: ${e.employeeId || ''}`,
-          value: e._id,
+        items={(Array.isArray(employees) ? employees : []).map((e) => ({
+          label: e?.employeeName || 'Staff',
+          subtitle: `${e?.designation || 'Staff'} • ID: ${e?.employeeId || ''}`,
+          value: e?._id,
         }))}
         selectedValue={selectedEmployeeId}
         onSelect={(val) => {
@@ -1677,10 +1716,10 @@ export const AllInOneReportScreen = ({ navigation }) => {
       <DropdownPickerModal
         visible={categoryModalVisible}
         title="Select Expense Category"
-        items={expenseCategories.map((c) => ({
-          label: c.name,
-          subtitle: `${c.calculationMode === 'automatic' ? 'Automatic (km)' : 'Manual'}`,
-          value: c.name,
+        items={(Array.isArray(expenseCategories) ? expenseCategories : []).map((c) => ({
+          label: c?.name || 'Category',
+          subtitle: `${c?.calculationMode === 'automatic' ? 'Automatic (km)' : 'Manual'}`,
+          value: c?.name,
         }))}
         selectedValue={selectedExpenseCategory}
         onSelect={(val) => {
@@ -2599,6 +2638,11 @@ const styles = StyleSheet.create({
   calLeaveText: {
     fontSize: 10,
     color: '#991B1B',
+  },
+  filterDrawerRootOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 990,
+    elevation: 990,
   },
   modalOverlay: {
     flex: 1,

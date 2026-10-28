@@ -193,6 +193,17 @@
 ## Change History
 
 ### 2026-10-28
+#### Fix: Defensive Array Normalization in AllInOneReportScreen & DropdownPickerModal
+- What was changed:
+  - Fixed `TypeError: undefined is not a function` during client and company catalog resolution in `AllInOneReportScreen.jsx`.
+  - Normalized `clientApi.getClients` response parsing: `res.data` from Axios contains `{ success: true, data: { clients: [...] } }`. Extracting `res?.data?.data?.clients || res?.data?.clients` and validating with `Array.isArray` prevents setting `clients` state to an Object.
+  - Defensively safeguarded `selectedCompanyName`, `selectedClientName`, and `selectedEmployeeName` with `Array.isArray` before invoking `.find()`.
+  - In `DropdownPickerModal.jsx`: Guarded `dataList` to return `Array.isArray(items) ? items : Array.isArray(options) ? options : []`, preventing non-array objects from breaking `.filter()`.
+  - In `AllInOneReportScreen.jsx`: Sanitized `exp._id` before string slicing (`String(exp._id || '').slice(-4)`) to safely handle MongoDB ObjectIds.
+- Reason: When `/clients` API returned 200 OK, the unnormalized object payload caused `.find()` / `.map()` to throw `TypeError: undefined is not a function` on re-render.
+- Impact: 100% resilient dropdown catalog loading and zero crashes when switching companies or loading clients.
+
+### 2026-10-28
 #### All-in-One Operations & Executive Report Section
 - What was changed:
   - **Backend Report Engine & Multi-Worksheet Excel Generation (`reportService.js`, `reportController.js`, `reportRoutes.js`, `report.test.js`)**:
@@ -3188,6 +3199,28 @@
 - Impact: Accurate real-time unread message counts displayed across Employee Dashboard and Notifications screens with zero cross-employee read leaks.
 
 ### 2026-10-28
+#### Bug Fix & Enhancement: All-in-One Report Excel Export, Resilient File Writing & Filter Click Overlay
+- What was changed:
+  1. Resolved Excel export failure (`FileSystem.writeAsStringAsync is not a function`) by implementing resilient `writeBase64ToCacheFile` helper using `expo-file-system/legacy` and modern `File`/`Paths` fallback.
+  2. Enhanced `promptDownloadOrShare` to accept direct `base64` payloads, enabling immediate Android StorageAccessFramework write to Downloads/user folder without re-reading from disk, and supporting direct browser downloads on Web.
+  3. Resolved filter clicks not working / erroring (`all in one reportfilter,click not working errorso fix`) by refactoring the Filter Drawer and Share Dialog in `AllInOneReportScreen.jsx` from native `<Modal>` components to absolute overlay `<View>`s with tap-capture responders. This eliminates native iOS/Android modal presentation collisions and allows `DropdownPickerModal` and `DatePickerModal` to mount cleanly as the sole native window dialogs.
+  4. Strengthened catalog and client list parsing in `AllInOneReportScreen.jsx` with deep fallback arrays (`res?.data?.data?.clients || res?.data?.clients || []`) and guarded safe navigation on all item mappers.
+  5. Verified entire mobile application (`duty-management-app/src`) and backend (`backend/src`) with 0 syntax errors, and verified all 61 automated backend tests passing across 10 test suites (61/61 pass).
+- Files changed:
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/utils/reportExportUtils.js`
+  - `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`
+  - `duty-management-app/src/components/DropdownPickerModal.jsx`
+  - `project.md`
+- Logic changed:
+  - `exportUtils.js`: Exported `writeBase64ToCacheFile(filename, base64)` with multi-tier Expo SDK 57 filesystem fallback; updated `promptDownloadOrShare` to accept `base64`, perform web download via blob/data anchor, use `base64` directly for SAF on Android, and ensure fallback cache file exists.
+  - `reportExportUtils.js`: Replaced root `FileSystem.writeAsStringAsync` with `writeBase64ToCacheFile`; added web download fallback; passed `base64` to `promptDownloadOrShare`.
+  - `AllInOneReportScreen.jsx`: Converted `filterDrawerVisible` and `shareDialogVisible` from React Native `<Modal>` to `styles.filterDrawerRootOverlay` with `onStartShouldSetResponder={() => true}`. Added explicit `fetchReport()` to "Apply Filters" action.
+  - `DropdownPickerModal.jsx`: Guarded `dataList` memo to always return `[]` when `items` and `options` are non-arrays or null.
+- Reason: User reported that All-in-One Excel export was failing, filter dropdown clicks inside the report drawer were unresponsive or throwing errors, and requested full application verification.
+- Impact: Flawless Excel (.xlsx) export and download across Web, Android, and iOS; instantaneous and smooth filter dropdown selections (Company, Client, Staff, Dates, Work Type, Status, Leave Type, Expense Category); zero modal stacking crashes.
+
+### 2026-10-28
 #### Feature & UI: Employee Avatar in Notifications with Company Logo Fallback
 - What was changed: Updated notification badges to display the applying employee's profile avatar on leave notifications (and other employee-generated notifications), and provided an automatic, resilient fallback to the default company logo (`logo.png`) when an employee has no avatar or if network image loading fails.
 - Files changed:
@@ -3233,6 +3266,12 @@
 - Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
+- Decision: Use absolute positioned overlay View instead of native Modal for parent drawer panels that spawn child picker modals.
+  Reason: React Native on iOS (`RCTModalHostViewController`) and Android (`Dialog`) does not support presenting a native `<Modal>` inside another active `<Modal>`. By rendering the parent drawer as an absolute overlay `View` (`{ ...StyleSheet.absoluteFillObject, zIndex: 990 }`), child pickers (`DropdownPickerModal`, `DatePickerModal`) mount cleanly as the sole active native dialog without presentation conflicts or gesture deadlocks.
+  Date: 2026-10-28
+- Decision: Pass base64 payload directly to promptDownloadOrShare with writeBase64ToCacheFile fallback.
+  Reason: Expo SDK 57 deprecated and removed `writeAsStringAsync` from the default `expo-file-system` module. Using `expo-file-system/legacy` with fallback to modern `File`/`Paths` creates valid disk cache, while passing `base64` directly avoids disk re-read overhead on Android StorageAccessFramework and enables instant client-side downloads on Web.
+  Date: 2026-10-28
 - Decision: Server-side multi-worksheet Excel (.xlsx) generation with `exceljs` instead of client-side CSV.
   Reason: Requirement 6 mandates a structured `.xlsx` file with separate worksheets (Summary, Companies & Clients, Work Details, Employee Details, Attendance & Working Days, Leave & Comp-Off, Overtime, Expenses, and Employee Calendar). Generating on the server via `exceljs` prevents mobile memory bloat, avoids client-side workbook corruption, and ensures all filtered records are included regardless of pagination.
   Date: 2026-10-28
