@@ -54,18 +54,34 @@ export const getNotifications = asyncHandler(async (req, res) => {
     Notification.countDocuments(query),
   ]);
 
-  // Calculate unread count specifically for this user
-  const unreadCount = await Notification.countDocuments({
-    ...query,
-    $and: [
-      { isRead: false },
-      { readBy: { $ne: req.user._id } },
-    ],
-  });
+  // Calculate unread counts specifically for this user
+  const unreadBaseFilter = {
+    readBy: { $ne: req.user._id },
+    $or:
+      req.user.role === 'admin'
+        ? [
+            { recipient: req.user._id, isRead: false },
+            { recipientRole: { $in: ['admin', 'all'] } },
+          ]
+        : [
+            { recipient: req.user._id, isRead: false },
+            { recipientRole: { $in: ['employee', 'all'] } },
+          ],
+  };
+
+  const [unreadCount, unreadMessageCount] = await Promise.all([
+    Notification.countDocuments(
+      req.query.type ? { ...unreadBaseFilter, type: req.query.type } : unreadBaseFilter
+    ),
+    Notification.countDocuments({ ...unreadBaseFilter, type: 'message' }),
+  ]);
 
   // Map notifications to indicate user-specific read status
   const formattedNotifications = notifications.map((n) => {
-    const isUserRead = n.isRead || (n.readBy && n.readBy.some((id) => id.toString() === req.user._id.toString()));
+    const isDirect = n.recipient && n.recipient.toString() === req.user._id.toString();
+    const isUserRead = isDirect
+      ? (n.isRead || (n.readBy && n.readBy.some((id) => id.toString() === req.user._id.toString())))
+      : (n.readBy && n.readBy.some((id) => id.toString() === req.user._id.toString()));
     return {
       ...n.toObject(),
       isRead: !!isUserRead,
@@ -75,6 +91,7 @@ export const getNotifications = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, 200, 'Notifications retrieved successfully', {
     notifications: formattedNotifications,
     unreadCount,
+    unreadMessageCount,
     pagination: {
       total,
       page,
@@ -99,15 +116,26 @@ export const markAsRead = asyncHandler(async (req, res) => {
     throw ApiError.notFound('Notification not found');
   }
 
-  notification.isRead = true;
+  // Only set global isRead = true if it's a direct 1-to-1 notification
+  if (notification.recipient && notification.recipient.toString() === req.user._id.toString()) {
+    notification.isRead = true;
+  }
   if (!notification.readBy.some((uid) => uid.toString() === req.user._id.toString())) {
     notification.readBy.push(req.user._id);
   }
 
   await notification.save();
 
+  const isDirect = notification.recipient && notification.recipient.toString() === req.user._id.toString();
+  const isUserRead = isDirect
+    ? (notification.isRead || notification.readBy.some((uid) => uid.toString() === req.user._id.toString()))
+    : notification.readBy.some((uid) => uid.toString() === req.user._id.toString());
+
   return ApiResponse.success(res, 200, 'Notification marked as read', {
-    notification,
+    notification: {
+      ...notification.toObject(),
+      isRead: !!isUserRead,
+    },
   });
 });
 
@@ -136,8 +164,14 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
     };
   }
 
+  // For direct notifications addressed to this user, mark isRead = true
+  await Notification.updateMany(
+    { recipient: req.user._id },
+    { $set: { isRead: true }, $addToSet: { readBy: req.user._id } }
+  );
+
+  // For broadcast or all notifications matching user's query, add to readBy
   await Notification.updateMany(query, {
-    $set: { isRead: true },
     $addToSet: { readBy: req.user._id },
   });
 
@@ -240,6 +274,7 @@ export const sendMessageNotification = asyncHandler(async (req, res) => {
       type: 'message',
       title: 'Message from Admin',
       message: trimmedMessage,
+      readBy: [req.user._id],
       data: {
         messageText: trimmedMessage,
         senderName: req.user.employeeName || 'Management',
@@ -297,6 +332,7 @@ export const sendMessageNotification = asyncHandler(async (req, res) => {
         type: 'message',
         title: 'Message from Admin',
         message: trimmedMessage,
+        readBy: [req.user._id],
         data: {
           messageText: trimmedMessage,
           senderName: req.user.employeeName || 'Management',

@@ -9,6 +9,7 @@ export const NotificationProvider = ({ children, navigationRef }) => {
   const { isAuthenticated } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const fetchNotifications = useCallback(
@@ -22,6 +23,11 @@ export const NotificationProvider = ({ children, navigationRef }) => {
           const newNotifs = res.data.notifications || [];
           setNotifications(newNotifs);
           setUnreadCount(newUnread);
+          const newUnreadMsgCount =
+            res.data.unreadMessageCount !== undefined
+              ? res.data.unreadMessageCount
+              : newNotifs.filter((n) => n.type === 'message' && !n.isRead).length;
+          setUnreadMessageCount(newUnreadMsgCount);
         }
       } catch {
         // Silently catch during background updates
@@ -85,6 +91,7 @@ export const NotificationProvider = ({ children, navigationRef }) => {
     } else {
       setNotifications([]);
       setUnreadCount(0);
+      setUnreadMessageCount(0);
     }
   }, [isAuthenticated, fetchNotifications, navigationRef]);
 
@@ -93,10 +100,20 @@ export const NotificationProvider = ({ children, navigationRef }) => {
     (n) => n.type === 'document_uploaded' && !n.isRead
   ).length;
 
+  // Compute effective unread count for admin messages (backend count takes precedence, with local fallback)
+  const localUnreadMessageCount = notifications.filter(
+    (n) => n.type === 'message' && !n.isRead
+  ).length;
+  const effectiveUnreadMessageCount =
+    typeof unreadMessageCount === 'number' && unreadMessageCount > 0
+      ? unreadMessageCount
+      : localUnreadMessageCount;
+
   const value = {
     notifications,
     unreadCount,
     unreadDocumentCount,
+    unreadMessageCount: effectiveUnreadMessageCount,
     loading,
     refreshNotifications: fetchNotifications,
   };

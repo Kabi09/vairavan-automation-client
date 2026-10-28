@@ -160,6 +160,14 @@ describe('In-App Notification Tests', () => {
     assert.equal(empMsgRes.body.data.notifications.length, 1);
     assert.equal(empMsgRes.body.data.notifications[0].type, 'message');
     assert.equal(empMsgRes.body.data.notifications[0].message, 'Team meeting tomorrow at 10 AM');
+    assert.equal(empMsgRes.body.data.unreadCount, 1);
+    assert.equal(empMsgRes.body.data.unreadMessageCount, 1);
+
+    // Admin sender should NOT have the broadcast message counted as unread
+    const adminCheckRes = await request(app)
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${adminUser.token}`);
+    assert.equal(adminCheckRes.body.data.unreadMessageCount, 0);
 
     // 4. Admin sends direct message to specific employee
     const directRes = await request(app)
@@ -173,11 +181,27 @@ describe('In-App Notification Tests', () => {
     assert.equal(directRes.status, 201);
     assert.equal(directRes.body.data.target, 'selected');
 
-    // 5. Employee now sees 2 messages
+    // 5. Employee now sees 2 messages and unread count is 2
     const empMsgsUpdated = await request(app)
       .get('/api/notifications?type=message')
       .set('Authorization', `Bearer ${employeeUser.token}`);
 
     assert.equal(empMsgsUpdated.body.data.notifications.length, 2);
+    assert.equal(empMsgsUpdated.body.data.unreadCount, 2);
+    assert.equal(empMsgsUpdated.body.data.unreadMessageCount, 2);
+
+    // 6. Mark one message as read
+    const notifToRead = empMsgsUpdated.body.data.notifications[0];
+    const markReadRes = await request(app)
+      .patch(`/api/notifications/${notifToRead._id}/read`)
+      .set('Authorization', `Bearer ${employeeUser.token}`);
+    assert.equal(markReadRes.status, 200);
+    assert.equal(markReadRes.body.data.notification.isRead, true);
+
+    // Verify unreadMessageCount drops to 1
+    const empAfterRead = await request(app)
+      .get('/api/notifications?type=message')
+      .set('Authorization', `Bearer ${employeeUser.token}`);
+    assert.equal(empAfterRead.body.data.unreadMessageCount, 1);
   });
 });

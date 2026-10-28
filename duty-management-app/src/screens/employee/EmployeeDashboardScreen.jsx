@@ -35,7 +35,7 @@ const SLIDE_WIDTH = SCREEN_WIDTH - SPACING.lg * 2;
 
 export const EmployeeDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const { unreadCount, unreadDocumentCount, refreshNotifications } = useNotifications();
+  const { unreadCount, unreadDocumentCount, unreadMessageCount, refreshNotifications } = useNotifications();
   const [data, setData] = useState(null);
   const [monthSummary, setMonthSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -638,6 +638,13 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               accessibilityLabel="View messages from management"
             >
               <Ionicons name="chatbubbles-outline" size={24} color={COLORS.text} />
+              {Boolean(unreadMessageCount > 0) ? (
+                <View style={styles.unreadMsgBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                  </Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -838,9 +845,25 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: '#E0F2FE' }]}>
                   <Ionicons name="chatbubble-ellipses" size={24} color="#0284C7" />
+                  {Boolean(unreadMessageCount > 0) ? (
+                    <View style={styles.quickActionBadge}>
+                      <Text style={styles.quickActionBadgeText}>
+                        {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
                 <Text style={styles.quickActionTitle}>Messages</Text>
-                <Text style={styles.quickActionSub}>From Admin</Text>
+                <Text
+                  style={[
+                    styles.quickActionSub,
+                    Boolean(unreadMessageCount > 0) && { color: '#0284C7', fontWeight: '700' },
+                  ]}
+                >
+                  {unreadMessageCount > 0
+                    ? `${unreadMessageCount} new`
+                    : 'From Admin'}
+                </Text>
               </TouchableOpacity>
 
               {/* 3. Expenses (Third, replacing Highlights slot) */}
@@ -1326,7 +1349,10 @@ export const EmployeeDashboardScreen = ({ navigation }) => {
       {/* Employee Messages Modal */}
       <EmployeeMessagesModal
         visible={messagesModalVisible}
-        onClose={() => setMessagesModalVisible(false)}
+        onClose={() => {
+          setMessagesModalVisible(false);
+          refreshNotifications();
+        }}
       />
 
     </SafeAreaView>
@@ -1372,8 +1398,23 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   messageBadgeBtn: {
+    position: 'relative',
     padding: SPACING.xs,
     marginRight: 2,
+  },
+  unreadMsgBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#0284C7',
+    borderRadius: RADIUS.full,
+    minWidth: 17,
+    height: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: COLORS.background,
   },
   notificationBadgeBtn: {
     position: 'relative',
@@ -1552,12 +1593,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   quickActionIcon: {
+    position: 'relative',
     width: 44,
     height: 44,
     borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.sm,
+  },
+  quickActionBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#0284C7',
+    borderRadius: RADIUS.full,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  quickActionBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
   },
   quickActionTitle: {
     fontSize: 15,

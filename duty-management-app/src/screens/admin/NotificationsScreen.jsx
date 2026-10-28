@@ -35,7 +35,7 @@ import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const NotificationsScreen = ({ navigation }) => {
   const { user, isAdmin } = useAuth();
-  const { refreshNotifications: refreshGlobalNotifications } = useNotifications();
+  const { unreadMessageCount, refreshNotifications: refreshGlobalNotifications } = useNotifications();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -531,6 +531,13 @@ export const NotificationsScreen = ({ navigation }) => {
               <Text style={styles.headerMessageActionBtnText}>
                 {isAdmin ? 'Add Message' : 'Messages'}
               </Text>
+              {!isAdmin && Boolean(unreadMessageCount > 0) ? (
+                <View style={styles.headerMessageBadge}>
+                  <Text style={styles.headerMessageBadgeText}>
+                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                  </Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
 
             {Boolean(unreadCount > 0) ? (
@@ -644,7 +651,11 @@ export const NotificationsScreen = ({ navigation }) => {
       {/* Employee Messages Modal */}
       <EmployeeMessagesModal
         visible={employeeMessagesModalVisible}
-        onClose={() => setEmployeeMessagesModalVisible(false)}
+        onClose={() => {
+          setEmployeeMessagesModalVisible(false);
+          fetchNotifications();
+          refreshGlobalNotifications();
+        }}
       />
 
     </SafeAreaView>
@@ -827,6 +838,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   headerMessageActionBtn: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.primarySubtle,
@@ -841,6 +853,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.primary,
+  },
+  headerMessageBadge: {
+    backgroundColor: '#0284C7',
+    borderRadius: RADIUS.full,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    marginLeft: 2,
+  },
+  headerMessageBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
   },
   markAllReadBtn: {
     paddingVertical: 6,

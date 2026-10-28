@@ -2997,12 +2997,44 @@
   - **Admin Company Details Clients Directory**: Added client contacts tab, avatar list, active status badges, quick call/WhatsApp buttons, and Add Client Contact modal.
   - All test suites passing with 0 failures (49/49 tests pass).
 
+### 2026-10-28
+#### Fix & Feature: Message Unread Count & Notification Badge Synchronization
+- What was changed: Fixed bug where when Admin sends a message to all employees or a particular employee, the notification is received but the unread count badge was not displayed on the Message icons, and ensured broadcast messages maintain independent read tracking per employee.
+- Files changed:
+  - `backend/src/controllers/notificationController.js`
+  - `backend/tests/notification.test.js`
+  - `duty-management-app/src/context/NotificationContext.jsx`
+  - `duty-management-app/src/screens/employee/EmployeeDashboardScreen.jsx`
+  - `duty-management-app/src/screens/admin/NotificationsScreen.jsx`
+- Logic changed:
+  - Broadcast read status isolation: Replaced global `isRead = true` on broadcast messages with per-user `readBy: [userId]` tracking so when an individual employee opens and reads a broadcast message, other employees' unread counts and read statuses remain intact.
+  - Sender exclusion: When Admin dispatches broadcast or direct messages, `readBy: [req.user._id]` is pre-populated with the Admin sender's ID, preventing Admin from receiving self-unread counts.
+  - Accurate user-scoped counts: Rewrote `Notification.countDocuments` filters in `getNotifications` to separately calculate total `unreadCount` and `unreadMessageCount` based on user role and `readBy: { $ne: req.user._id }`, returned directly in API payload.
+  - Mobile UI Badges:
+    - Added unread badge counter to header message icon button (`styles.messageBadgeBtn`) on `EmployeeDashboardScreen`.
+    - Added unread badge counter and dynamic subtitle (`${unreadMessageCount} new`) to Quick Actions Messages button (`styles.messageQuickAction`).
+    - Added unread badge counter to Notifications screen header action button (`styles.headerMessageActionBtn`).
+    - Integrated instant notification refresh on `EmployeeMessagesModal` close.
+- Reason: User requested that when Admin shares messages with all employees or particular employees, the message count is properly added and displayed on the message icons.
+- Impact: Accurate real-time unread message counts displayed across Employee Dashboard and Notifications screens with zero cross-employee read leaks.
+
+## Current Progress
+- Completed:
+  - Message unread count badge fixed on Employee Dashboard header, Quick Actions, and Notifications header.
+  - Independent user-level read tracking (`readBy`) for broadcast announcements and direct messages.
+  - All 56 automated tests passing across 9 test suites (56/56 pass).
+- In Progress: None.
+- Pending: User review.
+
 ## Known Issues
 - Issue: None. All requested features and fixes completed and verified.
 - Status: Clean state.
 - Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
+- Decision: User-scoped read tracking with `readBy` array for broadcast notifications.
+  Reason: In broadcast notifications where `recipientRole` is set to `employee` or `all`, storing individual reader IDs in `readBy` ensures each employee maintains an independent unread status without affecting other team members.
+  Date: 2026-10-28
 - Decision: Compound unique index on CompOffCredit for idempotent Sunday credits.
   Reason: Placing a unique index on `{ employee: 1, sundayDateString: 1 }` guarantees at the database level that multiple duty updates, checkout re-submissions, or concurrent requests never generate duplicate Comp-Off credits for the same Sunday.
   Date: 2026-10-27
