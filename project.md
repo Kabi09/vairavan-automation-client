@@ -193,6 +193,50 @@
 ## Change History
 
 ### 2026-10-28
+#### Duty Check-In Completed Auto-Navigation to Dashboard
+- What was changed:
+  - In `duty-management-app/src/screens/employee/DutyFormScreen.jsx`:
+    - Updated `handleCheckIn` success flow: After `dutyApi.checkIn` completes successfully, configured the confirmation alert (`Alert.alert`) with an action callback `navigateToDashboard` that transitions the user directly to `DashboardTab` (`EmployeeMainTabs` / `AdminMainTabs`) rather than staying on the duty form.
+    - Updated `handleSubmitDuty` checkout completion alert: Similarly wired `navigateAfterCheckout` to return cleanly to `DashboardTab` across both stack navigation and bottom tab navigation.
+- Files changed:
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+- Logic changed:
+  - Previous behavior: After check-in was completed, the screen stayed on `DutyFormScreen` in checkout mode with an alert button `'Continue'`.
+  - New behavior: After check-in is submitted, a confirmation alert (`'Check-In Successful'`) is displayed and clicking 'OK' (or auto-firing in Web/PWA alert polyfill) navigates immediately to the Dashboard (`DashboardTab`). On the dashboard, `useFocusEffect` retrieves the active duty, starts the live ticking timer, and turns the action button red for 'Check-out'.
+- Reason: User requested: `"also one small correction -> i want to checkin completed then navigate to dashboard fix;;"`.
+- Impact: Streamlines employee workflow: check in -> return immediately to dashboard with live timer -> continue daily activities -> tap red 'Check-out' button on dashboard when work is done.
+
+### 2026-10-28
+#### Exclude Developer Admin from Staff Counts, Analytics, and All-in-One Reports
+- What was changed:
+  - Created centralized utility `backend/src/utils/userFilter.js` exporting `isDeveloperAdmin(u)` and MongoDB filter `getNonDeveloperAdminFilter()` which identifies developer admin accounts by role (`admin`), employeeId (`DEV001`), emails (`mailtokabilan056@gmail.com`, `admin@gmail.com`), and phone number (`8883280816`).
+  - Updated `backend/src/services/reportService.js`:
+    - Filtered out developer admin from staff metrics: `staffCount`, active staff list, `employeeMap`, `staffSummary`, and all 9 Excel worksheets (Summary, Companies & Clients, Work Details, Employee Details, Attendance & Working Days, Leaves & Comp-Off, Overtime, Expenses, and Calendar).
+  - Updated `duty-management-app/src/utils/reportExportUtils.js`: Excluded developer admin from Section 3 (Staff Performance Summary) of PDF and client-side exports.
+  - Updated `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`: Excluded developer admin from the Employee filter picker and preview cards.
+  - Updated `backend/src/controllers/dashboardController.js` and `backend/src/controllers/employeeController.js` to ensure total staff counts reflect operational field employees.
+- Files changed:
+  - `backend/src/utils/userFilter.js`
+  - `backend/src/services/reportService.js`
+  - `duty-management-app/src/utils/reportExportUtils.js`
+  - `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`
+  - `backend/src/controllers/dashboardController.js`
+  - `backend/src/controllers/employeeController.js`
+- Reason: User requested: `"also export and show the staff count added developer admin i want remove/hidden; dont show the developer admin details ; fix"`.
+- Impact: Developer admin is hidden from employee metrics, counts, and exports while retaining system-level administrative access.
+
+### 2026-10-28
+#### Admin Dashboard Banners Spacing & Checkout Form Expense Section Removal
+- What was changed:
+  - In `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`: Fixed quick action banners vertical spacing by applying `gap: SPACING.md` on the container and removing conflicting margins.
+  - In `duty-management-app/src/screens/employee/DutyFormScreen.jsx`: Removed the redundant "Linked Expenses & Claims" card and unused expense states from the checkout form, directing employees to the dedicated Work Details expense tracker.
+- Files changed:
+  - `duty-management-app/src/screens/admin/AdminDashboardScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyFormScreen.jsx`
+- Reason: User requested: `"one small change- cap not have fix; also checkout form remove the add expense section;; expense already have to visit work details to add expense ; i want no need to checkout form - expense section not good so fix"`.
+- Impact: Cleaner checkout UI and balanced banner layout on Admin Dashboard.
+
+### 2026-10-28
 #### Fix: ReferenceError: formatDate is not defined in reportExportUtils.js
 - What was changed:
   - Imported `formatDate` and `formatDateTime` from `./dateUtils.js` in `duty-management-app/src/utils/reportExportUtils.js`.

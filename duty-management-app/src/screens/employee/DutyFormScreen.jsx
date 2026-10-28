@@ -851,10 +851,29 @@ export const DutyFormScreen = ({ navigation, route }) => {
         setActiveCheckInTime(createdDuty.checkInTime || createdDuty.inTime || '');
         // Explicitly start checkout location as fresh/empty
         setCheckOutLocationCoords(null);
+
+        const navigateToDashboard = () => {
+          if (!navigation) return;
+          try {
+            navigation.navigate(isAdmin ? 'AdminMainTabs' : 'EmployeeMainTabs', {
+              screen: 'DashboardTab',
+            });
+          } catch (_) {
+            try {
+              navigation.navigate('DashboardTab');
+            } catch {
+              if (navigation?.canGoBack?.()) {
+                navigation.goBack();
+              }
+            }
+          }
+        };
+
         Alert.alert(
           'Check-In Successful',
-          `Checked in at ${companyCategory === 'office' ? 'Office' : customerName || 'Client Site'}! You can now log your work details and check out when finished.`,
-          [{ text: 'Continue' }]
+          `Checked in at ${companyCategory === 'office' ? 'Office' : customerName || 'Client Site'}! Work session is now active on your dashboard.`,
+          [{ text: 'OK', onPress: navigateToDashboard }],
+          { cancelable: false }
         );
       }
     } catch (err) {
@@ -1201,10 +1220,27 @@ export const DutyFormScreen = ({ navigation, route }) => {
         await clearWorkDraft();
         setDraftRestored(false);
 
+        const navigateAfterCheckout = () => {
+          if (!navigation) return;
+          try {
+            navigation.navigate(isAdmin ? 'AdminMainTabs' : 'EmployeeMainTabs', {
+              screen: 'DashboardTab',
+            });
+          } catch (_) {
+            try {
+              navigation.navigate('DashboardTab');
+            } catch {
+              if (navigation?.canGoBack?.()) {
+                navigation.goBack();
+              }
+            }
+          }
+        };
+
         Alert.alert(
           'Checkout Complete',
           'Checked out and work details submitted successfully!',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          [{ text: 'OK', onPress: navigateAfterCheckout }]
         );
       }
     } catch (err) {
