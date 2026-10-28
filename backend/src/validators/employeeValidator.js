@@ -37,7 +37,7 @@ export const validateCreateEmployee = [
     .optional()
     .trim(),
   body('joiningDate')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isISO8601()
     .withMessage('Joining date must be a valid date'),
   body('dateOfBirth')
@@ -83,7 +83,7 @@ export const validateUpdateEmployee = [
     .optional()
     .trim(),
   body('joiningDate')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isISO8601()
     .withMessage('Joining date must be a valid date'),
   body('dateOfBirth')

@@ -594,71 +594,74 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
                 const totalClaimAmt = Number(exp.grandTotal ?? exp.totalAmount ?? exp.amount ?? 0);
 
                 return (
-                  <TouchableOpacity
+                  <View
                     key={exp._id || `exp-${expIdx}`}
                     style={styles.expenseClaimCard}
-                    onPress={() => setSelectedExpenseForModal(exp)}
-                    activeOpacity={0.85}
                   >
-                    <View style={styles.expenseClaimHeader}>
-                      <View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={styles.expenseClaimId}>{claimId}</Text>
-                          {exp.status ? <StatusBadge status={exp.status} /> : null}
-                        </View>
-                        {expDate ? <Text style={styles.expenseClaimDate}>{expDate}</Text> : null}
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.expenseClaimTotal}>
-                          ₹{totalClaimAmt.toLocaleString('en-IN')}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Itemized lines without large images cluttering */}
-                    <View style={styles.expenseItemsTable}>
-                      {items.map((itemRaw, itemIdx) => {
-                        const item = parseExpenseItem(itemRaw, itemIdx);
-
-                        return (
-                          <View key={`item-${itemIdx}`} style={styles.expenseItemRow}>
-                            <View style={{ flex: 1, paddingRight: 8 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <View style={styles.itemBullet} />
-                                <Text style={styles.expenseItemCat}>{item.displayTitle}</Text>
-                              </View>
-                              {item.calcText ? (
-                                <Text style={styles.expenseItemCalc}>{item.calcText}</Text>
-                              ) : null}
-                              {item.description ? (
-                                <Text style={styles.expenseItemDesc}>{item.description}</Text>
-                              ) : null}
-                            </View>
-                            <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                              <Text style={styles.expenseItemAmount}>
-                                ₹{item.amount.toLocaleString('en-IN')}
-                              </Text>
-                              {item.proofUrls.length > 0 && (
-                                <View style={styles.proofCountPill}>
-                                  <Ionicons name="document-attach" size={11} color="#0369A1" />
-                                  <Text style={styles.proofCountPillText}>
-                                    {item.proofUrls.length} {item.proofUrls.length === 1 ? 'Proof' : 'Proofs'}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
+                    <TouchableOpacity
+                      onPress={() => setSelectedExpenseForModal(exp)}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.expenseClaimHeader}>
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.expenseClaimId}>{claimId}</Text>
+                            {exp.status ? <StatusBadge status={exp.status} /> : null}
                           </View>
-                        );
-                      })}
-                    </View>
+                          {expDate ? <Text style={styles.expenseClaimDate}>{expDate}</Text> : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.expenseClaimTotal}>
+                            ₹{totalClaimAmt.toLocaleString('en-IN')}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Itemized lines without large images cluttering */}
+                      <View style={styles.expenseItemsTable}>
+                        {items.map((itemRaw, itemIdx) => {
+                          const item = parseExpenseItem(itemRaw, itemIdx);
+
+                          return (
+                            <View key={`item-${itemIdx}`} style={styles.expenseItemRow}>
+                              <View style={{ flex: 1, paddingRight: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <View style={styles.itemBullet} />
+                                  <Text style={styles.expenseItemCat}>{item.displayTitle}</Text>
+                                </View>
+                                {item.calcText ? (
+                                  <Text style={styles.expenseItemCalc}>{item.calcText}</Text>
+                                ) : null}
+                                {item.description ? (
+                                  <Text style={styles.expenseItemDesc}>{item.description}</Text>
+                                ) : null}
+                              </View>
+                              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                                <Text style={styles.expenseItemAmount}>
+                                  ₹{item.amount.toLocaleString('en-IN')}
+                                </Text>
+                                {item.proofUrls.length > 0 && (
+                                  <View style={styles.proofCountPill}>
+                                    <Ionicons name="document-attach" size={11} color="#0369A1" />
+                                    <Text style={styles.proofCountPillText}>
+                                      {item.proofUrls.length} {item.proofUrls.length === 1 ? 'Proof' : 'Proofs'}
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </TouchableOpacity>
 
                     {/* Action row with Admin Edit button & Tap hint */}
                     <View style={styles.claimTapHintRow}>
                       {isAdmin ? (
                         <TouchableOpacity
                           style={styles.claimInlineEditBtn}
-                          onPress={(e) => {
-                            e?.stopPropagation?.();
+                          onPress={() => {
+                            setSelectedExpenseForModal(null);
                             navigation.navigate('ExpenseForm', { expenseToEdit: exp, isAdmin: true });
                           }}
                           activeOpacity={0.8}
@@ -667,12 +670,16 @@ export const DutyDetailsScreen = ({ navigation, route }) => {
                           <Text style={styles.claimInlineEditBtnText}>Edit Expense</Text>
                         </TouchableOpacity>
                       ) : null}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' }}
+                        onPress={() => setSelectedExpenseForModal(exp)}
+                        activeOpacity={0.8}
+                      >
                         <Text style={styles.claimTapHintText}>Tap to view full detail</Text>
                         <Ionicons name="chevron-forward" size={13} color={COLORS.primary} />
-                      </View>
+                      </TouchableOpacity>
                     </View>
-                  </TouchableOpacity>
+                  </View>
                 );
               })}
             </View>

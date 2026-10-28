@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import dutyApi from '../../api/dutyApi';
+import employeeApi from '../../api/employeeApi';
 import leaveApi from '../../api/leaveApi';
 import expenseApi from '../../api/expenseApi';
 import ScreenHeader from '../../components/ScreenHeader';
@@ -45,7 +46,8 @@ import { formatWorkType } from '../../utils/dutyUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export const EmployeeDetailsScreen = ({ route, navigation }) => {
-  const { employee } = route.params || {};
+  const { employee: initialEmployee } = route.params || {};
+  const [employee, setEmployee] = useState(initialEmployee);
   const today = formatISODateOnly();
 
   // Active view: 'work' | 'leave' | 'expense'
@@ -171,8 +173,19 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
     }, [activeTab, fetchWorkDuties, fetchLeaves, fetchExpenses])
   );
 
+  const fetchEmployeeProfile = useCallback(async () => {
+    if (!employee?._id) return;
+    try {
+      const res = await employeeApi.getEmployeeById(employee._id);
+      if (res?.data?.employee) {
+        setEmployee(res.data.employee);
+      }
+    } catch (_) {}
+  }, [employee?._id]);
+
   const onRefresh = () => {
     setRefreshing(true);
+    fetchEmployeeProfile();
     if (activeTab === 'work') {
       fetchWorkDuties();
     } else if (activeTab === 'leave') {
@@ -344,7 +357,22 @@ export const EmployeeDetailsScreen = ({ route, navigation }) => {
             </Text>
             <Text style={styles.employeeEmail}>{employee?.email}</Text>
           </View>
-          <StatusBadge status={employee?.accountStatus} />
+          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+            <StatusBadge status={employee?.accountStatus} />
+            <TouchableOpacity
+              style={styles.profileEditBtn}
+              onPress={() =>
+                navigation.navigate('EmployeeForm', {
+                  employee,
+                  onUpdated: (updated) => setEmployee(updated),
+                })
+              }
+              activeOpacity={0.8}
+            >
+              <Ionicons name="create-outline" size={13} color={COLORS.primary} />
+              <Text style={styles.profileEditBtnText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.profileDetailsRow}>

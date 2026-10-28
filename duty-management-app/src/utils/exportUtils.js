@@ -2,7 +2,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as SecureStore from 'expo-secure-store';
 import { Alert, Platform } from 'react-native';
-import { formatWorkType } from './dutyUtils';
+import { formatWorkType } from './dutyUtils.js';
 
 const LOGO_URL =
   'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
@@ -553,6 +553,95 @@ const writeCsvFileAndShare = async (cleanFilename, csvContent, dialogTitle) => {
 };
 
 /**
+ * Asynchronously fetch and inline remote media to a synchronous data URI (or raw SVG string)
+ * Pre-fetching ensures Android WebView's print adapter and browser print engines render
+ * images and signatures instantly with ZERO network latency, ZERO CORS failures, and ZERO broken placeholders.
+ */
+export const inlineRemoteMedia = async (url) => {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('<svg') ||
+    (!trimmed.startsWith('http://') && !trimmed.startsWith('https://'))
+  ) {
+    return trimmed;
+  }
+
+  const isSvg = trimmed.toLowerCase().includes('.svg');
+
+  // 1. Native FileSystem (Android / iOS)
+  if (Platform.OS !== 'web') {
+    try {
+      let LegacyFS = null;
+      try {
+        LegacyFS = require('expo-file-system/legacy');
+      } catch {}
+      if (!LegacyFS) {
+        try {
+          LegacyFS = require('expo-file-system');
+        } catch {}
+      }
+
+      if (LegacyFS && LegacyFS.downloadAsync && LegacyFS.cacheDirectory) {
+        const ext = isSvg ? '.svg' : trimmed.toLowerCase().includes('.png') ? '.png' : '.jpg';
+        const tempUri = `${LegacyFS.cacheDirectory}pdf_img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}${ext}`;
+        const downloadRes = await LegacyFS.downloadAsync(trimmed, tempUri);
+        if (downloadRes && downloadRes.status === 200) {
+          if (isSvg) {
+            const svgContent = await LegacyFS.readAsStringAsync(tempUri, {
+              encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.UTF8 : 'utf8',
+            });
+            if (svgContent && svgContent.includes('<svg')) {
+              return svgContent;
+            }
+          }
+          const base64Data = await LegacyFS.readAsStringAsync(tempUri, {
+            encoding: LegacyFS.EncodingType ? LegacyFS.EncodingType.Base64 : 'base64',
+          });
+          if (base64Data) {
+            const mime = isSvg
+              ? 'image/svg+xml'
+              : trimmed.toLowerCase().includes('.png')
+              ? 'image/png'
+              : 'image/jpeg';
+            return `data:${mime};base64,${base64Data}`;
+          }
+        }
+      }
+    } catch (fsErr) {
+      // Fallback to fetch
+    }
+  }
+
+  // 2. Fetch API (Web or native fallback)
+  try {
+    const res = await fetch(trimmed);
+    if (res.ok) {
+      if (isSvg) {
+        const svgText = await res.text();
+        if (svgText && svgText.includes('<svg')) {
+          return svgText;
+        }
+      }
+      if (typeof FileReader !== 'undefined') {
+        const blob = await res.blob();
+        return await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result || trimmed);
+          reader.onerror = () => resolve(trimmed);
+          reader.readAsDataURL(blob);
+        });
+      }
+    }
+  } catch (fetchErr) {
+    // Keep original URL on error
+  }
+
+  return trimmed;
+};
+
+/**
  * Export work records to PDF
  */
 export const exportDutiesToPDF = async ({
@@ -579,7 +668,55 @@ export const exportDutiesToPDF = async ({
       return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
     });
 
-    const rowsHtml = sortedDuties
+    // Pre-inline media for each duty (proof photos, signatures, receipt attachments)
+    const processedDuties = await Promise.all(
+      sortedDuties.map(async (duty) => {
+        const proofPhotos = Array.isArray(duty.customerProofPhotos) ? duty.customerProofPhotos : [];
+        const photosToRender = proofPhotos.slice(0, 3);
+        const inlinedPhotos = await Promise.all(
+          photosToRender.map(async (p) => {
+            const origUrl = typeof p === 'string' ? p : p?.url || p?.uri || '';
+            const inlined = origUrl ? await inlineRemoteMedia(origUrl) : '';
+            return { origUrl, inlined: inlined || origUrl };
+          })
+        );
+
+        const signatureUrl =
+          duty.customerSignature?.url ||
+          (typeof duty.customerSignature === 'string' ? duty.customerSignature : '') ||
+          duty.signature?.url ||
+          '';
+        const inlinedSig = signatureUrl ? await inlineRemoteMedia(signatureUrl) : '';
+
+        const expensesList = Array.isArray(duty.expenses) ? duty.expenses : [];
+        const inlinedExpenses = await Promise.all(
+          expensesList.map(async (exp) => {
+            const expProofList = (exp.items || []).flatMap((it) => it.attachments || []).slice(0, 4);
+            const inlinedProofs = await Promise.all(
+              expProofList.map(async (att) => {
+                const origUrl = typeof att === 'string' ? att : att?.url || att?.uri || '';
+                const inlined = origUrl ? await inlineRemoteMedia(origUrl) : '';
+                return { origUrl, inlined: inlined || origUrl };
+              })
+            );
+            return {
+              ...exp,
+              inlinedProofs,
+            };
+          })
+        );
+
+        return {
+          ...duty,
+          inlinedPhotos,
+          inlinedSig,
+          inlinedExpenses,
+          signatureUrl,
+        };
+      })
+    );
+
+    const rowsHtml = processedDuties
       .map((d, index) => {
         const dutyId = escapeHtml(d.dutyId || ('WORK-' + (d._id || '').slice(-6).toUpperCase()));
         const empName = escapeHtml(d.employee?.employeeName || 'N/A');
@@ -627,25 +764,25 @@ export const exportDutiesToPDF = async ({
         }
         const checkOutMapsUrl = checkOutLat && checkOutLng ? `https://maps.google.com/?q=${checkOutLat},${checkOutLng}` : null;
 
-        const signatureUrl =
-          d.customerSignature?.url ||
-          (typeof d.customerSignature === 'string' ? d.customerSignature : '') ||
-          d.signature?.url ||
-          '';
         const proofPhotos = Array.isArray(d.customerProofPhotos) ? d.customerProofPhotos : [];
-        const photosToRender = proofPhotos.slice(0, 3);
 
         const photosHtml =
-          photosToRender.length > 0
-            ? photosToRender
+          d.inlinedPhotos && d.inlinedPhotos.length > 0
+            ? `<div style="display: flex; flex-wrap: wrap; gap: 8px;">` +
+              d.inlinedPhotos
                 .map((p) => {
-                  const pUrl = typeof p === 'string' ? p : (p?.url || p?.uri || '');
-                  return pUrl
-                    ? `<img src="${escapeHtml(pUrl)}" crossorigin="anonymous" style="width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; margin-top: 6px;" onerror="this.style.opacity='0.5'" />`
-                    : '';
+                  const src = p.inlined || p.origUrl;
+                  if (!src) return '';
+                  return `
+                    <div style="display: inline-block; text-align: center;">
+                      <img src="${escapeHtml(src)}" style="width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; display: block;" onerror="this.style.opacity='0.5'" />
+                      ${p.origUrl && p.origUrl.startsWith('http') ? `<a href="${escapeHtml(p.origUrl)}" target="_blank" style="font-size: 9px; color: #1e40af; text-decoration: underline; display: block; margin-top: 3px; font-weight: 600;">[View Full Photo ↗]</a>` : ''}
+                    </div>
+                  `;
                 })
                 .filter(Boolean)
-                .join('') || '<span style="color: #64748b; font-size: 11px;">No valid site proof photos</span>'
+                .join('') +
+              `</div>`
             : '<span style="color: #64748b; font-size: 11px;">No site proof photos attached</span>';
 
         const sigTime = d.customerSignature?.signedAt
@@ -653,26 +790,28 @@ export const exportDutiesToPDF = async ({
           : (dateStr && outTime ? `${dateStr} ${outTime}` : '');
 
         let signatureBodyHtml = '';
-        if (signatureUrl) {
-          if (signatureUrl.startsWith('data:image/svg+xml;utf8,') || signatureUrl.startsWith('data:image/svg+xml,')) {
+        if (d.inlinedSig || d.signatureUrl) {
+          const effectiveSig = d.inlinedSig || d.signatureUrl;
+          if (effectiveSig.trim().startsWith('<svg')) {
+            signatureBodyHtml = `<div style="max-height: 60px; max-width: 180px; display: inline-block;">${effectiveSig}</div>`;
+          } else if (effectiveSig.startsWith('data:image/svg+xml;utf8,') || effectiveSig.startsWith('data:image/svg+xml,')) {
             try {
               const prefixMatch = /^data:image\/svg\+xml(;utf8)?,/;
-              const rawSvg = decodeURIComponent(signatureUrl.replace(prefixMatch, ''));
+              const rawSvg = decodeURIComponent(effectiveSig.replace(prefixMatch, ''));
               signatureBodyHtml = `<div style="max-height: 60px; max-width: 180px; display: inline-block;">${rawSvg}</div>`;
             } catch {
-              signatureBodyHtml = `<img src="${escapeHtml(signatureUrl)}" crossorigin="anonymous" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" onerror="this.style.opacity='0.5'" />`;
+              signatureBodyHtml = `<img src="${escapeHtml(effectiveSig)}" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" onerror="this.style.opacity='0.5'" />`;
             }
-          } else if (signatureUrl.trim().startsWith('<svg')) {
-            signatureBodyHtml = `<div style="max-height: 60px; max-width: 180px; display: inline-block;">${signatureUrl}</div>`;
           } else {
-            signatureBodyHtml = `<img src="${escapeHtml(signatureUrl)}" crossorigin="anonymous" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" onerror="this.style.opacity='0.5'" />`;
+            signatureBodyHtml = `<img src="${escapeHtml(effectiveSig)}" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" onerror="this.style.opacity='0.5'" />`;
           }
         }
 
-        const signatureHtml = signatureUrl
+        const signatureHtml = d.signatureUrl || d.inlinedSig
           ? `<div style="display: inline-block; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px; text-align: right;">
                ${signatureBodyHtml}
                ${sigTime ? `<div style="font-size: 9px; color: #475569; font-weight: 700; border-top: 1px dashed #e2e8f0; padding-top: 2px;">🕒 ${escapeHtml(sigTime)}</div>` : ''}
+               ${d.signatureUrl && d.signatureUrl.startsWith('http') ? `<a href="${escapeHtml(d.signatureUrl)}" target="_blank" style="font-size: 9px; color: #1e40af; text-decoration: underline; display: block; margin-top: 2px;">[View Signature ↗]</a>` : ''}
              </div>`
           : '<span style="color: #64748b; font-size: 11px;">No signature recorded</span>';
 
@@ -756,7 +895,7 @@ export const exportDutiesToPDF = async ({
               `</div>`
             : '';
 
-        const expenseList = Array.isArray(d.expenses) ? d.expenses : [];
+        const expenseList = d.inlinedExpenses || d.expenses || [];
         const totalExp = d.totalExpenseAmount !== undefined ? d.totalExpenseAmount : expenseList.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
         let expensesHtml = '';
         if (expenseList.length > 0 || totalExp > 0) {
@@ -776,19 +915,21 @@ export const exportDutiesToPDF = async ({
                   return `• <strong>${escapeHtml(it.categoryName)}${title}</strong>: ₹${Number(it.amount||0).toLocaleString('en-IN')}${calc}${desc}`;
                 }).join('<br/>');
 
-                const expProofList = (exp.items || []).flatMap(it => it.attachments || []);
-                const expProofHtml = expProofList.slice(0, 4).map(att => {
-                  const attUrl = typeof att === 'string' ? att : (att?.url || att?.uri || '');
-                  return attUrl
-                    ? `<img src="${escapeHtml(attUrl)}" crossorigin="anonymous" style="width: 50px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #c7d2fe; margin-right: 4px; margin-top: 3px;" />`
+                const expProofHtml = (exp.inlinedProofs || []).map(att => {
+                  const src = att.inlined || att.origUrl;
+                  return src
+                    ? `<div style="display: inline-block; text-align: center; margin-right: 6px; margin-top: 3px;">
+                         <img src="${escapeHtml(src)}" style="width: 50px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #c7d2fe; display: block;" onerror="this.style.opacity='0.5'" />
+                         ${att.origUrl && att.origUrl.startsWith('http') ? `<a href="${escapeHtml(att.origUrl)}" target="_blank" style="font-size: 8px; color: #4338ca; text-decoration: underline; display: block; margin-top: 1px;">[Receipt ↗]</a>` : ''}
+                       </div>`
                     : '';
                 }).filter(Boolean).join('');
 
                 return `
                   <div style="font-size: 10px; color: #1e1b4b; padding: 4px 0; border-top: 1px dashed #c7d2fe;">
-                    <div style="font-weight: 700; color: #4338CA;">Claim #${escapeHtml(exp.expenseId || 'EXP')} • ₹${Number(exp.grandTotal||0).toLocaleString('en-IN')} ${expProofList.length > 0 ? `(${expProofList.length} receipt proof${expProofList.length !== 1 ? 's' : ''})` : ''}</div>
+                    <div style="font-weight: 700; color: #4338CA;">Claim #${escapeHtml(exp.expenseId || 'EXP')} • ₹${Number(exp.grandTotal||0).toLocaleString('en-IN')} ${(exp.inlinedProofs || []).length > 0 ? `(${(exp.inlinedProofs || []).length} receipt proof${(exp.inlinedProofs || []).length !== 1 ? 's' : ''})` : ''}</div>
                     <div style="padding-left: 6px; margin-top: 2px;">${itemsStr}</div>
-                    ${expProofHtml ? `<div style="margin-top: 3px; padding-left: 6px;">${expProofHtml}</div>` : ''}
+                    ${expProofHtml ? `<div style="margin-top: 3px; padding-left: 6px; display: flex; flex-wrap: wrap;">${expProofHtml}</div>` : ''}
                   </div>
                 `;
               }).join('')}
@@ -1571,7 +1712,7 @@ export const exportEmployeesToPDF = async ({
             <td style="padding: 8px 6px; text-align: center;">${index + 1}</td>
             <td style="padding: 8px 6px;">
               <strong>${empName}</strong><br/>
-              <span style="color: #64748b; font-size: 10px;">ID: ${empId}</span>
+              <span style="color: #64748b; font-size: 10px;">ID: ${empId} • Joined: ${escapeHtml(formatDate(emp.joiningDate || emp.createdAt))}</span>
             </td>
             <td style="padding: 8px 6px;">${designation}</td>
             <td style="padding: 8px 6px;">${phone}</td>
@@ -1770,7 +1911,7 @@ export const exportEmployeesToExcel = async ({
         escapeCsv(emp.email || ''),
         escapeCsv(emp.role || 'employee'),
         escapeCsv(emp.accountStatus || 'active'),
-        escapeCsv(formatDate(emp.createdAt)),
+        escapeCsv(formatDate(emp.joiningDate || emp.createdAt)),
       ].join(',');
     });
 

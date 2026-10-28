@@ -12,6 +12,7 @@ import {
   Modal,
   Platform,
   Image,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -101,6 +102,8 @@ export const AllInOneReportScreen = ({ navigation }) => {
 
   // Search filter inside lists
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedDutyId, setExpandedDutyId] = useState(null);
+  const [previewImageUri, setPreviewImageUri] = useState(null);
 
   // Modal Visibility State
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
@@ -833,7 +836,11 @@ export const AllInOneReportScreen = ({ navigation }) => {
                       )}
 
                       {/* Location & Meta Footer */}
-                      <View style={styles.dutyFooterRow}>
+                      <TouchableOpacity
+                        style={styles.dutyFooterRow}
+                        onPress={() => setExpandedDutyId(expandedDutyId === d._id ? null : d._id)}
+                        activeOpacity={0.7}
+                      >
                         <View style={styles.footerInfoItem}>
                           <Ionicons
                             name={d.customerSignature?.url ? 'checkmark-circle' : 'close-circle'}
@@ -860,7 +867,166 @@ export const AllInOneReportScreen = ({ navigation }) => {
                             </Text>
                           </View>
                         )}
-                      </View>
+
+                        <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: '700', marginRight: 2 }}>
+                            {expandedDutyId === d._id ? 'Hide Details' : 'Full Details'}
+                          </Text>
+                          <Ionicons
+                            name={expandedDutyId === d._id ? 'chevron-up' : 'chevron-down'}
+                            size={14}
+                            color={COLORS.primary}
+                          />
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Expanded Full Details Section */}
+                      {expandedDutyId === d._id && (
+                        <View style={styles.expandedDutySection}>
+                          {/* Locations */}
+                          <View style={styles.expandedLocationsBox}>
+                            <View style={styles.expandedLocItem}>
+                              <Text style={styles.expandedLocLabel}>Check-In Location:</Text>
+                              <Text style={styles.expandedLocAddr}>
+                                {d.checkInLocation?.address || 'Address not recorded'}
+                              </Text>
+                              {Boolean(d.checkInLocation?.latitude && d.checkInLocation?.longitude) && (
+                                <TouchableOpacity
+                                  style={styles.mapsBtn}
+                                  onPress={() =>
+                                    Linking.openURL(
+                                      `https://maps.google.com/?q=${d.checkInLocation.latitude},${d.checkInLocation.longitude}`
+                                    ).catch(() => {})
+                                  }
+                                >
+                                  <Ionicons name="navigate" size={12} color="#059669" />
+                                  <Text style={styles.mapsBtnText}>
+                                    Open Maps ({d.checkInLocation.latitude.toFixed(4)}, {d.checkInLocation.longitude.toFixed(4)})
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+
+                            <View style={[styles.expandedLocItem, { marginTop: 8 }]}>
+                              <Text style={styles.expandedLocLabel}>Check-Out Location:</Text>
+                              <Text style={styles.expandedLocAddr}>
+                                {d.checkOutLocation?.address || 'Address not recorded'}
+                              </Text>
+                              {Boolean(d.checkOutLocation?.latitude && d.checkOutLocation?.longitude) && (
+                                <TouchableOpacity
+                                  style={styles.mapsBtn}
+                                  onPress={() =>
+                                    Linking.openURL(
+                                      `https://maps.google.com/?q=${d.checkOutLocation.latitude},${d.checkOutLocation.longitude}`
+                                    ).catch(() => {})
+                                  }
+                                >
+                                  <Ionicons name="navigate" size={12} color="#1E40AF" />
+                                  <Text style={[styles.mapsBtnText, { color: '#1E40AF' }]}>
+                                    Open Maps ({d.checkOutLocation.latitude.toFixed(4)}, {d.checkOutLocation.longitude.toFixed(4)})
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* Proof Photos */}
+                          <View style={styles.expandedMediaBlock}>
+                            <Text style={styles.expandedMediaTitle}>
+                              Proof Photos ({(d.customerProofPhotos || []).length})
+                            </Text>
+                            {(d.customerProofPhotos || []).length === 0 ? (
+                              <Text style={styles.noMediaText}>No proof photos attached</Text>
+                            ) : (
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                                {(d.customerProofPhotos || []).map((p, pIdx) => {
+                                  const pUri = typeof p === 'string' ? p : p?.url || p?.uri;
+                                  if (!pUri) return null;
+                                  return (
+                                    <TouchableOpacity
+                                      key={pIdx}
+                                      onPress={() => setPreviewImageUri(pUri)}
+                                      activeOpacity={0.8}
+                                      style={styles.expandedPhotoThumbWrap}
+                                    >
+                                      <Image source={{ uri: pUri }} style={styles.expandedPhotoThumb} />
+                                      <View style={styles.zoomPill}>
+                                        <Ionicons name="expand" size={10} color="#FFFFFF" />
+                                      </View>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </ScrollView>
+                            )}
+                          </View>
+
+                          {/* Customer Signature */}
+                          <View style={styles.expandedMediaBlock}>
+                            <Text style={styles.expandedMediaTitle}>Customer Digital Signature</Text>
+                            {d.customerSignature?.url || (typeof d.customerSignature === 'string' && d.customerSignature) ? (
+                              <TouchableOpacity
+                                onPress={() => setPreviewImageUri(d.customerSignature?.url || d.customerSignature)}
+                                activeOpacity={0.8}
+                                style={styles.expandedSigBox}
+                              >
+                                <Image
+                                  source={{ uri: d.customerSignature?.url || d.customerSignature }}
+                                  style={styles.expandedSigImg}
+                                  resizeMode="contain"
+                                />
+                                {Boolean(d.customerSignature?.signedAt) && (
+                                  <Text style={styles.expandedSigTime}>
+                                    🕒 {d.customerSignature.signedAt.split('T')[0]}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            ) : (
+                              <Text style={styles.noMediaText}>No signature recorded</Text>
+                            )}
+                          </View>
+
+                          {/* Linked Expenses Breakdown */}
+                          {(d.linkedExpenses || []).length > 0 && (
+                            <View style={styles.expandedExpenseBlock}>
+                              <Text style={styles.expandedMediaTitle}>
+                                Linked Expense Claims ({(d.linkedExpenses || []).length})
+                              </Text>
+                              {(d.linkedExpenses || []).map((exp, expIdx) => (
+                                <View key={expIdx} style={styles.expandedExpCard}>
+                                  <View style={styles.expandedExpHeader}>
+                                    <Text style={styles.expandedExpId}>Claim #{exp.expenseId || 'EXP'}</Text>
+                                    <Text style={styles.expandedExpAmt}>{formatINR(exp.grandTotal || 0)}</Text>
+                                  </View>
+                                  {(exp.items || []).map((it, itIdx) => (
+                                    <Text key={itIdx} style={styles.expandedExpItem}>
+                                      • {it.categoryName}: {formatINR(it.amount)}
+                                      {it.calculationMode === 'automatic'
+                                        ? ` (${it.totalDistance || ((it.outboundDistance || 0) + (it.returnDistance || 0))} km @ ₹${it.ratePerUnit}/km)`
+                                        : ''}
+                                    </Text>
+                                  ))}
+                                  {/* Receipt Attachments */}
+                                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                                    {(exp.items || []).flatMap((it) => it.attachments || []).map((att, aIdx) => {
+                                      const attUri = typeof att === 'string' ? att : att?.url || att?.uri;
+                                      if (!attUri) return null;
+                                      return (
+                                        <TouchableOpacity
+                                          key={aIdx}
+                                          onPress={() => setPreviewImageUri(attUri)}
+                                          activeOpacity={0.8}
+                                        >
+                                          <Image source={{ uri: attUri }} style={styles.expandedReceiptThumb} />
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      )}
                     </View>
                   </Card>
                 ))
@@ -1070,13 +1236,15 @@ export const AllInOneReportScreen = ({ navigation }) => {
                       {l.endDate ? l.endDate.split('T')[0] : ''}
                     </Text>
                     <Text style={styles.leaveReasonText}>
-                      <strong>Reason:</strong> {l.reason || 'No reason provided'}
+                      <Text style={{ fontWeight: '700', color: COLORS.textPrimary }}>Reason: </Text>
+                      {l.reason || 'No reason provided'}
                     </Text>
 
                     {Boolean(l.adminRemarks) && (
                       <View style={styles.adminRemarkBox}>
                         <Text style={styles.adminRemarkText}>
-                          <strong>Admin Remarks:</strong> {l.adminRemarks}
+                          <Text style={{ fontWeight: '700', color: '#1E3A8A' }}>Admin Remarks: </Text>
+                          {l.adminRemarks}
                         </Text>
                       </View>
                     )}
@@ -1754,6 +1922,31 @@ export const AllInOneReportScreen = ({ navigation }) => {
         onClose={() => setEndDateModalVisible(false)}
         title="Select To Date"
       />
+
+      {/* 10. Full-Screen Image Preview Modal */}
+      {Boolean(previewImageUri) && (
+        <Modal
+          visible={true}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setPreviewImageUri(null)}
+        >
+          <View style={styles.imagePreviewOverlay}>
+            <TouchableOpacity
+              style={styles.imagePreviewCloseBtn}
+              onPress={() => setPreviewImageUri(null)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={26} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Image
+              source={{ uri: previewImageUri }}
+              style={styles.imagePreviewFull}
+              resizeMode="contain"
+            />
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -2841,6 +3034,158 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.textSecondary,
+  },
+  expandedDutySection: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  expandedLocationsBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.sm,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  expandedLocItem: {
+    marginBottom: 4,
+  },
+  expandedLocLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    marginBottom: 1,
+  },
+  expandedLocAddr: {
+    fontSize: 11,
+    color: COLORS.text,
+  },
+  mapsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 3,
+  },
+  mapsBtnText: {
+    fontSize: 11,
+    color: '#059669',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  expandedMediaBlock: {
+    marginTop: 10,
+  },
+  expandedMediaTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  noMediaText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+  },
+  expandedPhotoThumbWrap: {
+    marginRight: 8,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    overflow: 'hidden',
+  },
+  expandedPhotoThumb: {
+    width: 80,
+    height: 60,
+    borderRadius: RADIUS.sm,
+  },
+  zoomPill: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 4,
+    padding: 2,
+  },
+  expandedSigBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: RADIUS.sm,
+    padding: 6,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  expandedSigImg: {
+    width: 140,
+    height: 50,
+  },
+  expandedSigTime: {
+    fontSize: 9,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  expandedExpenseBlock: {
+    marginTop: 10,
+    backgroundColor: '#EEF2FF',
+    borderRadius: RADIUS.sm,
+    padding: SPACING.sm,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  expandedExpCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 4,
+    padding: 8,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+  },
+  expandedExpHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  expandedExpId: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#3730A3',
+  },
+  expandedExpAmt: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#4F46E5',
+  },
+  expandedExpItem: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  expandedReceiptThumb: {
+    width: 44,
+    height: 36,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  imagePreviewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePreviewCloseBtn: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 999,
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+  },
+  imagePreviewFull: {
+    width: '90%',
+    height: '80%',
   },
 });
 

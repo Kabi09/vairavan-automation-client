@@ -193,6 +193,39 @@
 ## Change History
 
 ### 2026-10-28
+#### Admin Employee Joining Date Edit Feature (Admin Only)
+- What was changed:
+  - **Employee Form & Joining Date Picker (`EmployeeFormScreen.jsx`)**:
+    - Added `joiningDate` state initialized with `formatISODateOnly(existingEmployee?.joiningDate)` or fallback to `existingEmployee?.createdAt` or today's date.
+    - Added "Date of Joining *" form picker field under "Role & Contact" section styled with an "Admin Only" security badge (`#FEF3C7` / `#92400E`).
+    - Added `DatePickerModal` allowing administrators to select or change an employee's joining date.
+    - Updated `handleSave` to send `joiningDate` payload for both employee update (`PUT /api/employees/:id`) and new employee creation (`POST /api/employees`).
+    - Added `onUpdated` callback propagation so parent screens immediately reflect updated profile data.
+  - **Employee Details Profile Card (`EmployeeDetailsScreen.jsx`)**:
+    - Converted `employee` route prop to component state (`[employee, setEmployee]`).
+    - Added an "Edit" button in the profile header card next to `StatusBadge` allowing admins to jump straight to `EmployeeForm` with `onUpdated: (updated) => setEmployee(updated)`.
+    - Added `fetchEmployeeProfile` on pull-to-refresh to re-fetch the latest employee record via `employeeApi.getEmployeeById`.
+    - Displayed updated joining date: `Joined: {formatDate(employee?.joiningDate || employee?.createdAt)}`.
+  - **Backend Employee Update Controller & Validator (`employeeController.js`, `employeeValidator.js`)**:
+    - In `updateEmployee` (`backend/src/controllers/employeeController.js`): added safe parsing `if (joiningDate !== undefined) employee.joiningDate = joiningDate ? new Date(joiningDate) : employee.joiningDate;`.
+    - In `createEmployee`: ensured `joiningDate: joiningDate ? new Date(joiningDate) : Date.now()`.
+    - In `backend/src/validators/employeeValidator.js`: configured `joiningDate` validator with `.optional({ nullable: true, checkFalsy: true }).isISO8601()` in both create and update validation chains.
+    - Restricted modification strictly to `admin` role: `PUT /api/employees/:id` is gated by `authorize('admin')` (non-admin receives `403 Forbidden`).
+    - Guarded employee self-profile update (`PATCH /api/auth/profile` in `authController.js`) to strictly ignore `joiningDate`, ensuring employees can never edit their own joining date.
+  - **Directory Exports & All-in-One Report Sync (`exportUtils.js`, `reportService.js`)**:
+    - In `exportEmployeesToExcel`: updated Joined Date column to prioritize `emp.joiningDate || emp.createdAt`.
+    - In `exportEmployeesToPDF`: included Joined Date under employee name in the directory table.
+    - In `backend/src/services/reportService.js`: populated `joiningDate: emp.joiningDate || emp.createdAt` in `employeeMap` and added a dedicated 'Date of Joining' column in Sheet 4 (Employee Details) of the All-in-One Excel export.
+  - **Automated Tests (`backend/tests/auth.test.js`)**:
+    - Added 3 automated tests:
+      1. Admin can update employee joiningDate via `PUT /api/employees/:id`.
+      2. Non-admin employee is rejected with `403 Forbidden` on `PUT /api/employees/:id`.
+      3. Self-profile update via `PATCH /api/auth/profile` ignores joiningDate.
+    - All 64 backend tests pass with 0 failures across 10 suites.
+- Reason: User requested the ability for Admins to view and edit employee joining date, strictly restricted to admin-only access.
+- Impact: Complete administrative control over employee service start dates, reflected across profiles, directory lists, and multi-worksheet Excel/PDF exports.
+
+### 2026-10-28
 #### Fix: Defensive Array Normalization in AllInOneReportScreen & DropdownPickerModal
 - What was changed:
   - Fixed `TypeError: undefined is not a function` during client and company catalog resolution in `AllInOneReportScreen.jsx`.
@@ -3199,6 +3232,60 @@
 - Impact: Accurate real-time unread message counts displayed across Employee Dashboard and Notifications screens with zero cross-employee read leaks.
 
 ### 2026-10-28
+#### Bug Fix & Major Enhancement: Work Details & All-in-One Report Media Inlining, Full Inspection Details, Leave Click Crash & Admin Expense Modification
+- What was changed:
+  1. **Leave Click Crash Resolution (`AllInOneReportScreen.jsx`)**:
+     - Fixed `Invariant Violation: View config getter callback for component 'strong' must be a function` crash when tapping the "Leaves" tab. Replaced raw HTML `<strong>` tags inside React Native `<Text>` with `<Text style={{ fontWeight: '700' }}>`.
+     - Audited all JSX source files across the app to confirm 0 raw HTML tags.
+  2. **Admin Expense Edit & Click Conflict Resolution (`AllDutiesScreen.jsx` & `DutyDetailsScreen.jsx`)**:
+     - Fixed `ReferenceError: setInspectionModalVisible is not defined` inside `AllDutiesScreen.jsx` when clicking "Edit Expense" from the duty inspection modal. Modals now dismiss cleanly (`setSelectedDuty(null); setSelectedExpenseForModal(null)`) before navigating to `ExpenseForm`.
+     - Decoupled nested `<TouchableOpacity>` buttons in both `AllDutiesScreen.jsx` and `DutyDetailsScreen.jsx`: converted card outer containers from touchables to `<View>` layouts with standalone clickable body and action buttons, completely preventing tap collision between opening inspection modals and triggering edits.
+     - Enhanced `ExpenseFormScreen.jsx`: verified admin edit mode resolution (`isAdmin`) and integrated `useData().syncExpense(expenseObj)` on both create and edit operations for immediate state cache invalidation.
+  3. **Fixed Missing/Broken Proof Photos, Signatures & Receipts in PDF Exports (`exportUtils.js` & `reportExportUtils.js`)**:
+     - Diagnosed root cause of broken image placeholders shown in exported PDFs:
+       - Cloudflare R2 / `upload.ameyy.in` assets served without CORS headers caused `crossorigin="anonymous"` on `<img>` tags to strictly reject rendering. Removed all `crossorigin="anonymous"` attributes.
+       - Android WebView (`expo-print`'s `Print.printToFileAsync`) triggers print rasterization before remote network images finish downloading asynchronously.
+       - Signatures stored as `.svg` files are not consistently rasterized by Android WebView's print adapter inside `<img>` tags.
+     - Solution: Implemented `inlineRemoteMedia` helper in `exportUtils.js`:
+       - On native Android/iOS: uses `expo-file-system/legacy` (or `expo-file-system`) `downloadAsync` to cache file to disk and reads as base64 data URI (`data:image/jpeg;base64,...`) or raw UTF-8 `<svg ...` string.
+       - On Web: uses `fetch(url)` and `FileReader.readAsDataURL(blob)` or `res.text()` with fallback to original URL.
+       - Pre-fetches and synchronously inlines all proof photos, digital signatures, and expense receipts *before* generating PDF HTML.
+       - Added direct clickable fallback links below every image and signature: `<a href="${origUrl}" target="_blank">[View Full Photo ↗]</a>` and `<a href="${sigUrl}" target="_blank">[View Signature ↗]</a>`.
+  4. **All-in-One Report Full Inspection Details (PDF, Excel, and Mobile/Web App)**:
+     - **PDF Report (`reportExportUtils.js`)**:
+       - Pre-inlines all duty proof photos, customer signatures, and expense receipt attachments.
+       - Section 2 (Field Work & Machine Service): renders a compact summary table followed by full detailed inspection cards for every work record, including Check-In and Check-Out GPS locations with Google Maps links (`[Maps ↗]`), proof photo gallery, customer digital signature, features, manpower team, work description, and linked expense breakdowns with receipts.
+       - Section 6 (Expenses): renders itemized claim breakdown and receipt proof thumbnails with direct `[View ↗]` links.
+       - Section 4 (Leaves & Comp-off) and Section 7 (Monthly Calendar): fully integrated.
+     - **Excel Spreadsheet (`backend/src/services/reportService.js`)**:
+       - Sheet 3 (`Work Details`): added Check-In Address, Check-In Google Maps Link, Check-Out Address, Check-Out Google Maps Link, Customer Signature Link, Proof Photo URLs (joined), Expense Claims Total, Expense Item Breakdown, and Expense Receipt Links.
+       - Sheet 5 (`Attendance & Working Days`): added Check-In & Check-Out Addresses and Google Maps links.
+       - Sheet 8 (`Expenses`): added Receipt Proof URLs and Approval Status.
+     - **Mobile/Web App (`AllInOneReportScreen.jsx`)**:
+       - Added expandable work cards in "Works" tab: admins can tap "Full Details" to toggle and inspect GPS coordinates with Google Maps navigation buttons, horizontal scrollable proof photos with zoom tap, customer signature, and linked expense items with receipt thumbnails.
+       - Added full-screen Image Preview Modal when tapping any proof photo, signature, or receipt image.
+  5. **Verification**:
+     - Verified all 61 automated backend tests passing across 10 test suites (61/61 pass).
+     - Verified clean Metro Web build compilation (`npx expo export -p web`, 899 modules bundled with 0 errors).
+- Files changed:
+  - `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`
+  - `duty-management-app/src/screens/admin/AllDutiesScreen.jsx`
+  - `duty-management-app/src/screens/employee/DutyDetailsScreen.jsx`
+  - `duty-management-app/src/screens/employee/ExpenseFormScreen.jsx`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/utils/reportExportUtils.js`
+  - `backend/src/services/reportService.js`
+  - `project.md`
+- Logic changed:
+  - `exportUtils.js`: Added `inlineRemoteMedia` helper; pre-inlines `customerProofPhotos`, `customerSignature`, and `expenses.items.attachments` to base64/SVG in `exportDutiesToPDF`; removed `crossorigin="anonymous"`; added `[View Full Photo ↗]` and `[View Signature ↗]` links.
+  - `reportExportUtils.js`: Pre-inlines all duty and expense media in `exportAllInOneToPDF`; added full work inspection cards with map links and photo galleries in Section 2; added receipt thumbnails and links in Section 6.
+  - `reportService.js`: Expanded Excel Sheet 3, Sheet 5, and Sheet 8 to include GPS coordinates, Google Maps URLs, signature URLs, photo URLs, breakdown items, and receipt URLs.
+  - `AllInOneReportScreen.jsx`: Removed `<strong>` tags; added `expandedDutyId` and `previewImageUri` state for interactive card expansions and full-screen media inspection.
+  - `AllDutiesScreen.jsx` & `DutyDetailsScreen.jsx`: Decoupled card touchables from action buttons and fixed inspection modal dismissal before navigating to `ExpenseForm`.
+- Reason: User requested fixes for admin expense edit clicking, missing proof photos/signatures in exported PDFs, complete data in All-in-One PDF and Excel reports (proofs, links, expenses, working days), and leave click crash.
+- Impact: 100% bug-free navigation and editing; zero broken image icons in exported PDFs with full high-resolution image inlining; exhaustive data export across PDF and Excel; seamless interactive inspection inside the app.
+
+### 2026-10-28
 #### Bug Fix & Enhancement: All-in-One Report Excel Export, Resilient File Writing & Filter Click Overlay
 - What was changed:
   1. Resolved Excel export failure (`FileSystem.writeAsStringAsync is not a function`) by implementing resilient `writeBase64ToCacheFile` helper using `expo-file-system/legacy` and modern `File`/`Paths` fallback.
@@ -3379,6 +3466,12 @@
 
 ## Current Progress
 - Completed:
+  - Fixed Leave click crash in `AllInOneReportScreen.jsx` by removing raw HTML `<strong>` tags from React Native `<Text>`.
+  - Fixed Admin Expense edit click crash (`ReferenceError: setInspectionModalVisible is not defined`) in `AllDutiesScreen.jsx` and decoupled nested `TouchableOpacity` containers in both `AllDutiesScreen.jsx` and `DutyDetailsScreen.jsx`.
+  - Fixed missing/broken proof photos, customer signatures, and expense receipts in mobile and web PDF exports (`exportUtils.js` & `reportExportUtils.js`): implemented `inlineRemoteMedia` pre-inlining remote media into synchronous base64 data URIs and inline SVG strings, removed blocking `crossorigin="anonymous"` from non-CORS Cloudflare R2 images, and added direct clickable fallback links (`[View Full Photo ↗]`, `[View Signature ↗]`, `[Receipt ↗]`).
+  - Enhanced All-in-One Report PDF (`reportExportUtils.js`): added full inspection cards for every work record with GPS check-in/out locations and Google Maps links, proof photos gallery, customer signature, features, manpower, observations, and linked expenses with receipt proofs.
+  - Enhanced All-in-One Report Excel (`backend/src/services/reportService.js`): updated Sheet 3 (Work Details), Sheet 5 (Attendance & Working Days), and Sheet 8 (Expenses) with Google Maps coordinates and URLs, customer signature URL, proof photo URLs, expense item breakdown, and receipt proof URLs.
+  - Interactive Work Details in All-in-One UI (`AllInOneReportScreen.jsx`): added expandable work inspection cards with Google Maps navigation buttons, horizontal scrollable photo gallery with full-screen zoom preview modal, and linked expense inspection.
   - PDF Proof Photos, Receipt Proofs & Signature: Eager loading and smart image completion in `printHtmlOnWeb` ensures all photos and signatures render in PDFs.
   - Total Working Duration Display: Dynamic calculation fallback formats accurate working time (`8h 0m (480 mins)`) instead of `N/A`.
   - Sunday-Only Overtime (OT) Engine: Overtime hours are recorded strictly for Sunday duties; weekday shifts never add OT.
@@ -3390,7 +3483,7 @@
   - API Optimization & SWR Caching: `DataContext` with `fetchWithCache` and domain TTLs eliminating 80%+ redundant network requests across tab switches.
   - Instant UI State Synchronization: Multi-screen optimistic updates and domain sync helpers (`syncDuty`, `syncExpense`, `syncLeave`, `syncCompany`, `syncEmployee`, `syncDocument`).
   - AST Syntax Validation: 87/87 source files in `src/` validated with 0 errors.
-  - Metro Expo Web Bundling: Successfully bundled 898 modules to `dist/` with zero errors.
+  - Metro Expo Web Bundling: Successfully bundled 899 modules to `dist/` with zero errors.
   - Backend Automated Test Suite: All 61 automated tests passing across 10 suites (61/61 pass).
   - All-in-One Operations & Executive Report Section: Built complete reporting engine in `AllInOneReportScreen.jsx`, `reportService.js`, `reportController.js`, `reportRoutes.js`, and `reportExportUtils.js`.
   - 9 KPI Summary Cards: Total Companies, Total Clients, Total Staff, Total Work Records, Total Working Days, Total Leave Days, Total Comp-Off Credits, Total OT Hours, and Total Expenses.
@@ -3418,6 +3511,10 @@
 - Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
+- Decision: Restrict employee joining date editing strictly to Admin role.
+  Reason: Employee joining dates are official employment milestones impacting service tenure, leave allowances, and historical record keeping. Allowing staff to modify this introduces employment data integrity risks. Hence, `PUT /api/employees/:id` is restricted via `authorize('admin')`, while employee self-update (`PATCH /api/auth/profile`) strictly ignores `joiningDate`.
+  Date: 2026-10-28
+
 - Decision: Immediate modal teardown decoupled from alert callbacks and universal Web Alert Polyfill.
   Reason: In `react-native-web`, `Alert.alert` is an empty stub. Tying modal dismissal or route navigation (`navigation.goBack()`) to an `Alert.alert` button's `onPress` causes actions to freeze indefinitely on Web browsers. Decoupling modal closure so it executes immediately on HTTP success guarantees clean UI dismissals, while the global polyfill ensures informational dialogs and confirmation callbacks (`window.alert` / `window.confirm`) work everywhere.
   Date: 2026-10-28

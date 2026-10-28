@@ -32,6 +32,8 @@ import { formatDate, formatISODateOnly, formatTime } from '../../utils/dateUtils
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { COLORS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { saveExpenseDraft, getExpenseDraft, clearExpenseDraft } from '../../utils/draftStorage';
+import { useAuth } from '../../context/AuthContext';
+import { useData } from '../../context/DataContext';
 
 // Helper to determine if a company represents internal office
 const isOfficeCompany = (c) => {
@@ -64,7 +66,9 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
   const routeDuty = route?.params?.duty || route?.params?.dutyToEdit;
   const expenseToEdit = route?.params?.expenseToEdit || route?.params?.expense;
   const isEditing = Boolean(expenseToEdit);
-  const isAdmin = Boolean(route?.params?.isAdmin);
+  const { user: authUser, isAdmin: authIsAdmin } = useAuth();
+  const { syncExpense } = useData();
+  const isAdmin = Boolean(route?.params?.isAdmin || authIsAdmin || authUser?.role === 'admin');
 
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -815,6 +819,9 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         const res = await expenseApi.updateExpense(expenseToEdit._id, payload);
         const expenseObj = res.data?.expense || res.data?.data?.expense || res.expense;
         const expenseCode = expenseObj?.expenseId || expenseToEdit.expenseId || '';
+        if (syncExpense && expenseObj) {
+          syncExpense(expenseObj);
+        }
 
         Alert.alert(
           'Expense Updated',
@@ -840,6 +847,9 @@ export const ExpenseFormScreen = ({ navigation, route }) => {
         setDraftRestored(false);
         const expenseObj = res.data?.expense || res.data?.data?.expense || res.expense;
         const expenseCode = expenseObj?.expenseId || '';
+        if (syncExpense && expenseObj) {
+          syncExpense(expenseObj);
+        }
 
         Alert.alert(
           'Expense Submitted',

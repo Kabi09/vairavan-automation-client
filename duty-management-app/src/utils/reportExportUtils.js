@@ -2,8 +2,8 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { Alert, Platform } from 'react-native';
-import reportApi from '../api/reportApi';
-import { promptDownloadOrShare, writeBase64ToCacheFile, printHtmlOnWeb } from './exportUtils';
+import reportApi from '../api/reportApi.js';
+import { promptDownloadOrShare, writeBase64ToCacheFile, printHtmlOnWeb, inlineRemoteMedia } from './exportUtils.js';
 
 const LOGO_URL =
   'https://res.cloudinary.com/etdurbgp/image/upload/v1791802852/vairavan_app/app_logo.png';
@@ -137,9 +137,8 @@ export const buildAllInOneReportHtml = (reportData) => {
     </table>
   `;
 
-  // Section 2: Works & Field Visits Table
-  const dutiesHtml = `
-    <div class="section-title">2. Field Work & Machine Service Details (${duties.length})</div>
+  // Section 2: Works & Field Visits Table & Full Inspection Cards
+  const dutiesSummaryTableHtml = `
     <table class="report-table">
       <thead>
         <tr>
@@ -150,15 +149,14 @@ export const buildAllInOneReportHtml = (reportData) => {
           <th>Company & Client</th>
           <th>Timings (IST)</th>
           <th>Duration</th>
-          <th>OT</th>
+          <th>Sunday OT</th>
           <th>Machine & Type</th>
-          <th>Description</th>
           <th>Expenses</th>
           <th>Status</th>
         </tr>
       </thead>
       <tbody>
-        ${duties.length === 0 ? '<tr><td colspan="12" class="empty-cell">No work records for this period</td></tr>' : ''}
+        ${duties.length === 0 ? '<tr><td colspan="11" class="empty-cell">No work records for this period</td></tr>' : ''}
         ${duties
           .map(
             (d, i) => `
@@ -172,7 +170,6 @@ export const buildAllInOneReportHtml = (reportData) => {
             <td>${d.workingHours || 0} hrs</td>
             <td style="color: ${d.otHours > 0 ? '#ea580c' : '#64748b'}; font-weight: ${d.otHours > 0 ? '700' : '400'};">${d.otHours > 0 ? `${d.otHours}h` : '-'}</td>
             <td><strong>${escapeHtml(d.machineName || 'N/A')}</strong><br/><small>${escapeHtml(d.workType || '')}</small></td>
-            <td style="max-width: 160px; font-size: 9px;">${escapeHtml(d.workDescription || 'N/A')}</td>
             <td style="text-align: right;">${d.totalExpenseAmount > 0 ? formatINR(d.totalExpenseAmount) : '-'}</td>
             <td><span class="badge ${d.status === 'approved' ? 'badge-green' : d.status === 'submitted' ? 'badge-blue' : 'badge-amber'}">${escapeHtml(d.status || 'N/A')}</span></td>
           </tr>
@@ -181,6 +178,224 @@ export const buildAllInOneReportHtml = (reportData) => {
           .join('')}
       </tbody>
     </table>
+  `;
+
+  const dutyCardsHtml = duties
+    .map((d) => {
+      const dutyId = escapeHtml(d.dutyId || 'WORK');
+      const dateStr = escapeHtml(d.dutyDateReadable || d.dutyDateStr || '');
+      const inTime = escapeHtml(d.inTime || 'N/A');
+      const outTime = escapeHtml(d.outTime || 'N/A');
+      const empName = escapeHtml(d.employee?.employeeName || 'N/A');
+      const empId = escapeHtml(d.employee?.employeeId || 'N/A');
+      const compName = escapeHtml(d.company?.companyName || 'N/A');
+      const compLoc = escapeHtml(d.company?.location || '');
+      const isOffice = d.dutyType === 'office' || (compName && compName.toLowerCase().includes('office'));
+      const customer = escapeHtml(d.customerName || (d.client ? d.client.clientName : (isOffice ? 'Office' : 'Client Site')));
+      const customerPhone = escapeHtml(d.customerPhoneNumber || (d.client ? d.client.clientPhoneNumber : ''));
+      const machine = escapeHtml(d.machineName || 'N/A');
+      const workType = escapeHtml(d.workType || 'Maintenance');
+      const workDesc = escapeHtml(d.workDescription || 'None recorded');
+
+      // Check-In Location
+      const checkInLat = d.checkInLocation?.latitude || d.location?.latitude;
+      const checkInLng = d.checkInLocation?.longitude || d.location?.longitude;
+      const checkInAddr = d.checkInLocation?.address || d.location?.address || '';
+      const checkInCoords = checkInLat && checkInLng ? `${checkInLat.toFixed(5)}, ${checkInLng.toFixed(5)}` : '';
+      let checkInLocText = 'Not Recorded';
+      if (checkInAddr && checkInCoords) checkInLocText = `${checkInAddr} (${checkInCoords})`;
+      else if (checkInAddr) checkInLocText = checkInAddr;
+      else if (checkInCoords) checkInLocText = checkInCoords;
+      const checkInMapsUrl = checkInLat && checkInLng ? `https://maps.google.com/?q=${checkInLat},${checkInLng}` : null;
+
+      // Check-Out Location
+      const checkOutLat = d.checkOutLocation?.latitude;
+      const checkOutLng = d.checkOutLocation?.longitude;
+      const checkOutAddr = d.checkOutLocation?.address || '';
+      const checkOutCoords = checkOutLat && checkOutLng ? `${checkOutLat.toFixed(5)}, ${checkOutLng.toFixed(5)}` : '';
+      let checkOutLocText = 'Not Recorded';
+      if (checkOutAddr && checkOutCoords) checkOutLocText = `${checkOutAddr} (${checkOutCoords})`;
+      else if (checkOutAddr) checkOutLocText = checkOutAddr;
+      else if (checkOutCoords) checkOutLocText = checkOutCoords;
+      const checkOutMapsUrl = checkOutLat && checkOutLng ? `https://maps.google.com/?q=${checkOutLat},${checkOutLng}` : null;
+
+      // Inlined Proof Photos
+      const inlinedPhotos = d.inlinedPhotos || [];
+      const photosHtml =
+        inlinedPhotos.length > 0
+          ? `<div style="display: flex; flex-wrap: wrap; gap: 8px;">` +
+            inlinedPhotos
+              .map((p) => {
+                const src = p.inlined || p.origUrl;
+                if (!src) return '';
+                return `
+                  <div style="display: inline-block; text-align: center;">
+                    <img src="${escapeHtml(src)}" style="width: 105px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #cbd5e1; display: block;" onerror="this.style.opacity='0.5'" />
+                    ${p.origUrl && p.origUrl.startsWith('http') ? `<a href="${escapeHtml(p.origUrl)}" target="_blank" style="font-size: 8px; color: #1e40af; text-decoration: underline; display: block; margin-top: 2px; font-weight: 600;">[View Full Photo ↗]</a>` : ''}
+                  </div>
+                `;
+              })
+              .filter(Boolean)
+              .join('') +
+            `</div>`
+          : '<span style="color: #64748b; font-size: 9px;">No site proof photos attached</span>';
+
+      // Inlined Customer Digital Signature
+      let signatureBodyHtml = '';
+      const effectiveSig = d.inlinedSig || d.sigUrl || d.customerSignature?.url || (typeof d.customerSignature === 'string' ? d.customerSignature : '');
+      if (effectiveSig) {
+        if (effectiveSig.trim().startsWith('<svg')) {
+          signatureBodyHtml = `<div style="max-height: 50px; max-width: 160px; display: inline-block;">${effectiveSig}</div>`;
+        } else {
+          signatureBodyHtml = `<img src="${escapeHtml(effectiveSig)}" style="max-height: 50px; max-width: 160px; object-fit: contain; display: block;" onerror="this.style.opacity='0.5'" />`;
+        }
+      }
+      const sigUrl = d.sigUrl || d.customerSignature?.url || (typeof d.customerSignature === 'string' ? d.customerSignature : '');
+      const sigTime = d.customerSignature?.signedAt ? formatDate(d.customerSignature.signedAt) : '';
+      const signatureHtml = effectiveSig
+        ? `<div style="display: inline-block; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px; text-align: right;">
+             ${signatureBodyHtml}
+             ${sigTime ? `<div style="font-size: 8px; color: #475569; font-weight: 600; margin-top: 2px;">🕒 ${escapeHtml(sigTime)}</div>` : ''}
+             ${sigUrl && sigUrl.startsWith('http') ? `<a href="${escapeHtml(sigUrl)}" target="_blank" style="font-size: 8px; color: #1e40af; text-decoration: underline; display: block; margin-top: 2px;">[View Signature ↗]</a>` : ''}
+           </div>`
+        : '<span style="color: #64748b; font-size: 9px;">No signature recorded</span>';
+
+      // Features
+      const featuresList = (d.features || []).filter(Boolean);
+      const featuresHtml =
+        featuresList.length > 0
+          ? `<div style="margin-top: 4px;"><strong style="color: #0f172a;">Features:</strong> ` +
+            featuresList
+              .map(
+                (f) =>
+                  `<span style="background: #EFF6FF; border: 1px solid #BFDBFE; color: #1E40AF; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 700; margin-right: 3px;">${escapeHtml(
+                    f
+                  )}</span>`
+              )
+              .join('') +
+            `</div>`
+          : '';
+
+      // Manpower
+      const manpowerList = (d.manpowerMembers || []).filter((m) => m && m.name);
+      const manpowerHtml =
+        manpowerList.length > 0
+          ? `<div style="margin-top: 4px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px 6px;">
+               <strong style="color: #0f172a; font-size: 9px;">Manpower Team (${manpowerList.length}):</strong> ` +
+            manpowerList
+              .map(
+                (m) =>
+                  `<span style="font-size: 9px; color: #334155;">• ${escapeHtml(m.name)}${
+                    m.phoneNumber || m.phone ? ` (${escapeHtml(m.phoneNumber || m.phone)})` : ''
+                  }</span>`
+              )
+              .join(' ') +
+            `</div>`
+          : '';
+
+      // Linked Expenses
+      const linkedExps = d.inlinedLinkedExps || d.linkedExpenses || [];
+      let linkedExpHtml = '';
+      if (linkedExps.length > 0 || (d.totalExpenseAmount || 0) > 0) {
+        linkedExpHtml = `
+          <div style="margin-top: 6px; padding: 6px; background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <strong style="color: #3730A3; font-size: 9px;">💰 Linked Expenses & Claims (${linkedExps.length}):</strong>
+              <strong style="color: #4F46E5; font-size: 10px;">Total: ${formatINR(d.totalExpenseAmount || 0)}</strong>
+            </div>
+            ${linkedExps
+              .map((exp) => {
+                const itemsStr = (exp.items || [])
+                  .map((it) => {
+                    const calc =
+                      it.calculationMode === 'automatic'
+                        ? ` (${it.totalDistance || ((it.outboundDistance || 0) + (it.returnDistance || 0))} km @ ₹${it.ratePerUnit || 0}/km)`
+                        : '';
+                    return `• <strong>${escapeHtml(it.categoryName)}</strong>: ₹${Number(it.amount || 0).toLocaleString('en-IN')}${calc}`;
+                  })
+                  .join('; ');
+                const receipts = (exp.inlinedProofs || [])
+                  .map((att) => {
+                    const src = att.inlined || att.origUrl;
+                    return src
+                      ? `<div style="display: inline-block; text-align: center; margin-right: 4px; margin-top: 2px;">
+                           <img src="${escapeHtml(src)}" style="width: 42px; height: 32px; object-fit: cover; border-radius: 3px; border: 1px solid #c7d2fe; display: block;" onerror="this.style.opacity='0.5'" />
+                           ${att.origUrl && att.origUrl.startsWith('http') ? `<a href="${escapeHtml(att.origUrl)}" target="_blank" style="font-size: 7px; color: #4338ca; text-decoration: underline;">[Receipt ↗]</a>` : ''}
+                         </div>`
+                      : '';
+                  })
+                  .filter(Boolean)
+                  .join('');
+                return `
+                  <div style="font-size: 9px; color: #1e1b4b; padding: 2px 0; border-top: 1px dashed #c7d2fe;">
+                    <div><strong>Claim #${escapeHtml(exp.expenseId || 'EXP')}</strong> • ₹${Number(exp.grandTotal || 0).toLocaleString('en-IN')}: ${itemsStr}</div>
+                    ${receipts ? `<div style="display: flex; flex-wrap: wrap; margin-top: 2px;">${receipts}</div>` : ''}
+                  </div>
+                `;
+              })
+              .join('')}
+          </div>
+        `;
+      }
+
+      return `
+        <div class="duty-detail-card">
+          <div class="duty-detail-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="badge badge-blue" style="font-size: 9px;">${dutyId}</span>
+              <span style="font-weight: 700; font-size: 9px;">${dateStr}</span>
+              <span style="color: #475569; font-size: 9px;">(${inTime} - ${outTime})</span>
+            </div>
+            <div>
+              <span class="badge ${d.status === 'approved' ? 'badge-green' : d.status === 'submitted' ? 'badge-blue' : 'badge-amber'}">${escapeHtml(d.status || 'N/A')}</span>
+            </div>
+          </div>
+
+          <div class="detail-grid">
+            <div>
+              <strong>Employee:</strong> ${empName} (${empId})<br/>
+              <strong>Duty Type:</strong> ${isOffice ? 'Office Duty' : 'Client Company Duty'}<br/>
+              <strong>Company:</strong> ${compName} ${compLoc ? `• ${compLoc}` : ''}<br/>
+              <strong>Customer / Client:</strong> ${customer} ${customerPhone ? `(${customerPhone})` : ''}<br/>
+              <strong>Machine / Asset:</strong> ${machine} • <span style="color: #1e40af; font-weight: 600;">${workType}</span>
+              ${featuresHtml}
+              ${manpowerHtml}
+            </div>
+            <div>
+              <strong>Check-In Time (IST):</strong> ${inTime}<br/>
+              <strong>Check-Out Time (IST):</strong> ${outTime}<br/>
+              <strong>Duration:</strong> ${d.workingHours || 0} hrs ${d.otHours > 0 ? `<span style="color: #ea580c; font-weight: 700;">(+${d.otHours}h Sunday OT)</span>` : ''}<br/>
+              <strong>Check-In Location:</strong> ${checkInLocText} ${checkInMapsUrl ? `<a href="${checkInMapsUrl}" target="_blank" style="color: #059669; font-weight: 700; font-size: 8px; margin-left: 2px;">[Maps ↗]</a>` : ''}<br/>
+              <strong>Check-Out Location:</strong> ${checkOutLocText} ${checkOutMapsUrl ? `<a href="${checkOutMapsUrl}" target="_blank" style="color: #1e40af; font-weight: 700; font-size: 8px; margin-left: 2px;">[Maps ↗]</a>` : ''}
+            </div>
+          </div>
+
+          <div class="desc-box">
+            <strong style="color: #0f172a;">Work Performed / Observations:</strong><br/>
+            <span style="white-space: pre-wrap; color: #334155;">${workDesc}</span>
+          </div>
+
+          ${linkedExpHtml}
+
+          <div class="media-row">
+            <div style="flex: 2;">
+              <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 3px;">Proof Photos (${(d.customerProofPhotos || []).length})</div>
+              ${photosHtml}
+            </div>
+            <div style="flex: 1; text-align: right;">
+              <div style="font-size: 8px; font-weight: 700; color: #475569; margin-bottom: 3px;">Customer Digital Signature</div>
+              ${signatureHtml}
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  const dutiesHtml = `
+    <div class="section-title">2. Field Work & Machine Service Details (${duties.length})</div>
+    ${dutiesSummaryTableHtml}
+    ${duties.length > 0 ? `<div style="margin-top: 10px; margin-bottom: 6px; font-size: 10px; font-weight: 700; color: #1e40af;">Work Service Inspection Records & Proofs:</div>${dutyCardsHtml}` : ''}
   `;
 
   // Section 3: Employee Details & Performance
@@ -343,35 +558,51 @@ export const buildAllInOneReportHtml = (reportData) => {
           <th>Company / Site</th>
           <th>Related Duty</th>
           <th>Itemized Breakdown</th>
+          <th>Receipt Proofs</th>
           <th>Amount (₹)</th>
         </tr>
       </thead>
       <tbody>
-        ${expenses.length === 0 ? '<tr><td colspan="8" class="empty-cell">No expense claims for this period</td></tr>' : ''}
+        ${expenses.length === 0 ? '<tr><td colspan="9" class="empty-cell">No expense claims for this period</td></tr>' : ''}
         ${expenses
-          .map(
-            (exp, i) => `
-          <tr>
-            <td style="text-align: center;">${i + 1}</td>
-            <td><strong>${escapeHtml(exp.expenseId || 'EXP')}</strong></td>
-            <td>${escapeHtml(exp.expenseDate ? exp.expenseDate.split('T')[0] : 'N/A')}</td>
-            <td>${escapeHtml(exp.employee?.employeeName || 'N/A')}</td>
-            <td>${escapeHtml(exp.company?.companyName || 'N/A')}</td>
-            <td>${escapeHtml(exp.duty?.dutyId || exp.relatedDuty || 'N/A')}</td>
-            <td>
-              ${(exp.items || [])
-                .map((it) => {
-                  const dist = it.calculationMode === 'automatic'
-                    ? ` (${it.totalDistance || ((it.outboundDistance || 0) + (it.returnDistance || 0))} km @ ₹${it.ratePerUnit}/km)`
-                    : '';
-                  return `• ${escapeHtml(it.categoryName)}: ${formatINR(it.amount)}${dist}`;
-                })
-                .join('<br/>')}
-            </td>
-            <td style="text-align: right; font-weight: 700; color: #1e40af;">${formatINR(exp.grandTotal || 0)}</td>
-          </tr>
-        `
-          )
+          .map((exp, i) => {
+            const receiptsHtml = (exp.inlinedProofs || [])
+              .map((att) => {
+                const src = att.inlined || att.origUrl;
+                return src
+                  ? `<div style="display: inline-block; text-align: center; margin-right: 4px; margin-top: 2px;">
+                       <img src="${escapeHtml(src)}" style="width: 42px; height: 32px; object-fit: cover; border-radius: 3px; border: 1px solid #c7d2fe; display: block;" onerror="this.style.opacity='0.5'" />
+                       ${att.origUrl && att.origUrl.startsWith('http') ? `<a href="${escapeHtml(att.origUrl)}" target="_blank" style="font-size: 7px; color: #4338ca; text-decoration: underline;">[View ↗]</a>` : ''}
+                     </div>`
+                  : '';
+              })
+              .filter(Boolean)
+              .join('');
+
+            return `
+              <tr>
+                <td style="text-align: center;">${i + 1}</td>
+                <td><strong>${escapeHtml(exp.expenseId || 'EXP')}</strong></td>
+                <td>${escapeHtml(exp.expenseDate ? exp.expenseDate.split('T')[0] : 'N/A')}</td>
+                <td>${escapeHtml(exp.employee?.employeeName || 'N/A')}</td>
+                <td>${escapeHtml(exp.company?.companyName || 'N/A')}</td>
+                <td>${escapeHtml(exp.duty?.dutyId || exp.relatedDuty || 'N/A')}</td>
+                <td>
+                  ${(exp.items || [])
+                    .map((it) => {
+                      const dist =
+                        it.calculationMode === 'automatic'
+                          ? ` (${it.totalDistance || ((it.outboundDistance || 0) + (it.returnDistance || 0))} km @ ₹${it.ratePerUnit}/km)`
+                          : '';
+                      return `• ${escapeHtml(it.categoryName)}: ${formatINR(it.amount)}${dist}`;
+                    })
+                    .join('<br/>')}
+                </td>
+                <td>${receiptsHtml || '<span style="color: #94a3b8; font-size: 8px;">No receipts</span>'}</td>
+                <td style="text-align: right; font-weight: 700; color: #1e40af;">${formatINR(exp.grandTotal || 0)}</td>
+              </tr>
+            `;
+          })
           .join('')}
       </tbody>
     </table>
@@ -587,6 +818,44 @@ export const buildAllInOneReportHtml = (reportData) => {
           .badge-amber { background: #fef3c7; color: #b45309; }
           .badge-orange { background: #ffedd5; color: #c2410c; }
           .badge-red { background: #fee2e2; color: #b91c1c; }
+          .duty-detail-card {
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 12px;
+            background: #fafafa;
+            page-break-inside: avoid;
+          }
+          .duty-detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+          }
+          .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 9px;
+            line-height: 1.5;
+          }
+          .desc-box {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 6px 8px;
+            margin-top: 8px;
+            font-size: 9px;
+          }
+          .media-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+            border-top: 1px dashed #e2e8f0;
+            padding-top: 8px;
+          }
         </style>
       </head>
       <body>
@@ -634,7 +903,80 @@ export const exportAllInOneToPDF = async ({ reportData, action = 'download' }) =
   const isSharingAvailable = await Sharing.isAvailableAsync().catch(() => false);
 
   try {
-    const htmlContent = buildAllInOneReportHtml(reportData);
+    // Pre-inline all media for work records (proof photos, signatures, receipts)
+    const dutiesList = reportData.duties || [];
+    const inlinedDuties = await Promise.all(
+      dutiesList.map(async (duty) => {
+        const proofPhotos = Array.isArray(duty.customerProofPhotos) ? duty.customerProofPhotos : [];
+        const inlinedPhotos = await Promise.all(
+          proofPhotos.slice(0, 3).map(async (p) => {
+            const origUrl = typeof p === 'string' ? p : p?.url || p?.uri || '';
+            const inlined = origUrl ? await inlineRemoteMedia(origUrl) : '';
+            return { origUrl, inlined: inlined || origUrl };
+          })
+        );
+
+        const sigUrl =
+          duty.customerSignature?.url ||
+          (typeof duty.customerSignature === 'string' ? duty.customerSignature : '') ||
+          duty.signature?.url ||
+          '';
+        const inlinedSig = sigUrl ? await inlineRemoteMedia(sigUrl) : '';
+
+        const linkedExps = Array.isArray(duty.linkedExpenses) ? duty.linkedExpenses : [];
+        const inlinedLinkedExps = await Promise.all(
+          linkedExps.map(async (exp) => {
+            const expProofs = (exp.items || []).flatMap((it) => it.attachments || []).slice(0, 4);
+            const inlinedProofs = await Promise.all(
+              expProofs.map(async (att) => {
+                const origUrl = typeof att === 'string' ? att : att?.url || att?.uri || '';
+                const inlined = origUrl ? await inlineRemoteMedia(origUrl) : '';
+                return { origUrl, inlined: inlined || origUrl };
+              })
+            );
+            return {
+              ...exp,
+              inlinedProofs,
+            };
+          })
+        );
+
+        return {
+          ...duty,
+          inlinedPhotos,
+          inlinedSig,
+          sigUrl,
+          inlinedLinkedExps,
+        };
+      })
+    );
+
+    // Pre-inline expenses receipts for Section 6
+    const expensesList = reportData.expenses || [];
+    const inlinedExpenses = await Promise.all(
+      expensesList.map(async (exp) => {
+        const expProofs = (exp.items || []).flatMap((it) => it.attachments || []).slice(0, 4);
+        const inlinedProofs = await Promise.all(
+          expProofs.map(async (att) => {
+            const origUrl = typeof att === 'string' ? att : att?.url || att?.uri || '';
+            const inlined = origUrl ? await inlineRemoteMedia(origUrl) : '';
+            return { origUrl, inlined: inlined || origUrl };
+          })
+        );
+        return {
+          ...exp,
+          inlinedProofs,
+        };
+      })
+    );
+
+    const enrichedReportData = {
+      ...reportData,
+      duties: inlinedDuties,
+      expenses: inlinedExpenses,
+    };
+
+    const htmlContent = buildAllInOneReportHtml(enrichedReportData);
 
     // On Web: print via isolated iframe / window (triggers browser "Save as PDF" / Print)
     if (Platform.OS === 'web') {

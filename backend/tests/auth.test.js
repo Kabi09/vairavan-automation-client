@@ -209,5 +209,63 @@ describe('Authentication & Authorization Tests', () => {
     assert.equal(res.body.success, false);
     assert.match(res.body.message, /phone number is already in use/i);
   });
-});
+  it('PUT /api/employees/:id should allow admin to update employee joiningDate', async () => {
+    const { token: adminToken } = await createTestUser({ role: 'admin' });
+    const { user: emp } = await createTestUser({
+      email: 'joining_test@vairavan.com',
+      joiningDate: new Date('2023-01-01'),
+    });
 
+    const newJoiningDate = '2024-06-15T00:00:00.000Z';
+    const res = await request(app)
+      .put(`/api/employees/${emp._id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        joiningDate: newJoiningDate,
+      });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.equal(new Date(res.body.data.employee.joiningDate).toISOString(), newJoiningDate);
+  });
+
+  it('PUT /api/employees/:id should reject non-admin (employee) with 403 Forbidden', async () => {
+    const { token: empToken } = await createTestUser({ role: 'employee' });
+    const { user: targetEmp } = await createTestUser({
+      email: 'target_emp@vairavan.com',
+    });
+
+    const res = await request(app)
+      .put(`/api/employees/${targetEmp._id}`)
+      .set('Authorization', `Bearer ${empToken}`)
+      .send({
+        joiningDate: '2024-06-15T00:00:00.000Z',
+      });
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.success, false);
+  });
+
+  it('PATCH /api/auth/profile should ignore joiningDate on employee self update', async () => {
+    const origJoining = new Date('2023-01-01');
+    const { token: empToken, user: emp } = await createTestUser({
+      role: 'employee',
+      email: 'self_joining@vairavan.com',
+      joiningDate: origJoining,
+    });
+
+    const res = await request(app)
+      .patch('/api/auth/profile')
+      .set('Authorization', `Bearer ${empToken}`)
+      .send({
+        joiningDate: '2025-12-31T00:00:00.000Z',
+        employeeName: 'Updated Name',
+      });
+
+    assert.equal(res.status, 200);
+    // Joining date must remain unchanged
+    const User = (await import('../src/models/User.js')).default;
+    const dbUser = await User.findById(emp._id);
+    assert.equal(dbUser.joiningDate.toISOString(), origJoining.toISOString());
+  });
+});

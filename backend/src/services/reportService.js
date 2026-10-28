@@ -359,6 +359,7 @@ export const generateAllInOneReportData = async (filters = {}) => {
       email: emp.email,
       avatar: emp.avatar,
       casualLeaveAllowance: emp.casualLeaveAllowance || 12,
+      joiningDate: emp.joiningDate || emp.createdAt,
       assignedCompanies: new Set(),
       assignedClients: new Set(),
       totalDuties: 0,
@@ -879,23 +880,65 @@ export const generateAllInOneExcelBuffer = async (reportData) => {
     'Check-In (IST)',
     'Check-Out (IST)',
     'Total Duration (Hrs)',
-    'OT Hours',
+    'Sunday OT Hours',
     'Machine Name',
     'Work Type',
+    'Features',
+    'Manpower Team',
     'Work Description',
-    'Check-In Location',
-    'Check-Out Location',
-    'Signature Recorded',
-    'Proof Photos Count',
-    'Expenses (₹)',
+    'Check-In Address',
+    'Check-In Maps Link',
+    'Check-Out Address',
+    'Check-Out Maps Link',
+    'Customer Signature Link',
+    'Proof Photos Links',
+    'Expense Claims (₹)',
+    'Expense Item Breakdown',
+    'Expense Receipt Links',
     'Status',
   ]);
 
   reportData.duties.forEach((d, idx) => {
-    const sigRecorded = Boolean(d.customerSignature?.url) ? 'YES' : 'NO';
-    const photosCount = (d.customerProofPhotos || []).length;
-    const inLoc = d.checkInLocation?.address || (d.checkInLocation?.latitude ? `${d.checkInLocation.latitude}, ${d.checkInLocation.longitude}` : 'N/A');
-    const outLoc = d.checkOutLocation?.address || (d.checkOutLocation?.latitude ? `${d.checkOutLocation.latitude}, ${d.checkOutLocation.longitude}` : 'N/A');
+    const sigUrl = d.customerSignature?.url || (typeof d.customerSignature === 'string' ? d.customerSignature : '') || 'None';
+    const photoUrls = (d.customerProofPhotos || [])
+      .map((p) => (typeof p === 'string' ? p : p?.url || p?.uri || ''))
+      .filter(Boolean)
+      .join('\n') || 'None';
+
+    const inLat = d.checkInLocation?.latitude || d.location?.latitude;
+    const inLng = d.checkInLocation?.longitude || d.location?.longitude;
+    const inMapsLink = inLat && inLng ? `https://maps.google.com/?q=${inLat},${inLng}` : 'N/A';
+    const inAddr = d.checkInLocation?.address || d.location?.address || (inLat && inLng ? `${inLat}, ${inLng}` : 'N/A');
+
+    const outLat = d.checkOutLocation?.latitude;
+    const outLng = d.checkOutLocation?.longitude;
+    const outMapsLink = outLat && outLng ? `https://maps.google.com/?q=${outLat},${outLng}` : 'N/A';
+    const outAddr = d.checkOutLocation?.address || (outLat && outLng ? `${outLat}, ${outLng}` : 'N/A');
+
+    const featuresStr = (d.features || []).filter(Boolean).join(', ') || 'None';
+    const manpowerStr = (d.manpowerMembers || [])
+      .filter((m) => m && m.name)
+      .map((m) => `${m.name}${m.phoneNumber || m.phone ? ` (${m.phoneNumber || m.phone})` : ''}`)
+      .join('; ') || 'None';
+
+    const expClaims = d.linkedExpenses || [];
+    const expBreakdown = expClaims
+      .map((exp) => {
+        const items = (exp.items || [])
+          .map((it) => `${it.categoryName}: ₹${it.amount}${it.calculationMode === 'automatic' ? ` (${it.totalDistance || ((it.outboundDistance||0)+(it.returnDistance||0))} km @ ₹${it.ratePerUnit}/km)` : ''}`)
+          .join(', ');
+        return `Claim #${exp.expenseId || 'EXP'}: ₹${exp.grandTotal || 0} [${items}]`;
+      })
+      .join('\n') || 'None';
+
+    const receiptUrls = expClaims
+      .flatMap((exp) =>
+        (exp.items || []).flatMap((it) =>
+          (it.attachments || []).map((a) => (typeof a === 'string' ? a : a?.url || a?.uri || ''))
+        )
+      )
+      .filter(Boolean)
+      .join('\n') || 'None';
 
     wsDuties.addRow([
       idx + 1,
@@ -912,12 +955,18 @@ export const generateAllInOneExcelBuffer = async (reportData) => {
       d.otHours,
       d.machineName,
       d.workType,
+      featuresStr,
+      manpowerStr,
       d.workDescription,
-      inLoc,
-      outLoc,
-      sigRecorded,
-      photosCount,
+      inAddr,
+      inMapsLink,
+      outAddr,
+      outMapsLink,
+      sigUrl,
+      photoUrls,
       d.totalExpenseAmount || 0,
+      expBreakdown,
+      receiptUrls,
       (d.status || '').toUpperCase(),
     ]);
   });
@@ -935,6 +984,7 @@ export const generateAllInOneExcelBuffer = async (reportData) => {
     'Designation',
     'Phone Number',
     'Email Address',
+    'Date of Joining',
     'Assigned Companies',
     'Total Duties',
     'Days Worked',
@@ -954,6 +1004,7 @@ export const generateAllInOneExcelBuffer = async (reportData) => {
       emp.designation,
       emp.phoneNumber || 'N/A',
       emp.email,
+      emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-GB') : 'N/A',
       (emp.assignedCompanies || []).join(', ') || 'None',
       emp.totalDuties,
       emp.totalWorkingDays,
@@ -975,29 +1026,49 @@ export const generateAllInOneExcelBuffer = async (reportData) => {
   wsAttendance.addRow([
     'Sl No',
     'Date',
+    'Work ID',
     'Employee ID',
     'Employee Name',
+    'Company / Office',
     'Check-In (IST)',
     'Check-Out (IST)',
     'Duration (Minutes)',
     'Working Hours',
-    'Company / Office',
-    'Service Location',
+    'Sunday OT Hours',
+    'Check-In Address',
+    'Check-In Maps Link',
+    'Check-Out Address',
+    'Check-Out Maps Link',
     'Duty Status',
   ]);
 
   reportData.duties.forEach((d, idx) => {
+    const inLat = d.checkInLocation?.latitude || d.location?.latitude;
+    const inLng = d.checkInLocation?.longitude || d.location?.longitude;
+    const inMapsLink = inLat && inLng ? `https://maps.google.com/?q=${inLat},${inLng}` : 'N/A';
+    const inAddr = d.checkInLocation?.address || d.location?.address || (inLat && inLng ? `${inLat}, ${inLng}` : 'N/A');
+
+    const outLat = d.checkOutLocation?.latitude;
+    const outLng = d.checkOutLocation?.longitude;
+    const outMapsLink = outLat && outLng ? `https://maps.google.com/?q=${outLat},${outLng}` : 'N/A';
+    const outAddr = d.checkOutLocation?.address || (outLat && outLng ? `${outLat}, ${outLng}` : 'N/A');
+
     wsAttendance.addRow([
       idx + 1,
       d.dutyDateStr,
+      d.dutyId,
       d.employee?.employeeId || 'N/A',
       d.employee?.employeeName || 'N/A',
+      d.company?.companyName || 'N/A',
       d.inTime,
       d.outTime,
       d.totalDurationMinutes,
       d.workingHours,
-      d.company?.companyName || 'N/A',
-      d.checkInLocation?.address || 'Site',
+      d.otHours,
+      inAddr,
+      inMapsLink,
+      outAddr,
+      outMapsLink,
       (d.status || '').toUpperCase(),
     ]);
   });
@@ -1109,7 +1180,9 @@ export const generateAllInOneExcelBuffer = async (reportData) => {
     'Grand Total (₹)',
     'Item Categories & Breakdown',
     'Receipts Count',
+    'Receipt Proof Links',
     'General Description',
+    'Status',
   ]);
 
   reportData.expenses.forEach((exp, idx) => {
@@ -1127,6 +1200,13 @@ export const generateAllInOneExcelBuffer = async (reportData) => {
       0
     );
 
+    const receiptUrls = (exp.items || [])
+      .flatMap((it) =>
+        (it.attachments || []).map((a) => (typeof a === 'string' ? a : a?.url || a?.uri || ''))
+      )
+      .filter(Boolean)
+      .join('\n') || 'None';
+
     wsExpenses.addRow([
       idx + 1,
       exp.expenseId || `EXP-${exp._id.toString().slice(-4).toUpperCase()}`,
@@ -1138,7 +1218,9 @@ export const generateAllInOneExcelBuffer = async (reportData) => {
       exp.grandTotal || 0,
       itemsStr,
       proofCount,
+      receiptUrls,
       exp.generalDescription || '',
+      (exp.status || 'APPROVED').toUpperCase(),
     ]);
   });
   applyTableStyling(wsExpenses, 4);

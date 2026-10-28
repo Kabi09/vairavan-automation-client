@@ -48,6 +48,14 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
   const [phone, setPhone] = useState(existingEmployee?.phoneNumber || '');
   const [designation, setDesignation] = useState(existingEmployee?.designation || '');
   const [address, setAddress] = useState(existingEmployee?.location || existingEmployee?.address || '');
+  const [joiningDate, setJoiningDate] = useState(
+    existingEmployee?.joiningDate
+      ? formatISODateOnly(existingEmployee.joiningDate)
+      : isEditing
+      ? (existingEmployee?.createdAt ? formatISODateOnly(existingEmployee.createdAt) : '')
+      : formatISODateOnly(new Date())
+  );
+  const [joiningDatePickerVisible, setJoiningDatePickerVisible] = useState(false);
   const [dateOfBirth, setDateOfBirth] = useState(
     existingEmployee?.dateOfBirth ? formatISODateOnly(existingEmployee.dateOfBirth) : ''
   );
@@ -97,16 +105,22 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
 
     try {
       if (isEditing) {
-        await employeeApi.updateEmployee(existingEmployee._id, {
+        const res = await employeeApi.updateEmployee(existingEmployee._id, {
           employeeName: name.trim(),
           email: email.trim().toLowerCase(),
           phoneNumber: phone.trim(),
           designation: designation.trim(),
           address: address.trim(),
           location: address.trim(),
+          joiningDate: joiningDate || null,
           dateOfBirth: dateOfBirth || null,
           role: role || 'employee',
         });
+        if (route.params?.onUpdated && res?.data?.employee) {
+          try {
+            route.params.onUpdated(res.data.employee);
+          } catch (_) {}
+        }
         Alert.alert('Success', 'Employee details updated successfully', [
           { text: 'OK', onPress: () => navigation.goBack() },
         ]);
@@ -120,6 +134,7 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
           designation: designation.trim() || (role === 'admin' ? 'Administrator' : 'Service Engineer'),
           address: address.trim(),
           location: address.trim(),
+          joiningDate: joiningDate || null,
           dateOfBirth: dateOfBirth || null,
           role: role || 'employee',
           accountStatus: 'active',
@@ -288,6 +303,28 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
               error={fieldErrors.phone}
             />
 
+            {/* Joining Date Field - Admin Editable */}
+            <View style={styles.dobContainer}>
+              <View style={styles.fieldLabelRow}>
+                <Text style={styles.dobLabel}>Date of Joining *</Text>
+                <View style={styles.adminOnlyBadge}>
+                  <Ionicons name="shield-checkmark" size={11} color="#B45309" />
+                  <Text style={styles.adminOnlyBadgeText}>Admin Only</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.dobButton}
+                onPress={() => setJoiningDatePickerVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="calendar-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <Text style={joiningDate ? styles.dobText : styles.dobPlaceholder}>
+                  {joiningDate ? formatDate(joiningDate) : 'Select joining date'}
+                </Text>
+                <Ionicons name="create-outline" size={16} color={COLORS.primary} style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.dobContainer}>
               <Text style={styles.dobLabel}>Date of Birth (Optional)</Text>
               <TouchableOpacity
@@ -321,6 +358,17 @@ export const EmployeeFormScreen = ({ navigation, route }) => {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <DatePickerModal
+        visible={joiningDatePickerVisible}
+        title="Select Date of Joining"
+        selectedDate={joiningDate}
+        onSelectDate={(d) => {
+          setJoiningDate(d);
+          setJoiningDatePickerVisible(false);
+        }}
+        onClose={() => setJoiningDatePickerVisible(false)}
+      />
 
       <DatePickerModal
         visible={dobPickerVisible}
@@ -439,6 +487,26 @@ const styles = StyleSheet.create({
   dobPlaceholder: {
     fontSize: 14,
     color: COLORS.textMuted,
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  adminOnlyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 3,
+  },
+  adminOnlyBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#92400E',
   },
   submitBtn: {
     marginBottom: SPACING.xxl,

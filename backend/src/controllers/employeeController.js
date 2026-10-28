@@ -65,7 +65,7 @@ export const createEmployee = asyncHandler(async (req, res) => {
     address: req.body.location !== undefined ? req.body.location : (address || ''),
     location: req.body.location !== undefined ? req.body.location : (address || ''),
     designation,
-    joiningDate: joiningDate || Date.now(),
+    joiningDate: joiningDate ? new Date(joiningDate) : Date.now(),
     dateOfBirth: dateOfBirth || null,
     role: role === 'admin' ? 'admin' : 'employee',
     accountStatus,
@@ -229,7 +229,7 @@ export const updateEmployee = asyncHandler(async (req, res) => {
     employee.location = locVal;
   }
   if (designation !== undefined) employee.designation = designation;
-  if (joiningDate) employee.joiningDate = joiningDate;
+  if (joiningDate !== undefined) { employee.joiningDate = joiningDate ? new Date(joiningDate) : employee.joiningDate; }
   if (dateOfBirth !== undefined) employee.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
   if (role && ['admin', 'employee', 'staff'].includes(role)) {
     employee.role = role === 'admin' ? 'admin' : 'employee';
