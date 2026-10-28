@@ -129,18 +129,26 @@ export const AdminSendMessageModal = ({ visible, onClose, onMessageSent }) => {
         ? 'all employees'
         : `${selectedIds.length} employee${selectedIds.length > 1 ? 's' : ''}`;
 
+      // Reset form state immediately
+      setMessage('');
+      setSelectedIds([]);
+      setSendToAll(true);
+      setError('');
+
+      // Notify parent to refresh notifications and dashboard
+      if (onMessageSent) {
+        try {
+          onMessageSent();
+        } catch (_) {}
+      }
+
+      // Close modal immediately so popup never stays stuck
+      onClose();
+
+      // Show confirmation alert
       Alert.alert(
         'Message Sent! 🚀',
-        `Your message was successfully sent to ${recipientText}.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              if (onMessageSent) onMessageSent();
-              onClose();
-            },
-          },
-        ]
+        `Your message was successfully sent to ${recipientText}.`
       );
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to send message to employees'));

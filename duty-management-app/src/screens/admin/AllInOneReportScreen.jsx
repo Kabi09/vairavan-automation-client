@@ -602,7 +602,7 @@ export const AllInOneReportScreen = ({ navigation }) => {
               <Text style={[styles.kpiValue, { color: '#EA580C' }]}>
                 {summary.totalOtHours || 0}h
               </Text>
-              <Text style={styles.kpiTitle}>Overtime (&gt; 8h)</Text>
+              <Text style={styles.kpiTitle}>Sunday OT Hours</Text>
             </Card>
 
             {/* Card 9: Total Expenses */}
@@ -1095,10 +1095,10 @@ export const AllInOneReportScreen = ({ navigation }) => {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.otBannerTitle}>
-                    Total Overtime: {summary.totalOtHours || 0} Hours
+                    Total Sunday Overtime: {summary.totalOtHours || 0} Hours
                   </Text>
                   <Text style={styles.otBannerSub}>
-                    Calculated for duty durations exceeding the standard 8-hour shift (480 mins)
+                    Recorded strictly for Sunday duties. Weekdays do not calculate overtime.
                   </Text>
                 </View>
               </View>
@@ -1106,8 +1106,8 @@ export const AllInOneReportScreen = ({ navigation }) => {
               {(reportData?.overtimeRecords || []).length === 0 ? (
                 <EmptyState
                   icon="time-outline"
-                  title="No overtime recorded"
-                  description="No duties exceeded 8 hours for the selected period and filters."
+                  title="No Sunday overtime recorded"
+                  description="No duties recorded on Sunday for the selected period and filters."
                 />
               ) : (
                 (reportData?.overtimeRecords || []).map((ot, idx) => (
@@ -1118,7 +1118,7 @@ export const AllInOneReportScreen = ({ navigation }) => {
                       </View>
                       <Text style={styles.dutyDateText}>{ot.dutyDateStr}</Text>
                       <View style={styles.otPillLarge}>
-                        <Text style={styles.otPillLargeText}>+{ot.otHours}h OT</Text>
+                        <Text style={styles.otPillLargeText}>+{ot.otHours}h Sunday OT</Text>
                       </View>
                     </View>
 
@@ -1140,15 +1140,15 @@ export const AllInOneReportScreen = ({ navigation }) => {
                         <Text style={styles.otHoursLabel}>Total Worked</Text>
                       </View>
                       <View style={styles.otHoursCol}>
-                        <Text style={styles.otHoursVal}>8.0 hrs</Text>
-                        <Text style={styles.otHoursLabel}>Standard Shift</Text>
+                        <Text style={styles.otHoursVal}>Sunday</Text>
+                        <Text style={styles.otHoursLabel}>Day Type</Text>
                       </View>
                       <View style={styles.otHoursCol}>
                         <Text style={[styles.otHoursVal, { color: '#EA580C' }]}>
                           {ot.otHours} hrs
                         </Text>
                         <Text style={[styles.otHoursLabel, { color: '#EA580C' }]}>
-                          OT Excess
+                          Sunday OT
                         </Text>
                       </View>
                     </View>

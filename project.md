@@ -3324,8 +3324,66 @@
 - Reason: User reported that export features were not working ("export - not working so fix;").
 - Impact: Flawless PDF and Excel/CSV exporting and printing across all screens (Duty Reports, Leaves, Employees, Companies, Expenses, All-in-One Operations Report) on both Web (PWA desktop/mobile browsers) and native Android/iOS.
 
+### 2026-10-28 (PWA Send Message Modal Stuck Open Fix & Universal Web Alert Polyfill)
+#### Change
+- What was changed:
+  1. Resolved PWA / Web Send Message Popup Stuck Open: In `AdminSendMessageModal.jsx`, `onClose()`, `onMessageSent()`, and form resets were previously buried inside the `onPress` callback of `Alert.alert(...)`. Since `react-native-web` implements `Alert.alert` as an empty no-op (`class Alert { static alert() {} }`), `onClose()` was never executed after successful dispatch (`201 Created`). Updated `handleSend` to immediately clear message input (`setMessage('')`), reset selections, notify parent (`onMessageSent()`), and close the modal (`onClose()`) directly upon API success before triggering confirmation.
+  2. Implemented Universal Web Alert Polyfill (`src/utils/alertPolyfill.js`):
+     - Polyfills `Alert.alert` for React Native Web / PWA.
+     - Single-button informational notices invoke `window.alert()` and execute `button.onPress()` via `setTimeout`, ensuring callbacks (such as `navigation.goBack()` in `CompanyFormScreen`, `EmployeeFormScreen`, `DutyFormScreen`, `ExpenseFormScreen`, and `LeaveRequestScreen`) fire reliably on web.
+     - Multi-button confirmations invoke `window.confirm()` and trigger confirm vs cancel `onPress` handlers.
+     - Imported at the very top of `App.js` for universal application-wide coverage.
+  3. Added inline error banner feedback in `AdminSendMessageModal.jsx`: When message or recipient validation fails, `setError(...)` renders the highlighted red error alert card directly within the modal, providing immediate visual feedback even if browser dialogs are suppressed.
+- Files changed:
+  - `duty-management-app/src/utils/alertPolyfill.js`
+  - `duty-management-app/App.js`
+  - `duty-management-app/src/components/AdminSendMessageModal.jsx`
+  - `project.md`
+- Logic changed:
+  - `AdminSendMessageModal.jsx`: Form reset and `onClose()` are decoupled from alert button callbacks and executed unconditionally upon successful HTTP 201 response.
+  - `alertPolyfill.js`: Global monkey-patch on `Alert.alert` on Web platform bridging React Native alerts to `window.alert`/`window.confirm` with safe asynchronous callback execution.
+- Reason: User reported that in PWA, sending a broadcast message succeeded with HTTP 201, but the "Send Message" popup modal remained stuck open with text still inside.
+- Impact: "Send Message" modal closes instantaneously upon sending across Web (PWA) and Mobile, dashboard counts refresh immediately, and all forms across the entire app that use `Alert.alert` for navigation or callbacks now work seamlessly on Web.
+
+### 2026-10-28 (PDF Proof Photo Rendering Fix, Total Working Duration Fallback & Sunday-Only Overtime Rule)
+#### Change
+- What was changed:
+  1. Resolved PDF Missing Proof Photos, Receipt Proofs & Signature:
+     - Root cause: Images in PDF export templates were configured with `loading="lazy"`. In Web/PWA headless print iframes (which are offscreen or sized 0x0), `loading="lazy"` instructs the browser to defer fetching images indefinitely, rendering blank white boxes in the print preview.
+     - Removed `loading="lazy"` from all `<img>` tags (`customerProofPhotos`, `customerSignature`, expense receipt attachments, brand logos) across [`exportUtils.js`](file:///c:/Users/kabil/Desktop/Antigravity/vairavan-automation-client/duty-management-app/src/utils/exportUtils.js). Added `crossorigin="anonymous"` and safe fallback opacity.
+     - Upgraded `printHtmlOnWeb` in `exportUtils.js` to give the printing iframe real rendering dimensions (`1000px` x `1000px`, `opacity: 0`, `z-index: -9999`) and implemented an eager image loader: listens to `load`/`error` events on all `iframeDoc.images` and triggers print only once every image has finished downloading and decoding into memory (with safety timeout).
+     - Enhanced proof photo URL resolution: Safely extracts URLs whether stored as an object `{ url }`, `{ uri }`, or raw string URL.
+  2. Resolved Total Working Duration Showing `N/A`:
+     - Added automatic dynamic calculation in `exportUtils.js`: when `d.totalDurationMinutes` is 0 or null, calculates duration from `inTime` & `outTime` or `checkInTime` & `checkOutTime`, formatting readable shift time (e.g. `8h 0m (480 mins)`).
+     - Updated backend `createDuty` in `dutyController.js` to automatically calculate and persist `totalDurationMinutes` upon duty report submission.
+  3. Strict Sunday-Only Overtime (OT) Rule:
+     - User rule: Overtime hours are strictly added ONLY for Sunday duties (`isSundayInIST`). Weekdays exceeding 8 hours do NOT add OT hours (`otHours = 0`).
+     - Updated `backend/src/services/reportService.js`: Weekday duty durations do not add OT; only Sunday work duration counts towards Overtime.
+     - Updated `reportExportUtils.js` Section 5 title to "5. Sunday Overtime (OT) Log".
+     - Updated `AllInOneReportScreen.jsx` KPI summary card to "Sunday OT Hours" and updated OT comparison tables to reflect Sunday work instead of standard 8-hour shift excess.
+     - Updated backend test suite `backend/tests/report.test.js` to verify Sunday Overtime (61/61 tests pass).
+- Files changed:
+  - `backend/src/services/reportService.js`
+  - `backend/src/controllers/dutyController.js`
+  - `backend/tests/report.test.js`
+  - `duty-management-app/src/utils/exportUtils.js`
+  - `duty-management-app/src/utils/reportExportUtils.js`
+  - `duty-management-app/src/screens/admin/AllInOneReportScreen.jsx`
+  - `project.md`
+- Logic changed:
+  - Overtime calculation: Changed from standard shift excess (`duration - 480`) to Sunday work duration (`isSundayInIST(dutyDate) ? duration : 0`).
+  - Print rendering: Removed lazy loading and added active image completion listeners in `printHtmlOnWeb`.
+  - Duration formatting: Computes minutes dynamically from time strings if `totalDurationMinutes` is absent.
+- Reason: User reported that proof photos, receipt proofs, and signatures were not showing in the PDF export, total working duration was showing "N/A", and overtime hours must not be added for 8-hour excess on weekdays, but only for Sunday work.
+- Impact: Vector PDFs render full proof photos, receipt attachments, and digital signatures; total working duration reliably shows exact hours and minutes; all overtime totals match the Sunday-only requirement.
+
 ## Current Progress
 - Completed:
+  - PDF Proof Photos, Receipt Proofs & Signature: Eager loading and smart image completion in `printHtmlOnWeb` ensures all photos and signatures render in PDFs.
+  - Total Working Duration Display: Dynamic calculation fallback formats accurate working time (`8h 0m (480 mins)`) instead of `N/A`.
+  - Sunday-Only Overtime (OT) Engine: Overtime hours are recorded strictly for Sunday duties; weekday shifts never add OT.
+  - Send Message PWA Modal Dismissal: Form instantly resets and closes upon successful message dispatch on both Web and Mobile.
+  - Universal Web Alert Polyfill: Global `Alert.alert` support on Web/PWA with `window.alert`/`window.confirm` and asynchronous callback execution.
   - Universal PDF & Excel/CSV Export: Completely functional on both Web (PWA) and Mobile (Android/iOS) with hidden iframe printing for PDFs and binary Blob downloads for `.xlsx` and `.csv` files.
   - Installable PWA (Progressive Web App): Full manifest (`manifest.json`), service worker (`sw.js`), branded offline fallback (`offline.html`), and `usePWAInstall` "Add to Home Screen" hook.
   - Universal Multi-Viewport Responsiveness: Mobile (compact touch), Tablet, Laptop, and Desktop (max-width caps, 4-col metric cards, 3-col action bars, centered headers).
@@ -3360,6 +3418,9 @@
 - Notes: Mobile frontend running in Metro bundler on port 8081 with live API integration.
 
 ## Technical Decisions
+- Decision: Immediate modal teardown decoupled from alert callbacks and universal Web Alert Polyfill.
+  Reason: In `react-native-web`, `Alert.alert` is an empty stub. Tying modal dismissal or route navigation (`navigation.goBack()`) to an `Alert.alert` button's `onPress` causes actions to freeze indefinitely on Web browsers. Decoupling modal closure so it executes immediately on HTTP success guarantees clean UI dismissals, while the global polyfill ensures informational dialogs and confirmation callbacks (`window.alert` / `window.confirm`) work everywhere.
+  Date: 2026-10-28
 - Decision: Hidden iframe document printing (`printHtmlOnWeb`) and binary Blob downloads for Web exports.
   Reason: Expo SDK 57's `Print.printToFileAsync` on Web returns `undefined` (and triggers `window.print()` which prints the entire active UI instead of the report), while `expo-file-system` lacks web directory roots. Rendering report HTML into an isolated hidden `<iframe>` cleanly triggers the browser's native vector "Save as PDF" / Print dialog for the exact report content without UI chrome, while converting base64 to binary `Blob` with `URL.createObjectURL` enables high-speed, length-unlimited downloads for multi-sheet `.xlsx` and `.csv` files.
   Date: 2026-10-28
@@ -3384,8 +3445,8 @@
 - Decision: Server-side multi-worksheet Excel (.xlsx) generation with `exceljs` instead of client-side CSV.
   Reason: Requirement 6 mandates a structured `.xlsx` file with separate worksheets (Summary, Companies & Clients, Work Details, Employee Details, Attendance & Working Days, Leave & Comp-Off, Overtime, Expenses, and Employee Calendar). Generating on the server via `exceljs` prevents mobile memory bloat, avoids client-side workbook corruption, and ensures all filtered records are included regardless of pagination.
   Date: 2026-10-28
-- Decision: Overtime (OT) evaluation based on duty durations exceeding standard 8-hour shift (480 minutes).
-  Reason: While Sunday work awards Comp-Off credits, daily shifts exceeding 8 hours represent overtime work. Computing `otMinutes = Math.max(0, totalDurationMinutes - 480)` and `otHours = (otMinutes / 60)` provides uniform, transparent OT auditing across field duties.
+- Decision: Overtime (OT) evaluation strictly restricted to Sunday field duties.
+  Reason: Per operational policy, weekday duties (Monday to Saturday) never accrue overtime hours regardless of shift duration. Only duties performed on Sunday count towards Overtime (OT) hours (`isSundayInIST(dutyDate) ? durationMinutes : 0`), while weekday hours are treated as standard working time.
   Date: 2026-10-28
 - Decision: Admin-only expense modification with automatic server-side recalculation.
   Reason: While employees can submit expense claims alongside their field duties, allowing employees to modify submitted records introduces financial reconciliation risks. Restricting edit operations strictly to administrators (`PUT /api/expenses/:id`) and recalculating distance-based item amounts (`ratePerUnit * distance`) and grand totals on the server guarantees data integrity and tamper prevention.

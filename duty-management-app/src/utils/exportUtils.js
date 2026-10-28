@@ -95,10 +95,13 @@ export const printHtmlOnWeb = (htmlContent, title = 'Report') => {
   try {
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
+    iframe.style.left = '0';
+    iframe.style.top = '0';
+    iframe.style.width = '1000px';
+    iframe.style.height = '1000px';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.zIndex = '-9999';
     iframe.style.border = '0';
     document.body.appendChild(iframe);
 
@@ -108,7 +111,7 @@ export const printHtmlOnWeb = (htmlContent, title = 'Report') => {
     iframeDoc.write(htmlContent);
     iframeDoc.close();
 
-    setTimeout(() => {
+    const triggerPrint = () => {
       try {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
@@ -126,9 +129,48 @@ export const printHtmlOnWeb = (htmlContent, title = 'Report') => {
           if (iframe.parentNode) {
             iframe.parentNode.removeChild(iframe);
           }
-        }, 3000);
+        }, 5000);
       }
-    }, 400);
+    };
+
+    // Ensure all images are loaded before triggering print dialog
+    const images = Array.from(iframeDoc.images || []);
+    if (images.length === 0) {
+      setTimeout(triggerPrint, 350);
+    } else {
+      let pending = images.length;
+      let hasTriggered = false;
+
+      const checkDone = () => {
+        pending--;
+        if (pending <= 0 && !hasTriggered) {
+          hasTriggered = true;
+          setTimeout(triggerPrint, 350);
+        }
+      };
+
+      images.forEach((img) => {
+        if (img.complete) {
+          pending--;
+        } else {
+          img.addEventListener('load', checkDone, { once: true });
+          img.addEventListener('error', checkDone, { once: true });
+        }
+      });
+
+      if (pending <= 0 && !hasTriggered) {
+        hasTriggered = true;
+        setTimeout(triggerPrint, 350);
+      } else {
+        // Fallback max 4 seconds
+        setTimeout(() => {
+          if (!hasTriggered) {
+            hasTriggered = true;
+            triggerPrint();
+          }
+        }, 4000);
+      }
+    }
   } catch (webErr) {
     console.error('Web print error:', webErr);
     const win = window.open('', '_blank');
@@ -596,11 +638,14 @@ export const exportDutiesToPDF = async ({
         const photosHtml =
           photosToRender.length > 0
             ? photosToRender
-                .map(
-                  (p) =>
-                    `<img src="${escapeHtml(p.url)}" style="width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; margin-top: 6px;" loading="lazy" onerror="this.style.display='none'" />`
-                )
-                .join('')
+                .map((p) => {
+                  const pUrl = typeof p === 'string' ? p : (p?.url || p?.uri || '');
+                  return pUrl
+                    ? `<img src="${escapeHtml(pUrl)}" crossorigin="anonymous" style="width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1; margin-right: 8px; margin-top: 6px;" onerror="this.style.opacity='0.5'" />`
+                    : '';
+                })
+                .filter(Boolean)
+                .join('') || '<span style="color: #64748b; font-size: 11px;">No valid site proof photos</span>'
             : '<span style="color: #64748b; font-size: 11px;">No site proof photos attached</span>';
 
         const sigTime = d.customerSignature?.signedAt
@@ -615,12 +660,12 @@ export const exportDutiesToPDF = async ({
               const rawSvg = decodeURIComponent(signatureUrl.replace(prefixMatch, ''));
               signatureBodyHtml = `<div style="max-height: 60px; max-width: 180px; display: inline-block;">${rawSvg}</div>`;
             } catch {
-              signatureBodyHtml = `<img src="${escapeHtml(signatureUrl)}" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" loading="lazy" onerror="this.style.display='none'" />`;
+              signatureBodyHtml = `<img src="${escapeHtml(signatureUrl)}" crossorigin="anonymous" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" onerror="this.style.opacity='0.5'" />`;
             }
           } else if (signatureUrl.trim().startsWith('<svg')) {
             signatureBodyHtml = `<div style="max-height: 60px; max-width: 180px; display: inline-block;">${signatureUrl}</div>`;
           } else {
-            signatureBodyHtml = `<img src="${escapeHtml(signatureUrl)}" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" loading="lazy" onerror="this.style.display='none'" />`;
+            signatureBodyHtml = `<img src="${escapeHtml(signatureUrl)}" crossorigin="anonymous" style="max-height: 60px; max-width: 180px; object-fit: contain; display: block; margin-bottom: 4px;" onerror="this.style.opacity='0.5'" />`;
           }
         }
 
@@ -642,9 +687,36 @@ export const exportDutiesToPDF = async ({
 
         const checkInIST = d.checkInTime ? formatTimeIST(d.checkInTime) : inTime;
         const checkOutIST = d.checkOutTime ? formatTimeIST(d.checkOutTime) : outTime;
-        const durationText = d.totalDurationMinutes
-          ? `${Math.floor(d.totalDurationMinutes / 60)}h ${d.totalDurationMinutes % 60}m (${d.totalDurationMinutes} mins)`
-          : 'N/A';
+        let durationMins = d.totalDurationMinutes || 0;
+        if (!durationMins) {
+          const inT = d.inTime || (d.checkInTime ? formatTimeIST(d.checkInTime) : '');
+          const outT = d.outTime || (d.checkOutTime ? formatTimeIST(d.checkOutTime) : '');
+          if (inT && outT && inT.includes(':') && outT.includes(':')) {
+            const parseMins = (tStr) => {
+              const clean = String(tStr).trim();
+              const isPM = clean.toUpperCase().includes('PM');
+              const isAM = clean.toUpperCase().includes('AM');
+              const timePart = clean.replace(/[^\d:]/g, '');
+              const parts = timePart.split(':').map(Number);
+              let h = parts[0] || 0;
+              const m = parts[1] || 0;
+              if (isPM && h < 12) h += 12;
+              if (isAM && h === 12) h = 0;
+              return h * 60 + m;
+            };
+            const inM = parseMins(inT);
+            const outM = parseMins(outT);
+            let diff = outM - inM;
+            if (diff < 0) diff += 24 * 60;
+            durationMins = Math.max(0, diff);
+          } else if (d.checkInTime && d.checkOutTime) {
+            const ms = new Date(d.checkOutTime).getTime() - new Date(d.checkInTime).getTime();
+            if (ms > 0) durationMins = Math.round(ms / 60000);
+          }
+        }
+        const durationText = durationMins > 0
+          ? `${Math.floor(durationMins / 60)}h ${durationMins % 60}m (${durationMins} mins)`
+          : (d.status === 'active' || !d.outTime ? 'In Progress' : '0h 0m (0 mins)');
 
         const featuresList = Array.isArray(d.features) ? d.features.filter(Boolean) : [];
         const featuresHtml =
@@ -705,9 +777,12 @@ export const exportDutiesToPDF = async ({
                 }).join('<br/>');
 
                 const expProofList = (exp.items || []).flatMap(it => it.attachments || []);
-                const expProofHtml = expProofList.slice(0, 4).map(att =>
-                  `<img src="${escapeHtml(typeof att === 'string' ? att : att.url)}" style="width: 50px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #c7d2fe; margin-right: 4px; margin-top: 3px;" loading="lazy" />`
-                ).join('');
+                const expProofHtml = expProofList.slice(0, 4).map(att => {
+                  const attUrl = typeof att === 'string' ? att : (att?.url || att?.uri || '');
+                  return attUrl
+                    ? `<img src="${escapeHtml(attUrl)}" crossorigin="anonymous" style="width: 50px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid #c7d2fe; margin-right: 4px; margin-top: 3px;" />`
+                    : '';
+                }).filter(Boolean).join('');
 
                 return `
                   <div style="font-size: 10px; color: #1e1b4b; padding: 4px 0; border-top: 1px dashed #c7d2fe;">

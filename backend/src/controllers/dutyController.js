@@ -180,6 +180,16 @@ export const createDuty = asyncHandler(async (req, res) => {
     customerSignature: signatureObj,
     customerProofPhotos: Array.isArray(customerProofPhotos) ? customerProofPhotos : [],
     status: 'submitted',
+    totalDurationMinutes: (() => {
+      if (inTime && outTime && inTime.includes(':') && outTime.includes(':')) {
+        const [inH, inM] = inTime.replace(/[^\d:]/g, '').split(':').map(Number);
+        const [outH, outM] = outTime.replace(/[^\d:]/g, '').split(':').map(Number);
+        let diff = (outH * 60 + (outM || 0)) - (inH * 60 + (inM || 0));
+        if (diff < 0) diff += 24 * 60;
+        return Math.max(0, diff);
+      }
+      return 0;
+    })(),
     auditTrail: [
       {
         changedBy: req.user._id,

@@ -60,16 +60,22 @@ describe('All-in-One Report API Tests', () => {
       status: 'approved',
     });
 
-    // 2. Overtime duty: 10 hours (600 mins -> 2h OT)
+    // 2. Sunday Overtime duty: 2 hours on Sunday -> 2.0h Sunday OT
+    const testNow = new Date();
+    const sundayDate = new Date(testNow.getFullYear(), testNow.getMonth(), 1, 10, 0, 0);
+    while (sundayDate.getDay() !== 0) {
+      sundayDate.setDate(sundayDate.getDate() + 1);
+    }
+
     await Duty.create({
       employee: employee2.user._id,
-      dutyDate: new Date(),
+      dutyDate: sundayDate,
       company: testCompany._id,
       client: testClient._id,
       dutyType: 'client',
-      inTime: '08:00',
-      outTime: '18:00',
-      totalDurationMinutes: 600, // 10 hours -> 2h OT
+      inTime: '10:00',
+      outTime: '12:00',
+      totalDurationMinutes: 120, // 2 hours Sunday OT
       machineName: 'Lathe Unit A',
       workType: 'Repair',
       workDescription: 'Spindle bearing replacement',

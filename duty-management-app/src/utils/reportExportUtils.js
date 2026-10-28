@@ -288,7 +288,7 @@ export const buildAllInOneReportHtml = (reportData) => {
 
   // Section 5: Overtime (OT)
   const otHtml = `
-    <div class="section-title">5. Overtime (OT) Log - Shifts Exceeding Standard 8 Hours (${overtimeRecords.length})</div>
+    <div class="section-title">5. Sunday Overtime (OT) Log (${overtimeRecords.length})</div>
     <table class="report-table">
       <thead>
         <tr>

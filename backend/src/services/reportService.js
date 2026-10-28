@@ -263,10 +263,29 @@ export const generateAllInOneReportData = async (filters = {}) => {
 
   // Work records enhanced with OT calculation and linked expenses
   const enhancedDuties = duties.map((duty) => {
-    const durationMinutes = duty.totalDurationMinutes || 0;
-    const standardShiftMinutes = 480; // 8 hours
-    const otMinutes = Math.max(0, durationMinutes - standardShiftMinutes);
+    let durationMinutes = duty.totalDurationMinutes || 0;
+    // Calculate duration on the fly if not explicitly recorded
+    if (!durationMinutes) {
+      const inT = duty.inTime || (duty.checkInTime ? formatTimeIST(duty.checkInTime) : '');
+      const outT = duty.outTime || (duty.checkOutTime ? formatTimeIST(duty.checkOutTime) : '');
+      if (inT && outT && inT.includes(':') && outT.includes(':')) {
+        const [inH, inM] = inT.replace(/[^\d:]/g, '').split(':').map(Number);
+        const [outH, outM] = outT.replace(/[^\d:]/g, '').split(':').map(Number);
+        let diff = (outH * 60 + (outM || 0)) - (inH * 60 + (inM || 0));
+        if (diff < 0) diff += 24 * 60;
+        durationMinutes = Math.max(0, diff);
+      } else if (duty.checkInTime && duty.checkOutTime) {
+        const ms = new Date(duty.checkOutTime).getTime() - new Date(duty.checkInTime).getTime();
+        if (ms > 0) durationMinutes = Math.round(ms / (1000 * 60));
+      }
+    }
+
+    // User Rule: Overtime (OT) is strictly added ONLY for Sunday work.
+    // Weekday duties (> 8 hours) do NOT add OT hours.
+    const isSunday = isSundayInIST(duty.dutyDate);
+    const otMinutes = isSunday ? durationMinutes : 0;
     const otHours = parseFloat((otMinutes / 60).toFixed(2));
+    const standardHours = isSunday ? 0 : parseFloat((durationMinutes / 60).toFixed(2));
     const dutyExpList = expensesByDutyId[duty._id.toString()] || [];
     const dutyExpTotal = dutyExpList.reduce((sum, e) => sum + (e.grandTotal || 0), 0);
 
@@ -286,7 +305,7 @@ export const generateAllInOneReportData = async (filters = {}) => {
       checkOutTime: duty.checkOutTime,
       totalDurationMinutes: durationMinutes,
       workingHours: parseFloat((durationMinutes / 60).toFixed(2)),
-      standardHours: parseFloat((Math.min(durationMinutes, standardShiftMinutes) / 60).toFixed(2)),
+      standardHours,
       otMinutes,
       otHours,
       customerName: duty.customerName || (duty.client ? duty.client.clientName : (duty.company ? duty.company.companyName : 'N/A')),
